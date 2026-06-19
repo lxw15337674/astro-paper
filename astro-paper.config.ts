@@ -3,12 +3,12 @@ import { defineAstroPaperConfig } from "./src/types/config";
 export default defineAstroPaperConfig({
   site: {
     url: "https://blog.bhwa233.com/",
-    title: "bhwa233 Blog",
-    description: "A minimal, responsive and SEO-friendly Astro blog.",
+    title: "bhwa233 博客",
+    description: "一个简洁、响应式、对 SEO 友好的 Astro 博客。",
     author: "bhwa233",
     profile: "https://github.com/lxw15337674",
     ogImage: "default-og.jpg",
-    lang: "en",
+    lang: "zh-cn",
     timezone: "Asia/Shanghai",
     dir: "ltr",
   },

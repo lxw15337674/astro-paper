@@ -1,0 +1,12 @@
+---
+import type { GetStaticPathsOptions } from "astro";
+import { ENGLISH_LOCALE } from "@/i18n/locales";
+import { getPaginatedPostPaths } from "@/utils/localeStaticPaths";
+import Page from "../../posts/[...page].astro";
+
+export async function getStaticPaths(options: GetStaticPathsOptions) {
+  return getPaginatedPostPaths(ENGLISH_LOCALE, options);
+}
+---
+
+<Page {...Astro.props} />

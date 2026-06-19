@@ -1,18 +1,24 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import { BLOG_PATH } from "@/content.config";
 import { slugifyStr } from "./slugify";
+import { isSupportedLocale } from "@/i18n/locales";
 import config from "@/config";
 
 function getPostPathSegments(filePath: string | undefined): string[] {
-  return (
+  const segments =
     filePath
       ?.replace(BLOG_PATH, "")
       .split("/")
       .filter(path => path !== "")
       .filter(path => !path.startsWith("_"))
-      .slice(0, -1)
-      .map(segment => slugifyStr(segment)) ?? []
-  );
+      .slice(0, -1) ?? [];
+
+  const routeSegments =
+    segments.length > 0 && isSupportedLocale(segments[0])
+      ? segments.slice(1)
+      : segments;
+
+  return routeSegments.map(segment => slugifyStr(segment));
 }
 
 function getIdSlug(id: string): string {

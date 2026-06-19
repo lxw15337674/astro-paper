@@ -1,6 +1,5 @@
 ---
-import type { GetStaticPaths } from "astro";
-import { getCollection } from "astro:content";
+import type { GetStaticPathsOptions } from "astro";
 import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Breadcrumb from "@/components/Breadcrumb.astro";
@@ -8,22 +7,23 @@ import Main from "@/components/Main.astro";
 import Card from "@/components/Card.astro";
 import Footer from "@/components/Footer.astro";
 import Pagination from "@/components/Pagination.astro";
-import { getSortedPosts } from "@/utils/getSortedPosts";
+import { DEFAULT_LOCALE } from "@/i18n/locales";
+import { getPaginatedPostPaths } from "@/utils/localeStaticPaths";
+import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { useTranslations } from "@/i18n";
-import config from "@/config";
 
-export const getStaticPaths = (async ({ paginate }) => {
-  const posts = await getCollection("posts", ({ data }) => !data.draft);
-  return paginate(getSortedPosts(posts), { pageSize: config.posts.perPage });
-}) satisfies GetStaticPaths;
+export async function getStaticPaths(options: GetStaticPathsOptions) {
+  return getPaginatedPostPaths(DEFAULT_LOCALE, options);
+}
 
 const { page } = Astro.props;
 
-const locale = Astro.currentLocale ?? config.site.lang;
+const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
 const t = useTranslations(locale);
+const siteTitle = getLocalizedSiteTitle(locale);
 ---
 
-<Layout title={`${t.pages.postsTitle} | ${config.site.title}`}>
+<Layout title={`${t.pages.postsTitle} | ${siteTitle}`}>
   <Header />
 
   <Breadcrumb />

@@ -1,0 +1,53 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { DEFAULT_LOCALE, ENGLISH_LOCALE } from "@/i18n/locales";
+import { stripBase, stripLocale } from "@/utils/withBase";
+import { useTranslations } from "@/i18n";
+import config from "@/config";
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const t = useTranslations(locale);
+
+const relativePath = stripBase(Astro.url.pathname);
+const normalizedPath =
+  relativePath.endsWith("/") && relativePath !== "/"
+    ? relativePath.slice(0, -1)
+    : relativePath;
+const pathWithoutLocale = stripLocale(normalizedPath, locale);
+
+const links = [
+  {
+    code: "中",
+    locale: DEFAULT_LOCALE,
+    href: getRelativeLocaleUrl(DEFAULT_LOCALE, pathWithoutLocale),
+  },
+  {
+    code: "EN",
+    locale: ENGLISH_LOCALE,
+    href: getRelativeLocaleUrl(ENGLISH_LOCALE, pathWithoutLocale),
+  },
+];
+---
+
+<div
+  class="col-span-2 flex items-center justify-center gap-2 sm:col-span-1"
+  aria-label={t.a11y.languageSwitcher}
+  title={t.a11y.languageSwitcher}
+>
+  {
+    links.map(({ code, locale: targetLocale, href }) => (
+      <a
+        href={href}
+        class:list={[
+          "rounded px-2 py-1 text-sm font-medium transition-colors",
+          targetLocale === locale
+            ? "text-accent underline decoration-dashed underline-offset-4"
+            : "hover:text-accent",
+        ]}
+        aria-current={targetLocale === locale ? "true" : undefined}
+      >
+        {code}
+      </a>
+    ))
+  }
+</div>

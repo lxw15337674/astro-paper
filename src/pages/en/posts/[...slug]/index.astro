@@ -1,0 +1,11 @@
+---
+import { ENGLISH_LOCALE } from "@/i18n/locales";
+import { getPostDetailPaths } from "@/utils/localeStaticPaths";
+import Page from "../../../posts/[...slug]/index.astro";
+
+export async function getStaticPaths() {
+  return getPostDetailPaths(ENGLISH_LOCALE);
+}
+---
+
+<Page {...Astro.props} />

@@ -30,6 +30,11 @@ export interface UIStrings {
     featured: string;
     recentPosts: string;
     allPosts: string;
+    heroTitle: string;
+    intro: string;
+    introCtaPrefix: string;
+    introCtaLabel: string;
+    introCtaSuffix: string;
   };
   footer: {
     copyright: string;
@@ -56,6 +61,7 @@ export interface UIStrings {
     openMenu: string;
     closeMenu: string;
     toggleTheme: string;
+    languageSwitcher: string;
     searchPlaceholder: string;
     noResults: string;
     goToPreviousPage: string;

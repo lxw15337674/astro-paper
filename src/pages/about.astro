@@ -5,9 +5,13 @@ import Header from "@/components/Header.astro";
 import Breadcrumb from "@/components/Breadcrumb.astro";
 import Main from "@/components/Main.astro";
 import Footer from "@/components/Footer.astro";
-import config from "@/config";
+import { DEFAULT_LOCALE } from "@/i18n/locales";
+import { getLocalizedPageId } from "@/utils/contentLocale";
+import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 
-const about = await getEntry("pages", "about");
+const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
+const about = await getEntry("pages", getLocalizedPageId("about", locale));
+const siteTitle = getLocalizedSiteTitle(locale);
 
 if (!about) {
   throw new Error(
@@ -19,7 +23,7 @@ const { Content } = await render(about);
 ---
 
 <Layout
-  title={`${about.data.title} | ${config.site.title}`}
+  title={`${about.data.title} | ${siteTitle}`}
   description={about.data.description}
   ogImage={about.data.ogImage}
   canonicalURL={about.data.canonicalURL}

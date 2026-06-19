@@ -6,18 +6,23 @@ import Breadcrumb from "@/components/Breadcrumb.astro";
 import Main from "@/components/Main.astro";
 import Footer from "@/components/Footer.astro";
 import Tag from "@/components/Tag.astro";
+import { DEFAULT_LOCALE } from "@/i18n/locales";
+import { filterCollectionByLocale } from "@/utils/contentLocale";
 import { getUniqueTags } from "@/utils/getUniqueTags";
+import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { useTranslations } from "@/i18n";
-import config from "@/config";
 
-const posts = await getCollection("posts", ({ data }) => !data.draft);
+const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
+const posts = filterCollectionByLocale(
+  await getCollection("posts", ({ data }) => !data.draft),
+  locale
+);
 const tags = getUniqueTags(posts);
-
-const locale = Astro.currentLocale ?? config.site.lang;
 const t = useTranslations(locale);
+const siteTitle = getLocalizedSiteTitle(locale);
 ---
 
-<Layout title={`${t.pages.tagsTitle} | ${config.site.title}`}>
+<Layout title={`${t.pages.tagsTitle} | ${siteTitle}`}>
   <Header />
 
   <Breadcrumb />

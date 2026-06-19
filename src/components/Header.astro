@@ -8,14 +8,17 @@ import IconSearch from "@/assets/icons/IconSearch.svg";
 import IconMoon from "@/assets/icons/IconMoon.svg";
 import IconX from "@/assets/icons/IconX.svg";
 import LinkButton from "./LinkButton.astro";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { stripBase, stripLocale } from "@/utils/withBase";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
-const { site, features } = config;
+const { features } = config;
 
 const locale = Astro.currentLocale ?? config.site.lang;
 const t = useTranslations(locale);
+const siteTitle = getLocalizedSiteTitle(locale);
 
 // Strip the base prefix so isActive comparisons work regardless of deploy subdirectory.
 // e.g. with base "/blog": "/blog/posts/slug" → "/posts/slug"
@@ -52,7 +55,7 @@ const isActive = (path: string) => {
       href={getRelativeLocaleUrl(locale, "")}
       class="absolute py-1 text-xl leading-8 font-semibold whitespace-nowrap sm:static sm:my-auto sm:text-2xl sm:leading-none"
     >
-      {site.title}
+      {siteTitle}
     </a>
     <nav
       id="nav-menu"
@@ -159,6 +162,9 @@ const isActive = (path: string) => {
             </li>
           )
         }
+        <li class="col-span-2 sm:col-span-1">
+          <LanguageSwitcher />
+        </li>
       </ul>
     </nav>
   </div>

@@ -16,6 +16,7 @@ import {
   transformerNotationHighlight,
   transformerNotationWordHighlight,
 } from "@shikijs/transformers";
+import { DEFAULT_LOCALE, LOCALES } from "./src/i18n/locales";
 import { transformerFileName } from "./src/utils/transformers/fileName";
 import config from "./astro-paper.config";
 
@@ -29,8 +30,8 @@ export default defineConfig({
     }),
   ],
   i18n: {
-    locales: ["en"],
-    defaultLocale: "en",
+    locales: [...LOCALES],
+    defaultLocale: DEFAULT_LOCALE,
     routing: {
       prefixDefaultLocale: false,
     },

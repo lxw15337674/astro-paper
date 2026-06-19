@@ -9,16 +9,18 @@ import Footer from "@/components/Footer.astro";
 import Socials from "@/components/Socials.astro";
 import Card from "@/components/Card.astro";
 import LinkButton from "@/components/LinkButton.astro";
+import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getSortedPosts } from "@/utils/getSortedPosts";
+import { filterCollectionByLocale } from "@/utils/contentLocale";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
 const { socials, posts: postsConfig } = config;
 
-const locale = Astro.currentLocale ?? config.site.lang;
+const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
 const t = useTranslations(locale);
 
-const posts = await getCollection("posts");
+const posts = filterCollectionByLocale(await getCollection("posts"), locale);
 const sortedPosts = getSortedPosts(posts);
 const featuredPosts = sortedPosts.filter(({ data }) => data.featured);
 const recentPosts = sortedPosts.filter(({ data }) => !data.featured);
@@ -35,11 +37,11 @@ const homePath = getRelativeLocaleUrl(locale, "");
   >
     <section id="hero" class="border-border border-b pt-8 pb-6">
       <h1 class="my-4 inline-block text-4xl font-bold sm:my-8 sm:text-5xl">
-        Mingalaba
+        {t.home.heroTitle}
       </h1>
       <a
         target="_blank"
-        href={`${import.meta.env.BASE_URL.replace(/\/?$/, "/")}rss.xml`}
+        href={getRelativeLocaleUrl(locale, "rss.xml")}
         class="inline-block"
         aria-label="RSS Feed"
         title="RSS Feed"
@@ -52,20 +54,18 @@ const homePath = getRelativeLocaleUrl(locale, "");
         <span class="sr-only">RSS Feed</span>
       </a>
 
-      <p>
-        AstroPaper is a minimal, responsive, accessible and SEO-friendly Astro
-        blog theme. This theme follows best practices and provides accessibility
-        out of the box. Light and dark mode are supported by default. Moreover,
-        additional color schemes can also be configured.
-      </p>
+      <p>{t.home.intro}</p>
       <p class="mt-2">
-        Read the blog posts or check
+        {t.home.introCtaPrefix}
+        {" "}
         <LinkButton
           class="hover:text-accent underline decoration-dashed underline-offset-4"
           href="https://github.com/satnaing/astro-paper#readme"
         >
-          README
-        </LinkButton> for more info.
+          {t.home.introCtaLabel}
+        </LinkButton>
+        {" "}
+        {t.home.introCtaSuffix}
       </p>
       {
         socials.length > 0 && (
