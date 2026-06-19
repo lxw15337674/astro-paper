@@ -153,6 +153,17 @@ All commands are run from the root of the project, from a terminal:
 | `pnpm sync`      | Generates TypeScript types for all Astro modules. [Learn more](https://docs.astro.build/en/reference/cli-reference/#astro-sync). |
 | `pnpm astro ...` | Run CLI commands like `astro add`, `astro check`                                                                                 |
 
+## Deploy to Cloudflare Pages
+
+This project is ready to deploy on Cloudflare Pages with GitHub integration.
+
+- Build command: `pnpm build`
+- Build output directory: `dist`
+- Production branch: `main`
+- Node.js version: `22.12.0` via `.node-version`
+
+After the first deploy succeeds, add the custom domain `blog.bhwa233.com` in the Cloudflare Pages project settings.
+
 ## ✨ Feedback & Suggestions
 
 If you have any suggestions/feedback, you can contact me via [my email](mailto:satnaingdev+astropaper@gmail.com). Alternatively, feel free to open an issue if you find bugs or want to request new features.
