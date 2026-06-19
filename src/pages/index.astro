@@ -37,8 +37,10 @@ const homePath = getRelativeLocaleUrl(locale, "");
     data-home-path={homePath}
     class="app-layout"
   >
-    <section id="hero" class="border-border border-b pt-8 pb-6">
-      <h1 class="my-4 inline-block text-4xl font-bold sm:my-8 sm:text-5xl">
+    <section id="hero" class="border-border/80 border-b pt-10 pb-8">
+      <h1
+        class="my-4 inline-block text-4xl leading-tight font-semibold tracking-tight sm:my-8 sm:text-5xl"
+      >
         {t.home.heroTitle}
       </h1>
       <a
@@ -56,12 +58,12 @@ const homePath = getRelativeLocaleUrl(locale, "");
         <span class="sr-only">RSS Feed</span>
       </a>
 
-      <p>{t.home.intro}</p>
-      <p class="mt-2">
+      <p class="text-muted-foreground leading-7">{t.home.intro}</p>
+      <p class="text-muted-foreground mt-2 leading-7">
         {t.home.introCtaPrefix}
         {" "}
         <LinkButton
-          class="hover:text-accent underline decoration-dashed underline-offset-4"
+          class="text-accent hover:text-accent-active underline underline-offset-4"
           href="https://github.com/satnaing/astro-paper#readme"
         >
           {t.home.introCtaLabel}
@@ -87,10 +89,10 @@ const homePath = getRelativeLocaleUrl(locale, "");
           id="featured"
           class:list={[
             "pt-12 pb-6",
-            { "border-border border-b": recentPosts.length > 0 },
+            { "border-border/80 border-b": recentPosts.length > 0 },
           ]}
         >
-          <h2 class="text-2xl font-semibold tracking-wide">
+          <h2 class="text-2xl font-semibold tracking-tight">
             {t.home.featured}
           </h2>
           <ul>
@@ -105,7 +107,7 @@ const homePath = getRelativeLocaleUrl(locale, "");
     {
       recentPosts.length > 0 && (
         <section id="recent-posts" class="pt-12 pb-6">
-          <h2 class="text-2xl font-semibold tracking-wide">
+          <h2 class="text-2xl font-semibold tracking-tight">
             {t.home.recentPosts}
           </h2>
           <ul>
@@ -118,7 +120,10 @@ const homePath = getRelativeLocaleUrl(locale, "");
     }
 
     <div class="my-8 text-center">
-      <LinkButton href={getRelativeLocaleUrl(locale, "posts")}>
+      <LinkButton
+        href={getRelativeLocaleUrl(locale, "posts")}
+        class="border-border bg-surface hover:bg-surface-hover text-foreground px-3 py-2 text-sm font-medium"
+      >
         {t.home.allPosts}
         <IconArrowRight class="inline-block rtl:-rotate-180" />
       </LinkButton>
