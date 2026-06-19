@@ -39,10 +39,10 @@ const links = [
       <a
         href={href}
         class:list={[
-          "rounded px-2 py-1 text-sm font-medium transition-colors",
+          "rounded-md px-2 py-1 text-sm font-medium transition-colors",
           targetLocale === locale
-            ? "text-accent underline decoration-dashed underline-offset-4"
-            : "hover:text-accent",
+            ? "bg-surface text-accent border-border border"
+            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
         ]}
         aria-current={targetLocale === locale ? "true" : undefined}
       >

@@ -11,7 +11,7 @@ const Button = disabled ? "span" : "a";
 <Button
   aria-disabled={disabled}
   class:list={[
-    "group inline-flex items-center gap-1",
+    "group inline-flex items-center gap-1 rounded-md transition-colors",
     { "hover:text-accent": !disabled },
     className,
   ]}

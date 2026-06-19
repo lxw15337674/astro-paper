@@ -17,10 +17,10 @@ const t = useTranslations(Astro.currentLocale);
   <button
     data-button="back-to-top"
     class:list={[
-      "group bg-background relative px-2 py-1",
+      "group border-border bg-surface hover:bg-surface-hover text-muted-foreground relative border px-2 py-1 transition-colors",
       "size-14 rounded-full shadow-xl",
       "md:h-8 md:w-fit md:rounded-md md:shadow-none md:focus-visible:rounded-none",
-      "md:bg-background/35 md:bg-clip-padding md:backdrop-blur-lg",
+      "md:bg-surface/70 md:bg-clip-padding md:backdrop-blur-lg",
     ]}
   >
     <span

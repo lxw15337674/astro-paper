@@ -3,9 +3,12 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
+  --color-accent-active: var(--accent-active);
   --color-accent-foreground: var(--accent-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
   --font-app: var(--font-google-sans-code);
 }
@@ -16,19 +19,28 @@
   --background: #fdfdfd;
   --foreground: #282728;
   --accent: #006cac;
+  --accent-active: #005edc;
   --accent-foreground: #ffffff;
   --muted: #e6e6e6;
   --muted-foreground: #6b7280;
+  --surface: #ffffff;
+  --surface-hover: #f2f2f2;
   --border: #ece9e9;
 }
 
-/* Dark theme values */
+/*
+ * Dark theme values follow Vercel Geist Colors exactly.
+ * Source tokens: https://vercel.com/geist/colors
+ */
 [data-theme="dark"] {
-  --background: #212737;
-  --foreground: #eaedf3;
-  --accent: #ff6b01;
-  --accent-foreground: #ffffff;
-  --muted: #343f60;
-  --muted-foreground: #afb9ca;
-  --border: #ab4b08;
+  --background: #000000; /* --ds-background-100 */
+  --foreground: #ededed; /* --ds-gray-1000 */
+  --accent: #50a8ff; /* --ds-blue-900 */
+  --accent-active: #0071f6; /* --ds-blue-700 */
+  --accent-foreground: #ebf6ff; /* --ds-blue-1000 */
+  --muted: #1a1a1a; /* --ds-gray-100 */
+  --muted-foreground: #a0a0a0; /* --ds-gray-900 */
+  --surface: #1a1a1a; /* --ds-gray-100 */
+  --surface-hover: #1f1f1f; /* --ds-gray-200 */
+  --border: #ffffff24; /* --ds-gray-alpha-400 */
 }
