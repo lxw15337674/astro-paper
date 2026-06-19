@@ -17,37 +17,118 @@ const pathWithoutLocale = stripLocale(normalizedPath, locale);
 
 const links = [
   {
-    code: "中",
+    label: "中文",
     locale: DEFAULT_LOCALE,
     href: getRelativeLocaleUrl(DEFAULT_LOCALE, pathWithoutLocale),
   },
   {
-    code: "EN",
+    label: "English",
     locale: ENGLISH_LOCALE,
     href: getRelativeLocaleUrl(ENGLISH_LOCALE, pathWithoutLocale),
   },
 ];
+
+const currentLabel =
+  links.find(({ locale: targetLocale }) => targetLocale === locale)?.label ??
+  t.a11y.languageSwitcher;
 ---
 
 <div
-  class="col-span-2 flex items-center justify-center gap-2 sm:col-span-1"
+  class="relative flex items-center justify-center"
   aria-label={t.a11y.languageSwitcher}
   title={t.a11y.languageSwitcher}
 >
-  {
-    links.map(({ code, locale: targetLocale, href }) => (
-      <a
-        href={href}
-        class:list={[
-          "rounded-md px-2 py-1 text-sm font-medium transition-colors",
-          targetLocale === locale
-            ? "bg-surface text-accent border-border border"
-            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-        ]}
-        aria-current={targetLocale === locale ? "true" : undefined}
-      >
-        {code}
-      </a>
-    ))
-  }
+  <button
+    id="language-picker-btn"
+    class="focus-outline hover:bg-surface-hover hover:text-foreground text-muted-foreground relative size-12 rounded-md p-4 transition-colors sm:size-8"
+    type="button"
+    aria-label={`${t.a11y.languageSwitcher}: ${currentLabel}`}
+    aria-haspopup="menu"
+    aria-expanded="false"
+    aria-controls="language-picker-items"
+  >
+    <svg
+      aria-hidden="true"
+      class="absolute top-1/2 left-1/2 size-6 -translate-x-1/2 -translate-y-1/2"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M4 5h7"></path>
+      <path d="M9 3v2c0 4.418-2.239 8-5 8"></path>
+      <path d="M5 9c0 2.144 2.952 3.908 6.7 4"></path>
+      <path d="M12 20l4-9 4 9"></path>
+      <path d="M19.1 18h-6.2"></path>
+    </svg>
+    <span class="sr-only">{currentLabel}</span>
+  </button>
+
+  <div
+    id="language-picker-items"
+    class="border-border bg-surface absolute end-0 top-full z-50 mt-2 hidden min-w-32 rounded-lg border p-1 shadow-lg"
+    role="menu"
+    aria-orientation="vertical"
+  >
+    {
+      links.map(({ label, locale: targetLocale, href }) => {
+        const isCurrent = targetLocale === locale;
+        return isCurrent ? (
+          <span
+            class="bg-surface-hover text-accent block rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap"
+            role="menuitem"
+            aria-current="true"
+          >
+            {label}
+          </span>
+        ) : (
+          <a
+            href={href}
+            class="hover:bg-surface-hover hover:text-foreground text-muted-foreground block rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors"
+            role="menuitem"
+          >
+            {label}
+          </a>
+        );
+      })
+    }
+  </div>
 </div>
+
+<script>
+  function setupLanguagePicker() {
+    const button = document.querySelector<HTMLButtonElement>(
+      "#language-picker-btn"
+    );
+    const menu = document.querySelector<HTMLElement>("#language-picker-items");
+    if (!button || !menu) return;
+
+    const newButton = button.cloneNode(true) as HTMLButtonElement;
+    button.parentNode?.replaceChild(newButton, button);
+
+    const close = () => {
+      menu.classList.add("hidden");
+      newButton.setAttribute("aria-expanded", "false");
+    };
+
+    const toggle = (event: MouseEvent) => {
+      event.stopPropagation();
+      const willOpen = menu.classList.contains("hidden");
+      menu.classList.toggle("hidden", !willOpen);
+      newButton.setAttribute("aria-expanded", String(willOpen));
+    };
+
+    newButton.addEventListener("click", toggle);
+    menu.addEventListener("click", event => event.stopPropagation());
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") close();
+    });
+  }
+
+  setupLanguagePicker();
+  document.addEventListener("astro:after-swap", setupLanguagePicker);
+</script>
