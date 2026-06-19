@@ -1,9 +1,6 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import config from "@/config";
-import {
-  DEFAULT_LOCALE,
-  ENGLISH_LOCALE,
-} from "@/i18n/locales";
+import { DEFAULT_LOCALE, ENGLISH_LOCALE } from "@/i18n/locales";
 import { getLocaleLangTag } from "@/utils/localeMeta";
 
 export type LocaleAlternate = {
