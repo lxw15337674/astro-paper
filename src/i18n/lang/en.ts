@@ -33,7 +33,8 @@ export default {
     recentPosts: "Recent Posts",
     allPosts: "All Posts",
     heroTitle: "bhwa233 Blog",
-    intro: "A bilingual engineering blog about development, deployment, tooling, and long-term technical notes.",
+    intro:
+      "A bilingual engineering blog about development, deployment, tooling, and long-term technical notes.",
     introCtaPrefix: "Read the blog posts or check",
     introCtaLabel: "README",
     introCtaSuffix: "for more info.",

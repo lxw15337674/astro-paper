@@ -36,13 +36,13 @@ export function stripLocalePrefix(value: string): string {
   return segments.join("/");
 }
 
-export function filterCollectionByLocale<T extends CollectionEntry<"posts"> | CollectionEntry<"pages">>(
-  entries: T[],
-  locale: string | undefined = DEFAULT_LOCALE
-): T[] {
+export function filterCollectionByLocale<
+  T extends CollectionEntry<"posts"> | CollectionEntry<"pages">,
+>(entries: T[], locale: string | undefined = DEFAULT_LOCALE): T[] {
   return entries.filter(entry => {
     const entryLocale =
-      getEntryLocaleFromFilePath(entry.filePath) ?? getEntryLocaleFromId(entry.id);
+      getEntryLocaleFromFilePath(entry.filePath) ??
+      getEntryLocaleFromId(entry.id);
 
     return entryLocale === locale;
   });
