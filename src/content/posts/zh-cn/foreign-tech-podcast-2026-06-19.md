@@ -16,25 +16,7 @@ timezone: Asia/Shanghai
 
 ## 今日总览
 
-今天收录的 4 期内容，可以归成两条主线：
-
-- **AI 正从单点工具走向组织级基础设施**：讨论重点不再只是模型能力，而是如何把 AI 接入企业工作流、开发者平台和治理体系。
-- **AI 的边界正在向物理世界和资本密集型产业扩展**：从数据中心到工业设计，话题开始明显脱离“纯软件效率工具”的范畴。
-
-如果你今天时间有限，优先推荐：
-
-1. **Kanjun Qiu 那期**：适合想理解“可信任 AI 代理”到底卡在哪里的人。
-2. **Kyle Daigle 那期**：适合关注 GitHub、Copilot 和 AI 如何改变开发者平台边界的人。
-
-### 今日关键词
-
-- AI agents
-- developer platform
-- ownership
-- evaluation
-- datacenter economics
-- hardware engineering
-- model orchestration
+今天的 4 期内容主要围绕两条主线展开：AI 正从单点工具走向组织级基础设施，同时讨论边界也在从软件扩展到数据中心、工业系统和更重的资本配置问题；如果时间有限，优先看 Kanjun Qiu 和 Kyle Daigle 这两期。
 
 ## 今日播客清单
 
@@ -57,15 +39,6 @@ timezone: Asia/Shanghai
 - **来源**：Possible 官方节目页 / 节目转录页
 - **链接**：https://www.possible.fm/podcasts/kanjun/
 
-### Keywords
-
-- trusted AI
-- delegation
-- ownership economy
-- reasoning systems
-- software reliability
-- human agency
-
 ### Highlights
 
 - 这期最核心的问题不是“模型是否更聪明”，而是**人类为什么仍然不敢把真正的工作托付给 AI**。
@@ -73,9 +46,9 @@ timezone: Asia/Shanghai
 - 她关注的不是 demo 效果，而是 **delegation 的可信任性**：AI 必须在代码执行、可靠性和边界控制上足够稳定。
 - 这期还有一个很强的反常识点：AI 时代的核心竞争不只是模型能力，而是谁能把**信任、主权和人的 agency** 嵌进系统。
 
-### 为什么值得听
+### 一句话总结
 
-如果你最近一直在看 AI agent、copilot、workflow automation，这期很适合作为“为什么大家还不敢真的放权给 AI”的底层解释。
+一场围绕“为什么 AI 仍不值得被稳定托付”展开的深度访谈，把可信代理、用户所有权和人类主体性放到了比模型能力更核心的位置。
 
 ### 长文笔记
 
@@ -99,15 +72,6 @@ timezone: Asia/Shanghai
 - **来源**：Every 官方转录页
 - **链接**：https://every.to/podcast/transcript-can-github-be-for-everyone
 
-### Keywords
-
-- GitHub
-- Copilot
-- developer platform
-- knowledge workers
-- agentic PRs
-- model routing
-
 ### Highlights
 
 - 这期最重要的信号是：**“开发者”这个身份正在扩展**，GitHub 面对的不再只是传统工程师群体。
@@ -115,9 +79,9 @@ timezone: Asia/Shanghai
 - 关于 AI 生成代码，真正棘手的不是“代码会不会更多”，而是 **agentic PR flood、质量衡量和组织治理**。
 - GitHub 把 **developer choice** 视为护城河，意味着它并不想把用户锁死在单一模型或单一助手里。
 
-### 为什么值得听
+### 一句话总结
 
-如果你关心 GitHub、Copilot、AI coding 工具和开发者平台格局，这期是理解 GitHub 官方视角最值得先看的材料之一。
+一场关于 GitHub 如何看待 AI 时代开发者扩张、代码协作基础设施升级以及模型选择权的高信息密度对话。
 
 ### 长文笔记
 
@@ -143,15 +107,6 @@ timezone: Asia/Shanghai
 - **来源**：TBPN YouTube 官方视频页
 - **链接**：https://www.youtube.com/watch?v=PW5n3ZnEJN0
 
-### Keywords
-
-- SpaceX
-- data centers
-- compute
-- energy
-- capital markets
-- AI infrastructure
-
 ### Highlights
 
 - 这期真正的价值不在于“SpaceX 伟不伟大”，而在于它展示了 **AI 基础设施时代资本市场如何重新给重资产公司定价**。
@@ -159,9 +114,9 @@ timezone: Asia/Shanghai
 - 节目暗示：未来最值钱的公司，可能不是最会做 AI 应用的公司，而是最能控制 **算力、能源和基础设施链条** 的公司。
 - 这期很适合作为“AI 时代工业化与资本配置逻辑”的补充材料，而不只是听投资人吹 SpaceX。
 
-### 为什么值得听
+### 一句话总结
 
-如果你想理解为什么市场越来越重视 GPU、电力、数据中心和主权 AI，这期能提供一个非常成体系的资本视角。
+一场把 SpaceX、数据中心、电力、GPU 与资本市场重新定价逻辑连在一起的 AI 基础设施投资视角访谈。
 
 ### 长文笔记
 
@@ -187,15 +142,6 @@ timezone: Asia/Shanghai
 - **来源**：Sequoia Capital 官方节目页
 - **链接**：https://sequoiacap.com/podcast/training-data-paul-eremenko
 
-### Keywords
-
-- hardware engineering
-- industrial AI
-- orchestration
-- surrogate models
-- physical systems
-- engineering workflow
-
 ### Highlights
 
 - Paul Eremenko 最关键的观点是：**AI 进入工程世界，核心难点不是模型会不会生成，而是有没有足够好的工程数据与约束环境。**
@@ -203,9 +149,9 @@ timezone: Asia/Shanghai
 - 节目明确强化了“联邦式 AI”路线：多模型分工、逐级验证、误差控制，比端到端一把梭更适合高后果工业领域。
 - 他们“从简单系统开始、按数量级递增复杂度”的方法，非常像一条真正可能落地的工业 AI 路线。
 
-### 为什么值得听
+### 一句话总结
 
-如果你已经看腻了纯软件世界里的 AI 叙事，这期特别值得用来理解 AI 如何真正进入物理工程和工业设计。
+一场聚焦 AI 如何进入物理工程世界的访谈，核心不是万能模型，而是工程数据、工具编排与高约束场景下的逐级验证。
 
 ### 长文笔记
 
