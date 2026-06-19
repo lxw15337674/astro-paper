@@ -3,11 +3,11 @@ import config from "@/config";
 import {
   DEFAULT_LOCALE,
   ENGLISH_LOCALE,
-  type SiteLocale,
 } from "@/i18n/locales";
+import { getLocaleLangTag } from "@/utils/localeMeta";
 
 export type LocaleAlternate = {
-  hreflang: SiteLocale | "x-default";
+  hreflang: string;
   href: string;
 };
 
@@ -20,8 +20,8 @@ export function getSharedLocaleAlternates(path: string): LocaleAlternate[] {
   const enHref = toAbsoluteUrl(getRelativeLocaleUrl(ENGLISH_LOCALE, path));
 
   return [
-    { hreflang: DEFAULT_LOCALE, href: zhHref },
-    { hreflang: ENGLISH_LOCALE, href: enHref },
+    { hreflang: getLocaleLangTag(DEFAULT_LOCALE), href: zhHref },
+    { hreflang: getLocaleLangTag(ENGLISH_LOCALE), href: enHref },
     { hreflang: "x-default", href: zhHref },
   ];
 }

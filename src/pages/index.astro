@@ -13,6 +13,7 @@ import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getSortedPosts } from "@/utils/getSortedPosts";
 import { filterCollectionByLocale } from "@/utils/contentLocale";
 import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
+import { getLocalizedRssPath } from "@/utils/localeMeta";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
@@ -42,7 +43,7 @@ const homePath = getRelativeLocaleUrl(locale, "");
       </h1>
       <a
         target="_blank"
-        href={getRelativeLocaleUrl(locale, "rss.xml")}
+        href={getLocalizedRssPath(locale)}
         class="inline-block"
         aria-label="RSS Feed"
         title="RSS Feed"
