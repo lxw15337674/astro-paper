@@ -7,6 +7,7 @@ import Main from "@/components/Main.astro";
 import Footer from "@/components/Footer.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getLocalizedPageId } from "@/utils/contentLocale";
+import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 
 const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
@@ -27,6 +28,7 @@ const { Content } = await render(about);
   description={about.data.description}
   ogImage={about.data.ogImage}
   canonicalURL={about.data.canonicalURL}
+  localeAlternates={getSharedLocaleAlternates("about")}
 >
   <Header />
 

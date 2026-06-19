@@ -7,6 +7,7 @@ import {
   getLocalizedSiteDescription,
   getLocalizedSiteTitle,
 } from "@/utils/siteMeta";
+import type { LocaleAlternate } from "@/utils/localeAlternates";
 import { getAssetPath } from "@/utils/withBase";
 import config from "@/config";
 import "@/styles/global.css";
@@ -16,6 +17,8 @@ type Props = {
   description?: string;
   ogImage?: string;
   canonicalURL?: string;
+  noindex?: boolean;
+  localeAlternates?: LocaleAlternate[];
 };
 
 const { site } = config;
@@ -28,6 +31,8 @@ const {
   description = siteDescription,
   ogImage = resolveDefaultOgImagePath(config),
   canonicalURL = new URL(Astro.url.pathname, Astro.site).href,
+  noindex = false,
+  localeAlternates = [],
 } = Astro.props;
 
 const socialImageURL = new URL(ogImage, Astro.site ?? Astro.url);
@@ -60,6 +65,13 @@ const rssHref = getRelativeLocaleUrl(locale, "rss.xml");
     <meta name="description" content={description} />
     <meta name="author" content={site.author} />
     <link rel="sitemap" href={getAssetPath("sitemap-index.xml")} />
+    {noindex && <meta name="robots" content="noindex,follow" />}
+    {noindex && <meta name="googlebot" content="noindex,follow" />}
+    {
+      localeAlternates.map(({ hreflang, href }) => (
+        <link rel="alternate" hreflang={hreflang} href={href} />
+      ))
+    }
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />

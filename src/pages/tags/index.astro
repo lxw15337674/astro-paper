@@ -8,6 +8,7 @@ import Footer from "@/components/Footer.astro";
 import Tag from "@/components/Tag.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { filterCollectionByLocale } from "@/utils/contentLocale";
+import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { getUniqueTags } from "@/utils/getUniqueTags";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { useTranslations } from "@/i18n";
@@ -22,7 +23,10 @@ const t = useTranslations(locale);
 const siteTitle = getLocalizedSiteTitle(locale);
 ---
 
-<Layout title={`${t.pages.tagsTitle} | ${siteTitle}`}>
+<Layout
+  title={`${t.pages.tagsTitle} | ${siteTitle}`}
+  localeAlternates={getSharedLocaleAlternates("tags")}
+>
   <Header />
 
   <Breadcrumb />

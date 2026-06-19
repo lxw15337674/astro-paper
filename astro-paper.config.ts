@@ -4,7 +4,7 @@ export default defineAstroPaperConfig({
   site: {
     url: "https://blog.bhwa233.com/",
     title: "bhwa233 博客",
-    description: "一个简洁、响应式、对 SEO 友好的 Astro 博客。",
+    description: "一个以中文为主、保留英文内容的双语技术博客，记录开发、部署、工具链与工程化实践。",
     author: "bhwa233",
     profile: "https://github.com/lxw15337674",
     ogImage: "default-og.jpg",

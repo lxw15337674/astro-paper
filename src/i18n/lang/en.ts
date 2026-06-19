@@ -33,7 +33,7 @@ export default {
     recentPosts: "Recent Posts",
     allPosts: "All Posts",
     heroTitle: "bhwa233 Blog",
-    intro: "A minimal, responsive, accessible, and SEO-friendly Astro blog.",
+    intro: "A bilingual engineering blog about development, deployment, tooling, and long-term technical notes.",
     introCtaPrefix: "Read the blog posts or check",
     introCtaLabel: "README",
     introCtaSuffix: "for more info.",

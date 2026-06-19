@@ -10,6 +10,7 @@ import Card from "@/components/Card.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { postFilter } from "@/utils/postFilter";
 import { filterCollectionByLocale } from "@/utils/contentLocale";
+import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { getPostsByGroupCondition } from "./_utils/getPostsByGroupCondition";
 import { useTranslations } from "@/i18n";
@@ -31,7 +32,10 @@ const filteredPosts = posts.filter(postFilter);
 const monthFormatter = new Intl.DateTimeFormat(locale, { month: "long" });
 ---
 
-<Layout title={`${t.pages.archivesTitle} | ${siteTitle}`}>
+<Layout
+  title={`${t.pages.archivesTitle} | ${siteTitle}`}
+  localeAlternates={getSharedLocaleAlternates("archives")}
+>
   <Header />
 
   <Breadcrumb />

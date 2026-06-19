@@ -12,6 +12,7 @@ import LinkButton from "@/components/LinkButton.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getSortedPosts } from "@/utils/getSortedPosts";
 import { filterCollectionByLocale } from "@/utils/contentLocale";
+import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
@@ -27,7 +28,7 @@ const recentPosts = sortedPosts.filter(({ data }) => !data.featured);
 const homePath = getRelativeLocaleUrl(locale, "");
 ---
 
-<Layout>
+<Layout localeAlternates={getSharedLocaleAlternates("")}>
   <Header />
   <main
     id="main-content"

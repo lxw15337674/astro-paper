@@ -30,7 +30,7 @@ const t = useTranslations(locale);
 const siteTitle = getLocalizedSiteTitle(locale);
 ---
 
-<Layout title={`${t.pages.searchTitle} | ${siteTitle}`}>
+<Layout title={`${t.pages.searchTitle} | ${siteTitle}`} noindex={true}>
   <Header />
 
   <Breadcrumb />

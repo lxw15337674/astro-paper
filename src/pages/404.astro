@@ -13,7 +13,7 @@ const t = useTranslations(locale);
 const siteTitle = getLocalizedSiteTitle(locale);
 ---
 
-<Layout title={`${t.notFound.title} | ${siteTitle}`}>
+<Layout title={`${t.notFound.title} | ${siteTitle}`} noindex={true}>
   <Header />
 
   <main

@@ -20,13 +20,35 @@ import { DEFAULT_LOCALE, LOCALES } from "./src/i18n/locales";
 import { transformerFileName } from "./src/utils/transformers/fileName";
 import config from "./astro-paper.config";
 
+const NON_INDEXABLE_PATHNAMES = new Set([
+  "/404/",
+  "/404.html",
+  "/search/",
+  "/en/404/",
+  "/en/search/",
+]);
+
 export default defineConfig({
   site: config.site.url,
   integrations: [
     mdx(),
     sitemap({
-      filter: page =>
-        config.features?.showArchives !== false || !page.endsWith("/archives/"),
+      filter: page => {
+        const pathname = new URL(page).pathname;
+
+        if (NON_INDEXABLE_PATHNAMES.has(pathname)) {
+          return false;
+        }
+
+        if (
+          config.features?.showArchives === false &&
+          pathname.endsWith("/archives/")
+        ) {
+          return false;
+        }
+
+        return true;
+      },
     }),
   ],
   i18n: {

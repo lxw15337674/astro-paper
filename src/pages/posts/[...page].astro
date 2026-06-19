@@ -8,6 +8,7 @@ import Card from "@/components/Card.astro";
 import Footer from "@/components/Footer.astro";
 import Pagination from "@/components/Pagination.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
+import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { getPaginatedPostPaths } from "@/utils/localeStaticPaths";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { useTranslations } from "@/i18n";
@@ -21,9 +22,14 @@ const { page } = Astro.props;
 const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
 const t = useTranslations(locale);
 const siteTitle = getLocalizedSiteTitle(locale);
+const localeAlternates =
+  page.currentPage === 1 ? getSharedLocaleAlternates("posts") : undefined;
 ---
 
-<Layout title={`${t.pages.postsTitle} | ${siteTitle}`}>
+<Layout
+  title={`${t.pages.postsTitle} | ${siteTitle}`}
+  localeAlternates={localeAlternates}
+>
   <Header />
 
   <Breadcrumb />
