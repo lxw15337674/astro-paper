@@ -1,7 +1,7 @@
 ---
 author: bhwa233
 pubDatetime: 2026-06-19T14:30:45Z
-modDatetime: 2026-06-19T14:36:00Z
+modDatetime: 2026-06-19T15:02:00Z
 title: "海外科技访谈播客笔记 - 2026-06-19"
 featured: false
 draft: false
@@ -29,8 +29,6 @@ timezone: Asia/Shanghai
 
 ## What it takes to trust AI | Kanjun Qiu
 
-![What it takes to trust AI | Kanjun Qiu](https://images.transistor.fm/file/transistor/images/show/48046/full_dh6kPuRK.png)
-
 ### 基本信息
 
 - **节目**：Possible with Reid Hoffman & Aria Finger
@@ -39,16 +37,18 @@ timezone: Asia/Shanghai
 - **来源**：Possible 官方节目页 / 节目转录页
 - **链接**：https://www.possible.fm/podcasts/kanjun/
 
+![What it takes to trust AI | Kanjun Qiu](https://images.transistor.fm/file/transistor/images/show/48046/full_dh6kPuRK.png)
+
+### 一句话总结
+
+一场围绕“为什么 AI 仍不值得被稳定托付”展开的深度访谈，把可信代理、用户所有权和人类主体性放到了比模型能力更核心的位置。
+
 ### Highlights
 
 - 这期最核心的问题不是“模型是否更聪明”，而是**人类为什么仍然不敢把真正的工作托付给 AI**。
 - Kanjun Qiu 把未来软件的竞争焦点，从“租用平台能力”转向“用户是否真正拥有代表自己意图的 AI 工具”。
 - 她关注的不是 demo 效果，而是 **delegation 的可信任性**：AI 必须在代码执行、可靠性和边界控制上足够稳定。
 - 这期还有一个很强的反常识点：AI 时代的核心竞争不只是模型能力，而是谁能把**信任、主权和人的 agency** 嵌进系统。
-
-### 一句话总结
-
-一场围绕“为什么 AI 仍不值得被稳定托付”展开的深度访谈，把可信代理、用户所有权和人类主体性放到了比模型能力更核心的位置。
 
 ### 长文笔记
 
@@ -62,8 +62,6 @@ timezone: Asia/Shanghai
 
 ## Can GitHub Be for Everyone? | Kyle Daigle
 
-![Can GitHub Be for Everyone? | Kyle Daigle](https://every.to/images/episodes/ai-and-i-kyle-daigle.jpg)
-
 ### 基本信息
 
 - **节目**：AI & I
@@ -72,16 +70,16 @@ timezone: Asia/Shanghai
 - **来源**：Every 官方转录页
 - **链接**：https://every.to/podcast/transcript-can-github-be-for-everyone
 
+### 一句话总结
+
+一场关于 GitHub 如何看待 AI 时代开发者扩张、代码协作基础设施升级以及模型选择权的高信息密度对话。
+
 ### Highlights
 
 - 这期最重要的信号是：**“开发者”这个身份正在扩展**，GitHub 面对的不再只是传统工程师群体。
 - Kyle Daigle 传递出的方向很清楚：GitHub 正从代码托管平台，继续演进为更底层的软件协作基础设施。
 - 关于 AI 生成代码，真正棘手的不是“代码会不会更多”，而是 **agentic PR flood、质量衡量和组织治理**。
 - GitHub 把 **developer choice** 视为护城河，意味着它并不想把用户锁死在单一模型或单一助手里。
-
-### 一句话总结
-
-一场关于 GitHub 如何看待 AI 时代开发者扩张、代码协作基础设施升级以及模型选择权的高信息密度对话。
 
 ### 长文笔记
 
@@ -97,8 +95,6 @@ timezone: Asia/Shanghai
 
 ## SpaceX Might Be the Greatest Company of All Time | Gavin Baker
 
-![SpaceX Might Be the Greatest Company of All Time | Gavin Baker](https://i.ytimg.com/vi/PW5n3ZnEJN0/hqdefault.jpg)
-
 ### 基本信息
 
 - **节目**：TBPN
@@ -107,16 +103,18 @@ timezone: Asia/Shanghai
 - **来源**：TBPN YouTube 官方视频页
 - **链接**：https://www.youtube.com/watch?v=PW5n3ZnEJN0
 
+![SpaceX Might Be the Greatest Company of All Time | Gavin Baker](https://i.ytimg.com/vi/PW5n3ZnEJN0/hqdefault.jpg)
+
+### 一句话总结
+
+一场把 SpaceX、数据中心、电力、GPU 与资本市场重新定价逻辑连在一起的 AI 基础设施投资视角访谈。
+
 ### Highlights
 
 - 这期真正的价值不在于“SpaceX 伟不伟大”，而在于它展示了 **AI 基础设施时代资本市场如何重新给重资产公司定价**。
 - Gavin Baker 把 gigawatt、电力、GPU 和数据中心 energization 直接翻译成未来收入能力，这是一种非常鲜明的基础设施投资视角。
 - 节目暗示：未来最值钱的公司，可能不是最会做 AI 应用的公司，而是最能控制 **算力、能源和基础设施链条** 的公司。
 - 这期很适合作为“AI 时代工业化与资本配置逻辑”的补充材料，而不只是听投资人吹 SpaceX。
-
-### 一句话总结
-
-一场把 SpaceX、数据中心、电力、GPU 与资本市场重新定价逻辑连在一起的 AI 基础设施投资视角访谈。
 
 ### 长文笔记
 
@@ -132,8 +130,6 @@ timezone: Asia/Shanghai
 
 ## P-1 AI’s Path to Hardware Engineering AGI | Paul Eremenko
 
-![P-1 AI’s Path to Hardware Engineering AGI | Paul Eremenko](https://i.ytimg.com/vi/placeholder/hqdefault.jpg)
-
 ### 基本信息
 
 - **节目**：Training Data
@@ -142,16 +138,16 @@ timezone: Asia/Shanghai
 - **来源**：Sequoia Capital 官方节目页
 - **链接**：https://sequoiacap.com/podcast/training-data-paul-eremenko
 
+### 一句话总结
+
+一场聚焦 AI 如何进入物理工程世界的访谈，核心不是万能模型，而是工程数据、工具编排与高约束场景下的逐级验证。
+
 ### Highlights
 
 - Paul Eremenko 最关键的观点是：**AI 进入工程世界，核心难点不是模型会不会生成，而是有没有足够好的工程数据与约束环境。**
 - P-1 AI 不是在追求一个万能模型，而是在构建一个会拆任务、调用仿真工具、理解工程流程的 AI 工程代理。
 - 节目明确强化了“联邦式 AI”路线：多模型分工、逐级验证、误差控制，比端到端一把梭更适合高后果工业领域。
 - 他们“从简单系统开始、按数量级递增复杂度”的方法，非常像一条真正可能落地的工业 AI 路线。
-
-### 一句话总结
-
-一场聚焦 AI 如何进入物理工程世界的访谈，核心不是万能模型，而是工程数据、工具编排与高约束场景下的逐级验证。
 
 ### 长文笔记
 
