@@ -74,7 +74,7 @@ const ogImage = ogImageUrl
   ? new URL(ogImageUrl, Astro.url.origin).href
   : undefined;
 
-const showCoverImage = Boolean(ogImageUrl) && !post.id.startsWith("zh-cn/mdblist热播推荐-");
+const showCoverImage = Boolean(ogImageUrl);
 ---
 
 <PostLayout

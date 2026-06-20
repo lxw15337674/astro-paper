@@ -1,11 +1,10 @@
 import type { APIRoute } from "astro";
-import { fontData, experimental_getFontFileURL } from "astro:assets";
 import satori from "satori";
 import sharp from "sharp";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
-import { getFontPathByWeight } from "@/utils/getFontPathByWeight";
 import { getPostOgPaths } from "@/utils/localeStaticPaths";
 import config from "@/config";
+import { loadOgFonts, OG_FONT_FAMILY } from "@/utils/ogFonts";
 
 export async function getStaticPaths() {
   return getPostOgPaths(DEFAULT_LOCALE);
@@ -16,22 +15,7 @@ export const GET: APIRoute = async ({ props, url }) => {
     return new Response(null, { status: 404, statusText: "Not found" });
   }
 
-  const fonts = fontData["--font-google-sans-code"];
-  const regularFontPath = getFontPathByWeight(fonts, 400);
-  const boldFontPath = getFontPathByWeight(fonts, 700);
-
-  if (regularFontPath === undefined || boldFontPath === undefined) {
-    throw new Error("Cannot find the font path.");
-  }
-
-  const [regularData, boldData] = await Promise.all([
-    fetch(experimental_getFontFileURL(regularFontPath, url)).then(res =>
-      res.arrayBuffer()
-    ),
-    fetch(experimental_getFontFileURL(boldFontPath, url)).then(res =>
-      res.arrayBuffer()
-    ),
-  ]);
+  const fonts = await loadOgFonts(url);
 
   const svg = await satori(
     {
@@ -44,6 +28,7 @@ export const GET: APIRoute = async ({ props, url }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          fontFamily: OG_FONT_FAMILY,
         },
         children: [
           {
@@ -98,6 +83,8 @@ export const GET: APIRoute = async ({ props, url }) => {
                           fontWeight: "bold",
                           maxHeight: "84%",
                           overflow: "hidden",
+                          lineHeight: 1.2,
+                          letterSpacing: -1,
                         },
                         children: props.data.title,
                       },
@@ -160,20 +147,7 @@ export const GET: APIRoute = async ({ props, url }) => {
       width: 1200,
       height: 630,
       embedFont: true,
-      fonts: [
-        {
-          name: "Google Sans Code",
-          data: regularData,
-          weight: 400,
-          style: "normal",
-        },
-        {
-          name: "Google Sans Code",
-          data: boldData,
-          weight: 700,
-          style: "normal",
-        },
-      ],
+      fonts,
     }
   );
 
