@@ -2,7 +2,11 @@ import { fontData, experimental_getFontFileURL } from "astro:assets";
 import type { FontData } from "astro:assets";
 import { getFontPathByWeight } from "@/utils/getFontPathByWeight";
 
-const CJK_FONT_PATH = "public/fonts/wqy-zenhei-subset.ttf";
+const PRIMARY_FONT_FAMILY = "Google Sans Code";
+const CJK_FONT_FAMILY = "Noto Sans SC";
+
+const PRIMARY_FONT_DATA = "--font-google-sans-code";
+const CJK_FONT_DATA = "--font-noto-sans-sc";
 
 type LoadedFont = {
   name: string;
@@ -25,47 +29,43 @@ async function loadAstroFont(
   );
 }
 
-async function loadLocalFont(path: string): Promise<ArrayBuffer> {
-  const fs = await import("node:fs/promises");
-  const nodePath = await import("node:path");
-  const buffer = await fs.readFile(nodePath.resolve(process.cwd(), path));
-  return buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength
-  );
-}
-
 export async function loadOgFonts(url: URL): Promise<LoadedFont[]> {
-  const fonts = fontData["--font-google-sans-code"];
+  const primaryFonts = fontData[PRIMARY_FONT_DATA];
+  const cjkFonts = fontData[CJK_FONT_DATA];
+
+  if (!primaryFonts || !cjkFonts) {
+    throw new Error("Cannot find configured OG font data.");
+  }
+
   const [regularData, boldData, cjkRegularData, cjkBoldData] =
     await Promise.all([
-      loadAstroFont(fonts, 400, url),
-      loadAstroFont(fonts, 700, url),
-      loadLocalFont(CJK_FONT_PATH),
-      loadLocalFont(CJK_FONT_PATH),
+      loadAstroFont(primaryFonts, 400, url),
+      loadAstroFont(primaryFonts, 700, url),
+      loadAstroFont(cjkFonts, 400, url),
+      loadAstroFont(cjkFonts, 700, url),
     ]);
 
   return [
     {
-      name: "Google Sans Code",
+      name: PRIMARY_FONT_FAMILY,
       data: regularData,
       weight: 400,
       style: "normal",
     },
     {
-      name: "Google Sans Code",
+      name: PRIMARY_FONT_FAMILY,
       data: boldData,
       weight: 700,
       style: "normal",
     },
     {
-      name: "WenQuanYi Zen Hei",
+      name: CJK_FONT_FAMILY,
       data: cjkRegularData,
       weight: 400,
       style: "normal",
     },
     {
-      name: "WenQuanYi Zen Hei",
+      name: CJK_FONT_FAMILY,
       data: cjkBoldData,
       weight: 700,
       style: "normal",
@@ -73,4 +73,4 @@ export async function loadOgFonts(url: URL): Promise<LoadedFont[]> {
   ];
 }
 
-export const OG_FONT_FAMILY = '"WenQuanYi Zen Hei", "Google Sans Code"';
+export const OG_FONT_FAMILY = `"${PRIMARY_FONT_FAMILY}", "${CJK_FONT_FAMILY}"`;
