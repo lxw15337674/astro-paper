@@ -45,7 +45,6 @@ timezone: Asia/Shanghai
 - **原文**：https://www.timwehrle.de/blog/i-stored-a-website-in-a-favicon/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48606619
 
-
 ### 2. Data Compression Explained (2012)
 
 - **热度**：107 points · 12 评论
@@ -68,7 +67,6 @@ timezone: Asia/Shanghai
 - **原文**：https://mattmahoney.net/dc/dce.html
 - **HN 讨论**：https://news.ycombinator.com/item?id=48562662
 
-
 ### 3. Where to Find the Colors Your Screen Can't Show You
 
 - **热度**：82 points · 17 评论
@@ -90,7 +88,6 @@ timezone: Asia/Shanghai
 
 - **原文**：https://moultano.wordpress.com/2026/06/19/where-to-find-the-colors-your-screen-cant-show-you/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48606140
-
 
 ### 4. There are no instances in ATProto
 
@@ -116,7 +113,6 @@ timezone: Asia/Shanghai
 - **原文**：https://overreacted.io/there-are-no-instances-in-atproto/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48599515
 
-
 ### 5. The discovery that changed how scientists think about memory
 
 - **热度**：48 points · 11 评论
@@ -138,7 +134,6 @@ timezone: Asia/Shanghai
 
 - **原文**：https://www.ibm.com/think/news/discovery-changed-how-scientists-think-about-memory-kavli-prize
 - **HN 讨论**：https://news.ycombinator.com/item?id=48568652
-
 
 ### 6. Can you see three trees?
 
@@ -164,7 +159,6 @@ timezone: Asia/Shanghai
 - **原文**：https://www.not-ship.com/can-you-see-three-trees/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48582374
 
-
 ### 7. Surprising economics of load-balanced systems
 
 - **热度**：106 points · 24 评论
@@ -189,7 +183,6 @@ timezone: Asia/Shanghai
 - **原文**：https://brooker.co.za/blog/2020/08/06/erlang.html
 - **HN 讨论**：https://news.ycombinator.com/item?id=48602918
 
-
 ### 8. Hyundai buys Boston Dynamics
 
 - **热度**：806 points · 354 评论
@@ -212,7 +205,6 @@ timezone: Asia/Shanghai
 - **原文**：https://startupfortune.com/hyundai-takes-full-control-of-boston-dynamics-as-softbank-exits-for-325-million/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48600312
 
-
 ### 9. How many of the 170k English words do you know?
 
 - **热度**：355 points · 443 评论
@@ -232,7 +224,6 @@ timezone: Asia/Shanghai
 
 - **原文**：https://vocabowl-870366514258.us-west1.run.app/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48598586
-
 
 ### 10. Norway imposes near ban on AI in elementary school
 

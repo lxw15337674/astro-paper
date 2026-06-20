@@ -17,6 +17,7 @@ import {
   transformerNotationWordHighlight,
 } from "@shikijs/transformers";
 import { DEFAULT_LOCALE, LOCALES } from "./src/i18n/locales";
+import { getSitemapLastmodForUrl } from "./src/utils/sitemapLastmod";
 import { transformerFileName } from "./src/utils/transformers/fileName";
 import config from "./astro-paper.config";
 
@@ -49,6 +50,10 @@ export default defineConfig({
 
         return true;
       },
+      serialize: item => ({
+        ...item,
+        lastmod: getSitemapLastmodForUrl(item.url),
+      }),
     }),
   ],
   i18n: {
