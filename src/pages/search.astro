@@ -8,6 +8,7 @@ import Main from "@/components/Main.astro";
 import Footer from "@/components/Footer.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getAssetPath } from "@/utils/withBase";
+import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
@@ -31,7 +32,11 @@ const siteTitle = getLocalizedSiteTitle(locale);
 const pagefindTranslations = JSON.stringify(t.search.pagefind);
 ---
 
-<Layout title={`${t.pages.searchTitle} | ${siteTitle}`} noindex={true}>
+<Layout
+  title={`${t.pages.searchTitle} | ${siteTitle}`}
+  noindex={true}
+  localeAlternates={getSharedLocaleAlternates("search")}
+>
   <Header />
 
   <Breadcrumb />
@@ -39,9 +44,9 @@ const pagefindTranslations = JSON.stringify(t.search.pagefind);
   <Main pageTitle={t.pages.searchTitle} pageDesc={t.pages.searchDesc}>
     <div
       id="pagefind-search"
-      transition:persist
       data-backurl={backUrl}
       data-bundle-path={pagefindBundlePath}
+      data-current-locale={locale}
       data-pagefind-translations={pagefindTranslations}
       data-dev-warning-title={t.search.devModeWarningTitle}
       data-dev-warning-text={t.search.devModeWarningText}
@@ -65,6 +70,7 @@ const pagefindTranslations = JSON.stringify(t.search.pagefind);
     const translations = JSON.parse(
       pageFindSearch.dataset.pagefindTranslations ?? "{}"
     );
+    const currentLocale = pageFindSearch.dataset.currentLocale;
 
     const params = new URLSearchParams(window.location.search);
 
@@ -83,7 +89,11 @@ const pagefindTranslations = JSON.stringify(t.search.pagefind);
         const paragraph = document.createElement("p");
         const title = document.createElement("strong");
         title.textContent = pageFindSearch.dataset.devWarningTitle ?? "";
-        paragraph.append(title, " ", pageFindSearch.dataset.devWarningText ?? "");
+        paragraph.append(
+          title,
+          " ",
+          pageFindSearch.dataset.devWarningText ?? ""
+        );
 
         const code = document.createElement("code");
         code.className =
@@ -119,6 +129,9 @@ const pagefindTranslations = JSON.stringify(t.search.pagefind);
 
       // If search param exists (eg: search?q=astro), trigger search
       const query = params.get("q");
+      if (currentLocale) {
+        search.triggerFilters({ locale: currentLocale });
+      }
       if (query) {
         search.triggerSearch(query);
       }

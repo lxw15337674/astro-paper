@@ -96,6 +96,7 @@ const showCoverImage = Boolean(ogImageUrl);
     id="main-content"
     class:list={["app-layout", { "mt-8": !config.features.showBackButton }]}
     data-pagefind-body
+    data-pagefind-filter={`locale:${locale}`}
     data-copy-label={t.code.copy}
     data-copied-label={t.code.copied}
     data-zoom-image-label={t.lightbox.zoomImage}
