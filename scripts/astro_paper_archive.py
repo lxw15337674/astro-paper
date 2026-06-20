@@ -132,9 +132,9 @@ def yaml_quote(text: str) -> str:
     return json.dumps(text, ensure_ascii=False)
 
 
-def build_frontmatter(*, title: str, pub_dt: datetime, mod_dt: datetime, tags: list[str], description: str) -> str:
+def build_frontmatter(*, title: str, pub_dt: datetime, mod_dt: datetime, tags: list[str], description: str, og_image: str = "") -> str:
     tags_yaml = "\n".join(f"  - {tag}" for tag in tags)
-    og_image_line = f"ogImage: {yaml_quote(HN_DEFAULT_OG_IMAGE)}\n" if "HackerNews" in tags else ""
+    og_image_line = f"ogImage: {yaml_quote(og_image)}\n" if og_image else ""
     return (
         "---\n"
         f"author: {DEFAULT_AUTHOR}\n"
@@ -203,6 +203,25 @@ def extract_line(pattern: str, text: str) -> str:
 def extract_url(text: str) -> str:
     m = re.search(r"https?://\S+", text)
     return m.group(0).rstrip(')。]') if m else ""
+
+
+def fetch_og_image(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        html = run(["curl", "-L", "-A", "Mozilla/5.0", "--max-time", "20", "-s", url])
+    except Exception:
+        return ""
+    for pattern in [
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
+    ]:
+        m = re.search(pattern, html, flags=re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+    return ""
 
 
 def infer_cover(url: str) -> str | None:
@@ -341,7 +360,7 @@ def build_hn_description(text: str, fallback: str) -> str:
             return f"Hacker News Top 10：{title}"[:140]
     return fallback[:140]
 
-def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
+def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
     points = next((b.removeprefix("⭐").strip() for b in bullets if b.startswith("⭐")), "")
@@ -351,6 +370,9 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
     summary = summary_candidates[0] if summary_candidates else ""
     content_summary, comment_summary = split_hn_summary_and_comment(summary)
     topic = classify_hn_topic(title, content_summary or summary)
+    source_image = fetch_og_image(link)
+    points_num_match = re.search(r"(\d+)", points)
+    points_num = int(points_num_match.group(1)) if points_num_match else 0
 
     if not hn_link:
         item_id = extract_line(r"news\.ycombinator\.com/item\?id=(\d+)", raw)
@@ -370,10 +392,10 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
     if hn_link:
         block.append(f"- **HN 讨论**：{hn_link}")
     block.append("")
-    return "\n".join(block), topic, title
+    return "\n".join(block), topic, title, source_image, points_num
 
 
-def format_hn_top10(text: str) -> str:
+def format_hn_top10(text: str) -> tuple[str, str]:
     title_line = text.splitlines()[0].strip() if text.splitlines() else "今日 HackerNews 热门文章 Top 10"
     matches = list(HN_ITEM_SPLIT_RE.finditer(text))
     item_chunks: list[str] = []
@@ -384,17 +406,19 @@ def format_hn_top10(text: str) -> str:
         if chunk:
             item_chunks.append(chunk)
     if not item_chunks:
-        return text
+        return text, ""
 
     item_blocks = []
     topics = []
-    top_titles = []
+    cover_image = ""
+    best_points = -1
     for idx, chunk in enumerate(item_chunks, start=1):
-        block, topic, title = build_hn_item_block(idx, chunk)
+        block, topic, _title, source_image, points_num = build_hn_item_block(idx, chunk)
         item_blocks.append(block)
         topics.append(topic)
-        if idx <= 3:
-            top_titles.append(title)
+        if source_image and points_num > best_points:
+            best_points = points_num
+            cover_image = source_image
 
     topic_counts: dict[str, int] = {}
     for topic in topics:
@@ -421,7 +445,7 @@ def format_hn_top10(text: str) -> str:
         close,
         "",
     ])
-    return "\n".join(lines).rstrip() + "\n"
+    return "\n".join(lines).rstrip() + "\n", cover_image
 
 
 def format_foreign_podcast(text: str, title: str) -> str:
@@ -458,14 +482,14 @@ def format_foreign_podcast(text: str, title: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def format_task_body(task_name: str, title: str, body: str) -> str:
+def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
     task = TASKS[task_name]
     formatter = task.get("formatter")
     if formatter == "podcast":
-        return format_foreign_podcast(body, title)
+        return format_foreign_podcast(body, title), ""
     if formatter == "hn":
         return format_hn_top10(body)
-    return body
+    return body, ""
 
 
 def main() -> int:
@@ -496,7 +520,7 @@ def main() -> int:
 
     raw_text = load_context_text()
     body = normalize_markdown(raw_text)
-    body = format_task_body(args.task, title, body)
+    body, cover_image = format_task_body(args.task, title, body)
     description = first_paragraph_summary(body, str(task["summary"]))
     if args.task == "hn-top10":
         description = build_hn_description(body, str(task["summary"]))
@@ -512,6 +536,7 @@ def main() -> int:
         mod_dt=mod_dt,
         tags=tags,
         description=description,
+        og_image=cover_image,
     )
     content = frontmatter + body
     rel_path = str(post_path.relative_to(repo))
