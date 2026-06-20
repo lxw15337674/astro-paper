@@ -17,12 +17,12 @@ const pathWithoutLocale = stripLocale(normalizedPath, locale);
 
 const links = [
   {
-    label: "中文",
+    label: t.language.zhCn,
     locale: DEFAULT_LOCALE,
     href: getRelativeLocaleUrl(DEFAULT_LOCALE, pathWithoutLocale),
   },
   {
-    label: "English",
+    label: t.language.en,
     locale: ENGLISH_LOCALE,
     href: getRelativeLocaleUrl(ENGLISH_LOCALE, pathWithoutLocale),
   },

@@ -10,7 +10,7 @@ import Pagination from "@/components/Pagination.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getTagPaginatedPaths } from "@/utils/localeStaticPaths";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
-import { useTranslations } from "@/i18n";
+import { tplStr, useTranslations } from "@/i18n";
 
 export async function getStaticPaths(options: GetStaticPathsOptions) {
   return getTagPaginatedPaths(DEFAULT_LOCALE, options);
@@ -21,17 +21,16 @@ const { page, tagName } = Astro.props;
 const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
 const t = useTranslations(locale);
 const siteTitle = getLocalizedSiteTitle(locale);
+const tagPageTitle = tplStr(t.pages.tagTitleWithName, { tagName });
+const tagPageDesc = tplStr(t.pages.tagDescWithName, { tagName });
 ---
 
-<Layout title={`${t.pages.tagTitle}: ${tagName} | ${siteTitle}`}>
+<Layout title={`${tagPageTitle} | ${siteTitle}`}>
   <Header />
 
   <Breadcrumb />
 
-  <Main
-    pageTitle={`${t.pages.tagTitle}: ${tagName}`}
-    pageDesc={`${t.pages.tagDesc} "${tagName}".`}
-  >
+  <Main pageTitle={tagPageTitle} pageDesc={tagPageDesc}>
     <ul>
       {page.data.map(data => <Card {...data} />)}
     </ul>

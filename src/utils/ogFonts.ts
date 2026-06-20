@@ -2,7 +2,7 @@ import { fontData, experimental_getFontFileURL } from "astro:assets";
 import type { FontData } from "astro:assets";
 import { getFontPathByWeight } from "@/utils/getFontPathByWeight";
 
-const CJK_FONT_PATH = "/home/bhwa233/code/astro-paper/public/fonts/wqy-zenhei-subset.ttf";
+const CJK_FONT_PATH = "public/fonts/wqy-zenhei-subset.ttf";
 
 type LoadedFont = {
   name: string;
@@ -27,8 +27,12 @@ async function loadAstroFont(
 
 async function loadLocalFont(path: string): Promise<ArrayBuffer> {
   const fs = await import("node:fs/promises");
-  const buffer = await fs.readFile(path);
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  const nodePath = await import("node:path");
+  const buffer = await fs.readFile(nodePath.resolve(process.cwd(), path));
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength
+  );
 }
 
 export async function loadOgFonts(url: URL): Promise<LoadedFont[]> {
