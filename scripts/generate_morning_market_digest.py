@@ -11,9 +11,7 @@ from zoneinfo import ZoneInfo
 BJT = ZoneInfo("Asia/Shanghai")
 ROOT = Path("/home/bhwa233")
 HERMES_SCRIPTS = ROOT / ".hermes" / "scripts"
-CRON_OUTPUT = ROOT / ".hermes" / "cron" / "output"
-AHK_JOB_ID = "190aaa34df04"
-HK_IPO_JOB_ID = "074ca3b35a55"
+ASTRO_POSTS = ROOT / "code" / "astro-paper" / "src" / "content" / "posts" / "zh-cn"
 
 
 def run_cmd(cmd: list[str]) -> str:
@@ -29,28 +27,19 @@ def run_script(path: Path) -> str:
     return run_cmd(["python3", str(path)])
 
 
-def latest_cron_response(job_id: str) -> str:
-    outdir = CRON_OUTPUT / job_id
-    if not outdir.exists():
-        raise FileNotFoundError(f"cron output dir not found: {outdir}")
-    files = sorted(p for p in outdir.iterdir() if p.is_file())
+def read_latest_post(pattern: str) -> str:
+    files = sorted(ASTRO_POSTS.glob(pattern))
     if not files:
-        raise FileNotFoundError(f"no cron artifacts in: {outdir}")
-    text = files[-1].read_text(encoding="utf-8")
-    marker = "## Response"
-    idx = text.find(marker)
-    if idx == -1:
-        raise ValueError(f"missing response marker in {files[-1]}")
-    return text[idx + len(marker):].strip()
+        raise FileNotFoundError(f"no post files matched {pattern} in {ASTRO_POSTS}")
+    return files[-1].read_text(encoding="utf-8")
 
 
-def strip_missing_skill_notice(text: str) -> str:
-    lines = [
-        line
-        for line in text.splitlines()
-        if not line.startswith("⚠️ Skill(s) not found and skipped:")
-    ]
-    return "\n".join(lines).strip()
+def strip_frontmatter(text: str) -> str:
+    if text.startswith("---\n"):
+        parts = text.split("\n---\n", 1)
+        if len(parts) == 2:
+            return parts[1].strip()
+    return text.strip()
 
 
 def parse_us_market(text: str) -> dict[str, str]:
@@ -72,15 +61,8 @@ def parse_us_market(text: str) -> dict[str, str]:
     return data
 
 
-def split_ah_hk(text: str) -> tuple[str, str]:
-    text = strip_missing_skill_notice(text)
-    parts = text.split("===SPLIT===")
-    if len(parts) != 2:
-        raise ValueError("A/H cron output missing ===SPLIT=== separator")
-    return parts[0].strip(), parts[1].strip()
-
-
 def parse_brief_sections(text: str) -> list[str]:
+    text = strip_frontmatter(text)
     lines = [line.rstrip() for line in text.splitlines() if line.strip()]
     if lines and lines[0].startswith("《"):
         lines = lines[1:]
@@ -111,14 +93,20 @@ def parse_btc(text: str) -> dict[str, str]:
 
 
 def parse_hk_ipo(text: str) -> dict[str, object]:
-    text = strip_missing_skill_notice(text)
+    text = strip_frontmatter(text)
     result: dict[str, object] = {"has_ipo": False, "body": text}
     if "今日非港股交易日" in text or "今日无可申购港股新股" in text:
         return result
-    if "【港股打新】" in text:
+    if "港股打新" in text or "打新" in text:
         result["has_ipo"] = True
         result["body"] = text
     return result
+
+
+def extract_section(text: str, heading: str) -> str:
+    pattern = rf"##\s+{re.escape(heading)}\n+(.*?)(?=\n##\s+|\Z)"
+    match = re.search(pattern, text, flags=re.S)
+    return match.group(1).strip() if match else ""
 
 
 def build_key_points(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> list[str]:
@@ -192,16 +180,16 @@ def build_summary(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> str
 def build_markdown(
     date_str: str,
     us_raw: str,
-    ah_raw: str,
-    hk_raw: str,
+    ah_text: str,
+    hk_text: str,
     btc_raw: str,
-    ipo_raw: str,
+    ipo_text: str,
 ) -> str:
     us = parse_us_market(us_raw)
     btc = parse_btc(btc_raw)
-    ah_paras = parse_brief_sections(ah_raw)
-    hk_paras = parse_brief_sections(hk_raw)
-    ipo = parse_hk_ipo(ipo_raw)
+    ah_paras = parse_brief_sections(ah_text)
+    hk_paras = parse_brief_sections(hk_text)
+    ipo = parse_hk_ipo(ipo_text)
     key_points = build_key_points(us, btc, bool(ipo.get("has_ipo")))
 
     lines: list[str] = [
@@ -255,11 +243,13 @@ def main() -> int:
 
     us_raw = run_script(HERMES_SCRIPTS / "us_market_close_summary.py")
     btc_raw = run_script(HERMES_SCRIPTS / "daily_btc_change.py")
-    ahk_response = latest_cron_response(AHK_JOB_ID)
-    ah_raw, hk_raw = split_ah_hk(ahk_response)
-    ipo_raw = latest_cron_response(HK_IPO_JOB_ID)
 
-    print(build_markdown(target_date, us_raw, ah_raw, hk_raw, btc_raw, ipo_raw))
+    market_post = read_latest_post("市场日报-*.md")
+    ah_text = extract_section(market_post, "A股收盘回顾")
+    hk_text = extract_section(market_post, "港股收盘回顾")
+    ipo_text = extract_section(market_post, "附录：港股打新") or "今日无可申购港股新股。"
+
+    print(build_markdown(target_date, us_raw, ah_text, hk_text, btc_raw, ipo_text))
     return 0
 
 
