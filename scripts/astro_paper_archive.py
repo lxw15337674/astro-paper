@@ -609,7 +609,9 @@ def main() -> int:
     task = TASKS[args.task]
     period_key = slug_date(dt, args.period)
     post_path = target_path(repo, args.task, str(task["task_tag"]), period_key)
-    sep = " - " if args.period == "weekly" else "｜"
+    sep = "｜"
+    if args.task == "mdblist-weekly" and args.period == "weekly":
+        period_key = period_key.replace("-W", " W")
     title = f"{task['title_prefix']}{sep}{period_key.upper() if args.period == 'weekly' else period_key}"
 
     raw_text = load_context_text()
