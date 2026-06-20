@@ -65,6 +65,7 @@ HN_TOPIC_RULES = [
 ]
 
 HN_ITEM_SPLIT_RE = re.compile(r"(?m)^\d+\.\s*🔥?\s+")
+ARCHIVE_PAYLOAD_MARKER = "===ARCHIVE_PAYLOAD==="
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> str:
@@ -482,6 +483,105 @@ def format_foreign_podcast(text: str, title: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def compact_mdblist_summary(text: str) -> str:
+    cleaned = compact_text(text)
+    if len(cleaned) > 120:
+        return cleaned[:120].rstrip("，,。 ") + "。"
+    return cleaned
+
+
+def build_mdblist_reason(item: dict[str, object]) -> str:
+    raw_genres = item.get("genres")
+    genres = [str(g) for g in raw_genres if g] if isinstance(raw_genres, list) else []
+    genre_text = "、".join(genres[:3]) if genres else "题材"
+    release_date = str(item.get("release_date") or "待补充")
+    rating_bits: list[str] = []
+    mdblist_rating = item.get("mdblist_rating")
+    douban_rating = str(item.get("douban_rating") or "").strip()
+    if mdblist_rating not in (None, ""):
+        rating_bits.append(f"MDBList {mdblist_rating}")
+    if douban_rating:
+        rating_bits.append(f"豆瓣 {douban_rating}")
+    if not rating_bits:
+        rating_bits.append("现有榜单评分")
+    return f"它在本周榜单里同时具备 {genre_text} 题材辨识度与讨论热度，且于 {release_date} 上线，当前{'、'.join(rating_bits)}，很适合作为本周优先补看的候选。"
+
+
+def format_mdblist_weekly(text: str) -> str:
+    if ARCHIVE_PAYLOAD_MARKER not in text:
+        return text
+    raw_body, raw_payload = text.split(ARCHIVE_PAYLOAD_MARKER, 1)
+    payload = json.loads(raw_payload.strip())
+    items = payload.get("items") or []
+    if not isinstance(items, list) or not items:
+        return raw_body.strip() + "\n"
+
+    intro = "这份片单基于 MDBList 热门榜中近期评分与讨论度都比较突出的条目整理而成，不强行凑固定数量，重点挑出这周更值得立即加入待看列表的作品。"
+    lines = [
+        "《本周高分热播推荐》",
+        "",
+        "## 本周总览",
+        "",
+        intro,
+        "",
+    ]
+
+    for idx, item in enumerate(items, start=1):
+        title = str(item.get("title") or f"第{idx}部作品")
+        poster = str(item.get("poster") or "").strip()
+        genres = item.get("genres") or []
+        genre_text = " / ".join(str(g) for g in genres if g) or "待补充"
+        release_date = str(item.get("release_date") or "待补充")
+        media_type = str(item.get("media_type") or "")
+        mdblist_rating = item.get("mdblist_rating")
+        douban_rating = str(item.get("douban_rating") or "").strip()
+        imdb_rating = str(item.get("imdb_rating") or "").strip()
+        summary = compact_mdblist_summary(str(item.get("summary") or "待补充"))
+        link = str(item.get("url") or "").strip()
+        douban_url = str(item.get("douban_url") or "").strip()
+        basic_info = []
+        if media_type == "movie":
+            basic_info.append("- **类型归属**：电影")
+        elif media_type == "tv":
+            basic_info.append("- **类型归属**：剧集")
+        basic_info.extend([
+            f"- **题材类型**：{genre_text}",
+            f"- **上线日期**：{release_date}",
+        ])
+        ratings = []
+        if mdblist_rating not in (None, ""):
+            ratings.append(f"MDBList {mdblist_rating}")
+        if douban_rating:
+            ratings.append(f"豆瓣 {douban_rating}")
+        if imdb_rating:
+            ratings.append(f"IMDb {imdb_rating}")
+        basic_info.append(f"- **评分**：{'｜'.join(ratings) if ratings else '待补充'}")
+        if link:
+            basic_info.append(f"- **MDBList**：{link}")
+        if douban_url:
+            basic_info.append(f"- **豆瓣**：{douban_url}")
+
+        lines.extend([f"## {idx}. {title}", ""])
+        if poster:
+            lines.extend([f"![{title} 海报]({poster})", ""])
+        lines.extend([
+            "### 基本信息",
+            "",
+            *basic_info,
+            "",
+            "### 剧情概要",
+            "",
+            summary,
+            "",
+            "### 推荐理由",
+            "",
+            build_mdblist_reason(item),
+            "",
+        ])
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
     task = TASKS[task_name]
     formatter = task.get("formatter")
@@ -489,6 +589,8 @@ def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
         return format_foreign_podcast(body, title), ""
     if formatter == "hn":
         return format_hn_top10(body)
+    if task_name == "mdblist-weekly":
+        return format_mdblist_weekly(body), ""
     return body, ""
 
 
