@@ -14,6 +14,8 @@ def main() -> int:
     args = parser.parse_args()
 
     data = sys.stdin.read()
+    if "## Response" in data:
+        data = data.split("## Response", 1)[1].strip() + "\n"
     repo = Path("/home/bhwa233/code/astro-paper")
     script = repo / "scripts" / "astro_paper_archive.py"
     cmd = ["python3", str(script), "--task", args.task]
