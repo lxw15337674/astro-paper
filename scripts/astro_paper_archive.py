@@ -63,6 +63,8 @@ HN_TOPIC_RULES = [
     (r"espresso|coffee|economics|game|doom|wolfenstein|duke nukem", "文化 / 杂项"),
 ]
 
+HN_ITEM_SPLIT_RE = re.compile(r"(?m)^\d+\.\s*🔥?\s+")
+
 
 def run(cmd: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
@@ -361,8 +363,14 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
 
 def format_hn_top10(text: str) -> str:
     title_line = text.splitlines()[0].strip() if text.splitlines() else "今日 HackerNews 热门文章 Top 10"
-    chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
-    item_chunks = [c for c in chunks if re.match(r"^\d+\.\s*🔥?", c)]
+    matches = list(HN_ITEM_SPLIT_RE.finditer(text))
+    item_chunks: list[str] = []
+    for i, m in enumerate(matches):
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        chunk = text[start:end].strip()
+        if chunk:
+            item_chunks.append(chunk)
     if not item_chunks:
         return text
 
