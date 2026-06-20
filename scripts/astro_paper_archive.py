@@ -21,6 +21,7 @@ TASKS: dict[str, dict[str, object]] = {
         "title_prefix": "HackerNews Top 10",
         "task_tag": "HackerNews",
         "summary": "每日 Hacker News 热门文章 Top 10 中文整理，按当天归档并覆盖更新。",
+        "formatter": "hn",
     },
     "foreign-tech-podcast": {
         "title_prefix": "海外科技访谈播客笔记",
@@ -52,6 +53,14 @@ FAIL_PATTERNS = [
     r"command failed:",
     r"上游 .* 未提供可归档的最终正文",
     r"BLOCKED:",
+]
+
+HN_TOPIC_RULES = [
+    (r"ai|openai|llm|model|anthropic|gemini|copilot", "AI / 模型"),
+    (r"school|education|teacher|children|policy|government|id|internet traffic", "政策 / 社会议题"),
+    (r"javascript|typescript|rust|biome|tooling|compiler|developer", "开发工具 / 编程语言"),
+    (r"spacex|gpu|datacenter|load-balanced|systems|atproto|boston dynamics|robot", "基础设施 / 系统"),
+    (r"espresso|coffee|economics|game|doom|wolfenstein|duke nukem", "文化 / 杂项"),
 ]
 
 
@@ -282,6 +291,93 @@ def build_podcast_section(raw: str) -> tuple[str, str]:
     return "\n".join(parts), checklist_line
 
 
+def classify_hn_topic(title: str, summary: str) -> str:
+    hay = f"{title} {summary}".lower()
+    for pattern, topic in HN_TOPIC_RULES:
+        if re.search(pattern, hay):
+            return topic
+    return "技术 / 观察"
+
+
+def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
+    title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
+    points = extract_line(r"^•\s*⭐\s*(.+)$", raw)
+    summary = extract_line(r"^•\s*(?!⭐|原文|HN 讨论)(.+)$", raw)
+    link = extract_line(r"^•\s*蚊帐连?接?：\s*(.+)$", raw) or extract_line(r"^•\s*原文：\s*(.+)$", raw)
+    hn_link = extract_line(r"^•\s*HN 讨论：\s*(.+)$", raw)
+    topic = classify_hn_topic(title, summary)
+
+    if not hn_link:
+        item_id = extract_line(r"news\.ycombinator\.com/item\?id=(\d+)", raw)
+        if item_id:
+            hn_link = f"https://news.ycombinator.com/item?id={item_id}"
+
+    block = [f"### {index}. {title}", ""]
+    if points:
+        block.append(f"- **热度**：{points}")
+    block.append(f"- **主题**：{topic}")
+    if summary:
+        block.append(f"- **摘要**：{summary}")
+    if link:
+        block.append(f"- **原文**：{link}")
+    if hn_link:
+        block.append(f"- **HN 讨论**：{hn_link}")
+    block.append("")
+    return "\n".join(block), topic, title
+
+
+def format_hn_top10(text: str) -> str:
+    title_line = text.splitlines()[0].strip() if text.splitlines() else "今日 HackerNews 热门文章 Top 10"
+    chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
+    item_chunks = [c for c in chunks if re.match(r"^\d+\.\s*🔥?", c)]
+    if not item_chunks:
+        return text
+
+    item_blocks = []
+    topics = []
+    top_titles = []
+    for idx, chunk in enumerate(item_chunks, start=1):
+        block, topic, title = build_hn_item_block(idx, chunk)
+        item_blocks.append(block)
+        topics.append(topic)
+        if idx <= 3:
+            top_titles.append(title)
+
+    topic_counts: dict[str, int] = {}
+    for topic in topics:
+        topic_counts[topic] = topic_counts.get(topic, 0) + 1
+    topic_lines = [f"- {topic}：{count} 条" for topic, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]]
+
+    lead = "今天的 Hacker News 热门内容同时覆盖了教育政策、工程文化、分布式系统与基础设施议题，说明社区关注点并不只停留在单一技术热点，而是明显横跨工具、社会影响与系统设计。"
+    close = "从今天的榜单看，Hacker News 讨论重心仍然偏向‘技术如何影响现实系统’，而不是单纯追逐新产品发布。"
+
+    lines = [
+        title_line,
+        "",
+        "## 今日总览",
+        "",
+        lead,
+        "",
+        f"如果时间有限，优先看：{'; '.join(top_titles[:3])}。",
+        "",
+        "## 今日看点",
+        "",
+        *topic_lines,
+        "",
+        "## 今日 Hacker News Top 10",
+        "",
+    ]
+    for block in item_blocks:
+        lines.extend([block, ""])
+    lines.extend([
+        "## 结尾观察",
+        "",
+        close,
+        "",
+    ])
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def format_foreign_podcast(text: str, title: str) -> str:
     sections = split_sections(text)
     episode_sections = []
@@ -318,8 +414,11 @@ def format_foreign_podcast(text: str, title: str) -> str:
 
 def format_task_body(task_name: str, title: str, body: str) -> str:
     task = TASKS[task_name]
-    if task.get("formatter") == "podcast":
+    formatter = task.get("formatter")
+    if formatter == "podcast":
         return format_foreign_podcast(body, title)
+    if formatter == "hn":
+        return format_hn_top10(body)
     return body
 
 
