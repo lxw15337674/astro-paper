@@ -48,7 +48,7 @@ TASKS: dict[str, dict[str, object]] = {
     },
     "mdblist-weekly": {
         "title_prefix": "每周影视推荐",
-        "task_tag": "MDBList热播推荐",
+        "task_tag": "每周影视推荐",
         "summary": "每周影视推荐专栏，汇总本周值得关注的电影与剧集，并补充口碑观察。",
         "formatter": "mdblist-weekly",
     },
