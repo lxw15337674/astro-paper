@@ -61,18 +61,6 @@ def parse_us_market(text: str) -> dict[str, str]:
     return data
 
 
-def parse_brief_sections(text: str) -> list[str]:
-    text = strip_frontmatter(text)
-    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-    if lines and lines[0].startswith("《"):
-        lines = lines[1:]
-    joined = "\n".join(lines).strip()
-    if not joined:
-        return []
-    paras = [p.strip() for p in joined.split("\n\n") if p.strip()]
-    return paras or [joined]
-
-
 def parse_btc(text: str) -> dict[str, str]:
     data: dict[str, str] = {}
     for line in text.splitlines():
@@ -109,15 +97,47 @@ def extract_section(text: str, heading: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-def build_key_points(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> list[str]:
+def normalize_paragraphs(text: str) -> list[str]:
+    text = strip_frontmatter(text)
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    return [p for p in paras if not p.startswith("### ")]
+
+
+def first_sentence(text: str) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
+    match = re.search(r".+?[。！？!?]", text)
+    return match.group(0).strip() if match else text
+
+
+def compact_join(parts: list[str]) -> str:
+    return " ".join(part.strip() for part in parts if part and part.strip())
+
+
+def clean_macro_for_summary(macro: str) -> str:
+    macro = macro.rstrip("。")
+    macro = re.sub(r"^消息面", "", macro)
+    macro = re.sub(r"^主要围绕", "", macro)
+    return macro.lstrip("，,：:；; ")
+
+
+def build_key_points(
+    us: dict[str, str],
+    ah_paras: list[str],
+    hk_paras: list[str],
+    btc: dict[str, str],
+    has_ipo: bool,
+) -> list[str]:
     points = []
     if us.get("indexes"):
         points.append(
             f"隔夜美股方面，{us['indexes']}，整体呈现{us.get('sentiment', '分化整理')}。"
         )
-    if us.get("macro"):
-        macro = us["macro"]
-        points.append(macro if macro.startswith("消息面") else f"消息面上，{macro}")
+    if ah_paras:
+        points.append(first_sentence(ah_paras[0]))
+    if hk_paras:
+        points.append(first_sentence(hk_paras[0]))
     if btc.get("price") or btc.get("change_24h"):
         bits = []
         if btc.get("price"):
@@ -129,52 +149,88 @@ def build_key_points(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> 
         points.append("；".join(bits) + "。")
     if has_ipo:
         points.append("今天有处于可申购期的港股新股，文末附录已整理相关打新信息。")
-    else:
-        points.append(
-            "今天无新增港股打新附录内容，正文聚焦隔夜美股、A股、港股与 BTC 四个市场观察模块。"
-        )
-    return points[:5]
+    return points[:4]
 
 
-def build_btc_paragraph(btc: dict[str, str]) -> str:
-    parts = []
+def build_us_sections(us: dict[str, str]) -> list[str]:
+    lines: list[str] = ["## 隔夜美股", ""]
+    if us.get("indexes") or us.get("sentiment"):
+        lines.extend(["### 指数表现", ""])
+        parts = []
+        if us.get("indexes"):
+            parts.append(f"隔夜美股收盘方面，{us['indexes']}。")
+        if us.get("sentiment"):
+            parts.append(f"从指数层面看，整体呈现{us['sentiment']}。")
+        lines.extend([compact_join(parts), ""])
+    if us.get("tech"):
+        lines.extend([
+            "### 科技股与结构",
+            "",
+            f"科技权重方面，{us['tech']}",
+            "",
+        ])
+    if us.get("macro") or us.get("risk"):
+        lines.extend(["### 消息面", ""])
+        if us.get("macro"):
+            macro = us["macro"]
+            lines.append(macro if macro.startswith("消息面") else f"消息面上，{macro}")
+        if us.get("risk"):
+            lines.extend(["", f"后续仍可继续关注{us['risk']}"])
+        lines.append("")
+    return lines
+
+
+def build_ah_sections(ah_paras: list[str]) -> list[str]:
+    lines: list[str] = ["## A股收盘回顾", ""]
+    labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
+    for label, para in zip(labels, ah_paras[:3]):
+        lines.extend([label, "", para, ""])
+    return lines
+
+
+def build_hk_sections(hk_paras: list[str]) -> list[str]:
+    lines: list[str] = ["## 港股收盘回顾", ""]
+    labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
+    for label, para in zip(labels, hk_paras[:3]):
+        lines.extend([label, "", para, ""])
+    return lines
+
+
+def build_btc_sections(btc: dict[str, str]) -> list[str]:
+    lines: list[str] = ["## BTC 市场动态", "", "### 当前价格与短线变化", ""]
+    current = []
     if btc.get("price"):
-        parts.append(f"截至发文时，BTC 报 {btc['price']}。")
+        current.append(f"截至发文时，BTC 报 {btc['price']}。")
     if btc.get("change_24h") and btc.get("change_12h"):
-        parts.append(
+        current.append(
             f"过去 24 小时变动为 {btc['change_24h']}，过去 12 小时变动为 {btc['change_12h']}。"
         )
     elif btc.get("change_24h"):
-        parts.append(f"过去 24 小时变动为 {btc['change_24h']}。")
+        current.append(f"过去 24 小时变动为 {btc['change_24h']}。")
+    lines.extend([compact_join(current), "", "### 市场观察", ""])
+    observation = []
     if btc.get("mtd"):
-        parts.append(f"按月初口径计算，本月累计变动为 {btc['mtd']}。")
+        observation.append(
+            f"从月内表现看，BTC 目前较月初仍变动 {btc['mtd']}，说明短线虽然有所修复，但月内趋势仍未完全扭转。"
+        )
     if btc.get("note") and "获取失败" in btc["note"]:
-        parts.append(f"备注：{btc['note']}")
-    return " ".join(parts)
-
-
-def clean_macro_for_summary(macro: str) -> str:
-    macro = macro.rstrip("。")
-    macro = re.sub(r"^消息面", "", macro)
-    macro = re.sub(r"^主要围绕", "", macro)
-    return macro.lstrip("，,：:；; ")
+        observation.append(f"备注：{btc['note']}")
+    lines.extend([compact_join(observation), ""])
+    return lines
 
 
 def build_summary(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> str:
     lines = []
     if us.get("macro"):
         macro = clean_macro_for_summary(us["macro"])
-        lines.append(f"从晨间横向观察看，外盘主线仍主要围绕{macro}展开。")
+        lines.append(f"今天早上把几类市场放在一起看，海外市场主线仍集中在{macro}上。")
     if btc.get("change_24h"):
         lines.append(
-            f"加密资产方面，BTC 的短线表现为 {btc['change_24h']}，可作为风险情绪的补充观察窗口。"
+            f"A股与港股的科技方向仍是主要观察重点，而 BTC 的近 24 小时表现为 {btc['change_24h']}，更适合作为风险情绪的辅助指标。"
         )
-    lines.append(
-        "A股与港股部分则分别对应最近一个交易日的收盘状态，便于在开盘前快速建立当日市场背景。"
-    )
     if has_ipo:
-        lines.append("若需要关注一级市场机会，可直接查看文末港股打新附录。")
-    return "\n\n".join(lines)
+        lines.append("若需要关注一级市场机会，还可以结合文末的港股打新附录继续看。")
+    return "\n\n".join(lines[:3])
 
 
 def build_markdown(
@@ -187,48 +243,19 @@ def build_markdown(
 ) -> str:
     us = parse_us_market(us_raw)
     btc = parse_btc(btc_raw)
-    ah_paras = parse_brief_sections(ah_text)
-    hk_paras = parse_brief_sections(hk_text)
+    ah_paras = normalize_paragraphs(ah_text)
+    hk_paras = normalize_paragraphs(hk_text)
     ipo = parse_hk_ipo(ipo_text)
-    key_points = build_key_points(us, btc, bool(ipo.get("has_ipo")))
+    key_points = build_key_points(us, ah_paras, hk_paras, btc, bool(ipo.get("has_ipo")))
 
-    lines: list[str] = [
-        f"《晨间市场观察》{date_str}",
-        "",
-        "## 今日要点",
-        "",
-    ]
+    lines: list[str] = ["## 今日要点", ""]
     lines.extend([f"- {point}" for point in key_points])
-    lines.extend(["", "## 隔夜美股", ""])
-    if us.get("indexes"):
-        lines.append(f"隔夜美股收盘方面，{us['indexes']}。")
-    if us.get("sentiment"):
-        lines.append(f"从指数层面看，整体呈现{us['sentiment']}。")
-    if us.get("tech"):
-        lines.extend(["", f"科技权重方面，{us['tech']}"])
-    if us.get("macro"):
-        macro = us["macro"]
-        lines.extend(["", macro if macro.startswith("消息面") else f"消息面上，{macro}"])
-    if us.get("risk"):
-        lines.extend(["", f"盘后仍需留意{us['risk']}"])
-
-    lines.extend(["", "## A股收盘回顾", ""])
-    lines.extend(ah_paras or ["暂无可用的 A 股收盘内容。"])
-
-    lines.extend(["", "## 港股收盘回顾", ""])
-    lines.extend(hk_paras or ["暂无可用的港股收盘内容。"])
-
-    lines.extend([
-        "",
-        "## BTC 市场动态",
-        "",
-        build_btc_paragraph(btc),
-        "",
-        "## 总结",
-        "",
-        build_summary(us, btc, bool(ipo.get("has_ipo"))),
-        "",
-    ])
+    lines.extend([""])
+    lines.extend(build_us_sections(us))
+    lines.extend(build_ah_sections(ah_paras))
+    lines.extend(build_hk_sections(hk_paras))
+    lines.extend(build_btc_sections(btc))
+    lines.extend(["## 总结", "", build_summary(us, btc, bool(ipo.get("has_ipo"))), ""])
     if ipo.get("has_ipo"):
         lines.extend(["## 附录：港股打新", "", str(ipo["body"]).strip(), ""])
     return "\n".join(lines).strip() + "\n"
