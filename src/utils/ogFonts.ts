@@ -37,12 +37,13 @@ async function loadLocalFont(path: string): Promise<ArrayBuffer> {
 
 export async function loadOgFonts(url: URL): Promise<LoadedFont[]> {
   const fonts = fontData["--font-google-sans-code"];
-  const [regularData, boldData, cjkRegularData, cjkBoldData] = await Promise.all([
-    loadAstroFont(fonts, 400, url),
-    loadAstroFont(fonts, 700, url),
-    loadLocalFont(CJK_FONT_PATH),
-    loadLocalFont(CJK_FONT_PATH),
-  ]);
+  const [regularData, boldData, cjkRegularData, cjkBoldData] =
+    await Promise.all([
+      loadAstroFont(fonts, 400, url),
+      loadAstroFont(fonts, 700, url),
+      loadLocalFont(CJK_FONT_PATH),
+      loadLocalFont(CJK_FONT_PATH),
+    ]);
 
   return [
     {

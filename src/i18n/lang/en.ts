@@ -68,7 +68,7 @@ export default {
     tagTitle: "Tag",
     tagDesc: "All the articles with the tag",
     tagTitleWithName: "Tag: {{tagName}}",
-    tagDescWithName: "All the articles with the tag \"{{tagName}}\".",
+    tagDescWithName: 'All the articles with the tag "{{tagName}}".',
 
     tagsTitle: "Tags",
     tagsDesc: "All the tags used in posts.",
@@ -116,8 +116,10 @@ export default {
       zero_results: "No results for [SEARCH_TERM]",
       many_results: "[COUNT] results for [SEARCH_TERM]",
       one_result: "[COUNT] result for [SEARCH_TERM]",
-      alt_search: "No results for [SEARCH_TERM]. Showing results for [DIFFERENT_TERM] instead",
-      search_suggestion: "No results for [SEARCH_TERM]. Try one of the following searches:",
+      alt_search:
+        "No results for [SEARCH_TERM]. Showing results for [DIFFERENT_TERM] instead",
+      search_suggestion:
+        "No results for [SEARCH_TERM]. Try one of the following searches:",
       searching: "Searching for [SEARCH_TERM]...",
       total_results: "[COUNT] total results",
       total_result: "[COUNT] total result",

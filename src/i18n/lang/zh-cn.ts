@@ -115,7 +115,8 @@ export default {
       zero_results: "未找到 [SEARCH_TERM] 的相关结果",
       many_results: "找到 [COUNT] 条关于 [SEARCH_TERM] 的结果",
       one_result: "找到 [COUNT] 条关于 [SEARCH_TERM] 的结果",
-      alt_search: "未找到 [SEARCH_TERM] 的相关结果。改为显示 [DIFFERENT_TERM] 的结果",
+      alt_search:
+        "未找到 [SEARCH_TERM] 的相关结果。改为显示 [DIFFERENT_TERM] 的结果",
       search_suggestion: "未找到 [SEARCH_TERM] 的相关结果。可以尝试以下搜索：",
       searching: "正在搜索 [SEARCH_TERM]……",
       total_results: "共 [COUNT] 条结果",
