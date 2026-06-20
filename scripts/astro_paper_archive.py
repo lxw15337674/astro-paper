@@ -47,9 +47,9 @@ TASKS: dict[str, dict[str, object]] = {
         "summary": "高分新剧电影推荐周报，包含剧情概要、类型与具体上线日期。",
     },
     "mdblist-weekly": {
-        "title_prefix": "MDBList 高分热播推荐",
+        "title_prefix": "每周影视推荐",
         "task_tag": "MDBList热播推荐",
-        "summary": "基于 MDBList 的高分热播影视推荐归档，按当天覆盖更新。",
+        "summary": "每周影视推荐专栏，汇总本周值得关注的电影与剧集，并补充口碑观察。",
         "formatter": "mdblist-weekly",
     },
 }
@@ -561,78 +561,14 @@ def translate_mdblist_summary(text: str) -> str:
 
 
 def format_mdblist_weekly(text: str) -> str:
-    if ARCHIVE_PAYLOAD_MARKER not in text:
-        return text
-    raw_body, raw_payload = text.split(ARCHIVE_PAYLOAD_MARKER, 1)
-    payload = json.loads(raw_payload.strip())
-    items = payload.get("items") or []
-    if not isinstance(items, list) or not items:
-        return raw_body.strip() + "\n"
-
-    intro = "这份片单基于 MDBList 热门榜中近期评分与讨论度都比较突出的条目整理而成，不强行凑固定数量，重点挑出这周更值得立即加入待看列表的作品。"
-    lines = [
-        "《本周高分热播推荐》",
-        "",
-        "## 本周总览",
-        "",
-        intro,
-        "",
-    ]
-
-    for idx, item in enumerate(items, start=1):
-        title = str(item.get("title") or f"第{idx}部作品")
-        poster = str(item.get("poster") or "").strip()
-        genres = item.get("genres") or []
-        genre_text = " / ".join(str(g) for g in genres if g) or "待补充"
-        release_date = str(item.get("release_date") or "待补充")
-        media_type = str(item.get("media_type") or "")
-        mdblist_rating = item.get("mdblist_rating")
-        douban_rating = str(item.get("douban_rating") or "").strip()
-        imdb_rating = str(item.get("imdb_rating") or "").strip()
-        summary = translate_mdblist_summary(f"{title}||{str(item.get('summary') or '')}")
-        link = str(item.get("url") or "").strip()
-        douban_url = str(item.get("douban_url") or "").strip()
-        basic_info = []
-        if media_type == "movie":
-            basic_info.append("- **类型归属**：电影")
-        elif media_type == "tv":
-            basic_info.append("- **类型归属**：剧集")
-        basic_info.extend([
-            f"- **题材类型**：{genre_text}",
-            f"- **上线日期**：{release_date}",
-        ])
-        ratings = []
-        if mdblist_rating not in (None, ""):
-            ratings.append(f"MDBList {mdblist_rating}")
-        if douban_rating:
-            ratings.append(f"豆瓣 {douban_rating}")
-        if imdb_rating:
-            ratings.append(f"IMDb {imdb_rating}")
-        basic_info.append(f"- **评分**：{'｜'.join(ratings) if ratings else '待补充'}")
-        if link:
-            basic_info.append(f"- **MDBList**：{link}")
-        if douban_url:
-            basic_info.append(f"- **豆瓣**：{douban_url}")
-
-        lines.extend([f"## {idx}. {title}", ""])
-        if poster:
-            lines.extend([f"![{title} 海报]({poster})", ""])
-        lines.extend([
-            "### 基本信息",
-            "",
-            *basic_info,
-            "",
-            "### 剧情概要",
-            "",
-            summary,
-            "",
-            "### 推荐理由",
-            "",
-            build_mdblist_reason(item),
-            "",
-        ])
-
-    return "\n".join(lines).rstrip() + "\n"
+    cleaned = text.strip()
+    if ARCHIVE_PAYLOAD_MARKER in cleaned:
+        cleaned = cleaned.split(ARCHIVE_PAYLOAD_MARKER, 1)[0].strip()
+    cleaned = re.sub(r"^```(?:markdown)?\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```\s*$", "", cleaned).strip()
+    cleaned = re.sub(r"^#\s+.*$", "", cleaned, count=1, flags=re.MULTILINE).strip()
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.rstrip() + "\n"
 
 
 def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
