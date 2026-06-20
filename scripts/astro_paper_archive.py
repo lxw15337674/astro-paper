@@ -18,6 +18,12 @@ TOTAL_TAG = "定时文章"
 HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg"
 
 TASKS: dict[str, dict[str, object]] = {
+    "morning-market": {
+        "title_prefix": "晨间市场观察",
+        "task_tag": "市场日报",
+        "summary": "每日晨间市场观察，汇总隔夜美股、A股收盘、港股收盘、BTC动态与可申购港股打新附录。",
+        "formatter": "morning-market",
+    },
     "hn-top10": {
         "title_prefix": "HackerNews Top 10",
         "task_tag": "HackerNews",
@@ -622,6 +628,8 @@ def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
         return format_hn_top10(body)
     if formatter == "mdblist-weekly":
         return format_mdblist_weekly(body), ""
+    if formatter == "morning-market":
+        return body, ""
     return body, ""
 
 
