@@ -73,6 +73,8 @@ if (!ogImageUrl && config.features.dynamicOgImage) {
 const ogImage = ogImageUrl
   ? new URL(ogImageUrl, Astro.url.origin).href
   : undefined;
+
+const showCoverImage = Boolean(ogImageUrl);
 ---
 
 <PostLayout
@@ -113,6 +115,18 @@ const ogImage = ogImageUrl
       </span>
       <EditPost {hideEditPost} {post} class="max-sm:hidden" />
     </div>
+
+    {
+      showCoverImage && ogImageUrl && (
+        <img
+          src={ogImageUrl}
+          alt={title}
+          class="border-border/60 my-6 aspect-[16/9] w-full overflow-hidden rounded-2xl border object-cover shadow-sm"
+          loading="eager"
+          decoding="async"
+        />
+      )
+    }
 
     <article
       id="article"

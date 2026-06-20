@@ -15,6 +15,7 @@ BJT = ZoneInfo("Asia/Shanghai")
 DEFAULT_REPO = Path("/home/bhwa233/code/astro-paper")
 DEFAULT_AUTHOR = "bhwa233"
 TOTAL_TAG = "定时文章"
+HN_DEFAULT_OG_IMAGE = "/images/hn-cover.svg"
 
 TASKS: dict[str, dict[str, object]] = {
     "hn-top10": {
@@ -133,6 +134,7 @@ def yaml_quote(text: str) -> str:
 
 def build_frontmatter(*, title: str, pub_dt: datetime, mod_dt: datetime, tags: list[str], description: str) -> str:
     tags_yaml = "\n".join(f"  - {tag}" for tag in tags)
+    og_image_line = f"ogImage: {yaml_quote(HN_DEFAULT_OG_IMAGE)}\n" if "HackerNews" in tags else ""
     return (
         "---\n"
         f"author: {DEFAULT_AUTHOR}\n"
@@ -143,6 +145,7 @@ def build_frontmatter(*, title: str, pub_dt: datetime, mod_dt: datetime, tags: l
         "draft: false\n"
         "tags:\n"
         f"{tags_yaml}\n"
+        f"{og_image_line}"
         f"description: {yaml_quote(description)}\n"
         "timezone: Asia/Shanghai\n"
         "---\n\n"
