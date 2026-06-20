@@ -420,7 +420,7 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
 
 
 def format_hn_top10(text: str) -> tuple[str, str]:
-    title_line = text.splitlines()[0].strip() if text.splitlines() else "今日 HackerNews 热门文章 Top 10"
+    title_line = text.splitlines()[0].strip() if text.splitlines() else "1. 🔥 今日 HackerNews 热门文章 Top 10"
     matches = list(HN_ITEM_SPLIT_RE.finditer(text))
     item_chunks: list[str] = []
     for i, m in enumerate(matches):
@@ -449,8 +449,6 @@ def format_hn_top10(text: str) -> tuple[str, str]:
         topic_counts[topic] = topic_counts.get(topic, 0) + 1
     topic_lines = [f"- {topic}：{count} 条" for topic, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]]
 
-    close = "从今天的榜单看，Hacker News 讨论重心仍然偏向‘技术如何影响现实系统’，而不是单纯追逐新产品发布。"
-
     lines = [
         title_line,
         "",
@@ -463,12 +461,6 @@ def format_hn_top10(text: str) -> tuple[str, str]:
     ]
     for block in item_blocks:
         lines.extend([block, ""])
-    lines.extend([
-        "## 结尾观察",
-        "",
-        close,
-        "",
-    ])
     return "\n".join(lines).rstrip() + "\n", cover_image
 
 
