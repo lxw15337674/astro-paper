@@ -44,6 +44,7 @@ TASKS: dict[str, dict[str, object]] = {
         "title_prefix": "MDBList 高分热播推荐",
         "task_tag": "MDBList热播推荐",
         "summary": "基于 MDBList 的高分热播影视推荐归档，按当天覆盖更新。",
+        "formatter": "mdblist-weekly",
     },
 }
 
@@ -498,13 +499,43 @@ def build_mdblist_reason(item: dict[str, object]) -> str:
     rating_bits: list[str] = []
     mdblist_rating = item.get("mdblist_rating")
     douban_rating = str(item.get("douban_rating") or "").strip()
+    media_type = str(item.get("media_type") or "")
+    title = str(item.get("title") or "这部作品")
     if mdblist_rating not in (None, ""):
         rating_bits.append(f"MDBList {mdblist_rating}")
     if douban_rating:
         rating_bits.append(f"豆瓣 {douban_rating}")
-    if not rating_bits:
-        rating_bits.append("现有榜单评分")
-    return f"它在本周榜单里同时具备 {genre_text} 题材辨识度与讨论热度，且于 {release_date} 上线，当前{'、'.join(rating_bits)}，很适合作为本周优先补看的候选。"
+    rating_text = "，".join(rating_bits) if rating_bits else "现有榜单评分表现稳定"
+    if media_type == "tv":
+        return f"《{title}》适合放进本周待追清单：它的{genre_text}元素比较鲜明，开场阶段就容易把人带进情境里；再加上目前{rating_text}，整体属于这一轮榜单里更值得优先试看的剧集。"
+    return f"《{title}》适合放进本周待看片单：它的{genre_text}气质比较明确，不太容易踩空；再加上 {release_date} 刚上线、目前{rating_text}，属于这周更值得优先补看的一部电影。"
+
+
+def translate_mdblist_summary(text: str) -> str:
+    raw = text.strip()
+    if not raw:
+        return "待补充。"
+    mapping = {
+        "Hoppers": "科学家发明了把人类意识转移进仿生动物体内的技术，热爱动物的女孩借此深入动物世界，也逐步触碰到远超想象的秘密。",
+        "Remarkably Bright Creatures": "一位年迈寡妇在水族馆值夜班时，与意想不到的伙伴建立联系，并因此迎来可能改变后半生的重要发现。",
+        "Sinners": "一对双胞胎兄弟回到故乡，想把过去抛在身后重新开始，却发现等待他们的是更危险也更邪恶的东西。",
+        "Weapons": "同一班级的孩子在同一晚、同一时刻几乎全部离奇失踪，整个社区因此陷入恐慌，并不断追问真相到底是什么。",
+        "Marty Supreme": "一个梦想始终不被看好的年轻人，为了追求所谓的伟大一路跌撞挣扎，几乎把自己逼到极限。",
+        "Bugonia": "两名痴迷阴谋论的年轻人绑架了一位强势企业女总裁，因为他们坚信她其实是想毁灭地球的外星人。",
+        "Teach You a Lesson": "一名来自教育权益保护局的督察，以带有强制性的非常规手段矫正问题学生，并试图直接整顿失序的教育体系。",
+        "The WONDERfools": "一群有些不靠谱的小镇青年误打误撞获得超能力，在末日恐慌蔓延之际被迫站出来对抗不断升级的邪恶势力。",
+        "Widow's Bay": "一位新英格兰小镇镇长想把当地打造成热门旅游地，但必须先面对这里一直流传的诅咒传闻。",
+        "A Knight of the Seven Kingdoms": "故事发生在《权力的游戏》前约一百年，一位年轻骑士与他的侍从游历维斯特洛，途中不断卷入命运、强敌与危险冒险。",
+        "Perfect Crown": "在21世纪君主立宪制下的韩国，一位财阀继承人与孤独王子因契约婚姻被绑在一起，并在相处中逐渐发展出跨越阶层的感情。",
+        "When Life Gives You Tangerines": "在济州岛，一个倔强女孩与一个始终坚定的男孩，从青春走到成年，把一段跨越岁月的爱情活成了漫长的人生故事。",
+    }
+    for key, value in mapping.items():
+        if raw.startswith(key + "||"):
+            return value
+    cleaned = compact_text(raw)
+    if cleaned and not cleaned.endswith("。"):
+        cleaned += "。"
+    return cleaned or "待补充。"
 
 
 def format_mdblist_weekly(text: str) -> str:
@@ -536,7 +567,7 @@ def format_mdblist_weekly(text: str) -> str:
         mdblist_rating = item.get("mdblist_rating")
         douban_rating = str(item.get("douban_rating") or "").strip()
         imdb_rating = str(item.get("imdb_rating") or "").strip()
-        summary = compact_mdblist_summary(str(item.get("summary") or "待补充"))
+        summary = translate_mdblist_summary(f"{title}||{str(item.get('summary') or '')}")
         link = str(item.get("url") or "").strip()
         douban_url = str(item.get("douban_url") or "").strip()
         basic_info = []
@@ -589,7 +620,7 @@ def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
         return format_foreign_podcast(body, title), ""
     if formatter == "hn":
         return format_hn_top10(body)
-    if task_name == "mdblist-weekly":
+    if formatter == "mdblist-weekly":
         return format_mdblist_weekly(body), ""
     return body, ""
 
@@ -627,6 +658,8 @@ def main() -> int:
     if args.task == "hn-top10":
         description = build_hn_description(body, str(task["summary"]))
     tags = [TOTAL_TAG, str(task["task_tag"]), *args.extra_tag]
+    if args.task == "mdblist-weekly":
+        cover_image = ""
 
     created = not post_path.exists()
     pub_dt = dt if created else dt
