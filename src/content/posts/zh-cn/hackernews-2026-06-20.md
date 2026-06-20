@@ -8,7 +8,7 @@ draft: false
 tags:
   - 定时文章
   - HackerNews
-ogImage: "/images/hn-cover.svg"
+ogImage: "../../../../public/images/hn-cover.svg"
 description: "Hacker News Top 10：How to feed a dictator"
 timezone: Asia/Shanghai
 ---

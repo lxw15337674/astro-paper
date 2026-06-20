@@ -15,7 +15,7 @@ BJT = ZoneInfo("Asia/Shanghai")
 DEFAULT_REPO = Path("/home/bhwa233/code/astro-paper")
 DEFAULT_AUTHOR = "bhwa233"
 TOTAL_TAG = "定时文章"
-HN_DEFAULT_OG_IMAGE = "/images/hn-cover.svg"
+HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg"
 
 TASKS: dict[str, dict[str, object]] = {
     "hn-top10": {
@@ -332,6 +332,15 @@ def normalize_hn_paragraph(text: str) -> str:
     text = re.sub(r"([。！？!?])([^\n])", r"\1\n\n\2", text)
     return text.strip()
 
+
+def build_hn_description(text: str, fallback: str) -> str:
+    title_match = re.search(r"^\d+\.\s*🔥?\s*(.+)$", text, flags=re.MULTILINE)
+    if title_match:
+        title = compact_text(title_match.group(1))
+        if title:
+            return f"Hacker News Top 10：{title}"[:140]
+    return fallback[:140]
+
 def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
@@ -489,6 +498,8 @@ def main() -> int:
     body = normalize_markdown(raw_text)
     body = format_task_body(args.task, title, body)
     description = first_paragraph_summary(body, str(task["summary"]))
+    if args.task == "hn-top10":
+        description = build_hn_description(body, str(task["summary"]))
     tags = [TOTAL_TAG, str(task["task_tag"]), *args.extra_tag]
 
     created = not post_path.exists()
