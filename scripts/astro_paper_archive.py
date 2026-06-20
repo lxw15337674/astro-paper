@@ -72,6 +72,7 @@ HN_TOPIC_RULES = [
 ]
 
 HN_ITEM_SPLIT_RE = re.compile(r"(?m)^\d+\.\s*🔥?\s+")
+HN_HEADER_RE = re.compile(r"^1\.\s*🔥?\s*今日 HackerNews 热门文章 Top 10\s*$", re.M)
 ARCHIVE_PAYLOAD_MARKER = "===ARCHIVE_PAYLOAD==="
 
 
@@ -334,9 +335,12 @@ def classify_hn_topic(title: str, summary: str) -> str:
 def extract_hn_bullets(raw: str) -> list[str]:
     bullets: list[str] = []
     for line in raw.splitlines():
-        m = re.match(r"^•\s*(.+)$", line.strip())
-        if m:
-            bullets.append(m.group(1).strip())
+        stripped = line.strip()
+        for pattern in (r"^•\s*(.+)$", r"^-\s*(.+)$"):
+            m = re.match(pattern, stripped)
+            if m:
+                bullets.append(m.group(1).strip())
+                break
     return bullets
 
 
@@ -388,12 +392,18 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
     points = next((b.removeprefix("⭐").strip() for b in bullets if b.startswith("⭐")), "")
+    topic_from_source = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("主题：")), "")
     link = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("原文：") or b.startswith("蚊帐连接：") or b.startswith("蚊帐链接：")), "")
     hn_link = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("HN 讨论：")), "")
-    summary_candidates = [b for b in bullets if not re.match(r"^(⭐|原文：|HN 讨论：|蚊帐连接：|蚊帐链接：)", b)]
-    summary = summary_candidates[0] if summary_candidates else ""
-    content_summary, comment_summary = split_hn_summary_and_comment(summary)
-    topic = classify_hn_topic(title, content_summary or summary)
+    content_summary = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("内容总结：")), "")
+    comment_summary = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("评论总结：")), "")
+    summary_candidates = [b for b in bullets if not re.match(r"^(⭐|主题：|原文：|HN 讨论：|内容总结：|评论总结：|蚊帐连接：|蚊帐链接：)", b)]
+    fallback_summary = summary_candidates[0] if summary_candidates else ""
+    if not content_summary or not comment_summary:
+        parsed_content, parsed_comment = split_hn_summary_and_comment(fallback_summary)
+        content_summary = content_summary or parsed_content
+        comment_summary = comment_summary or parsed_comment
+    topic = topic_from_source or classify_hn_topic(title, content_summary or fallback_summary)
     source_image = fetch_og_image(link)
     points_num_match = re.search(r"(\d+)", points)
     points_num = int(points_num_match.group(1)) if points_num_match else 0
@@ -408,7 +418,7 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
         block.append(f"- **热度**：{points}")
     block.append(f"- **主题**：{topic}")
     if content_summary:
-        block.extend(["#### 内容总结", "", normalize_hn_paragraph(content_summary), ""])
+        block.extend(["", "#### 内容总结", "", normalize_hn_paragraph(content_summary), ""])
     if comment_summary:
         block.extend(["#### 评论总结", "", normalize_hn_paragraph(comment_summary), ""])
     if link:
@@ -420,13 +430,15 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
 
 
 def format_hn_top10(text: str) -> tuple[str, str]:
-    title_line = text.splitlines()[0].strip() if text.splitlines() else "1. 🔥 今日 HackerNews 热门文章 Top 10"
-    matches = list(HN_ITEM_SPLIT_RE.finditer(text))
+    cleaned = text.strip()
+    title_line = "1. 🔥 今日 HackerNews 热门文章 Top 10"
+    cleaned = HN_HEADER_RE.sub("", cleaned, count=1).strip()
+    matches = list(HN_ITEM_SPLIT_RE.finditer(cleaned))
     item_chunks: list[str] = []
     for i, m in enumerate(matches):
         start = m.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        chunk = text[start:end].strip()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned)
+        chunk = cleaned[start:end].strip()
         if chunk:
             item_chunks.append(chunk)
     if not item_chunks:
