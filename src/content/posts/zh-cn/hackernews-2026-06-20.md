@@ -1,7 +1,7 @@
 ---
 author: bhwa233
 pubDatetime: 2026-06-19T16:00:00Z
-modDatetime: 2026-06-20T02:29:01Z
+modDatetime: 2026-06-20T02:37:35Z
 title: "HackerNews Top 10 - 2026-06-20"
 featured: false
 draft: false
@@ -9,7 +9,7 @@ tags:
   - 定时文章
   - HackerNews
 ogImage: "/images/hn-cover.svg"
-description: "1 How to feed a dictator"
+description: "Hacker News Top 10：How to feed a dictator"
 timezone: Asia/Shanghai
 ---
 
