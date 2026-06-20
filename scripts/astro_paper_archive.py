@@ -321,6 +321,12 @@ def split_hn_summary_and_comment(summary: str) -> tuple[str, str]:
     return text, ""
 
 
+def normalize_hn_paragraph(text: str) -> str:
+    text = text.strip()
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"([。！？!?])([^\n])", r"\1\n\n\2", text)
+    return text.strip()
+
 def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
@@ -342,9 +348,9 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
         block.append(f"- **热度**：{points}")
     block.append(f"- **主题**：{topic}")
     if content_summary:
-        block.append(f"- **内容总结**：{content_summary}")
+        block.extend(["#### 内容总结", "", normalize_hn_paragraph(content_summary), ""])
     if comment_summary:
-        block.append(f"- **评论总结**：{comment_summary}")
+        block.extend(["#### 评论总结", "", normalize_hn_paragraph(comment_summary), ""])
     if link:
         block.append(f"- **原文**：{link}")
     if hn_link:
