@@ -3,7 +3,7 @@ author: bhwa233
 pubDatetime: 2026-06-19T00:00:00Z
 modDatetime: 2026-06-19T00:00:00Z
 title: 欢迎来到我的博客
-featured: true
+featured: false
 draft: false
 tags:
   - notes
