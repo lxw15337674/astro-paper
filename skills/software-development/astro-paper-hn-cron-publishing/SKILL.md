@@ -132,19 +132,25 @@ The final HN article should preserve the current Astro-style structure:
 - `#### 评论总结`
 
 ### Editorial quality target
-The current expected writing quality is **方案 B / 中增强**.
+The current expected writing quality is **高密度信息摘要** rather than editorial recommendation copy.
 
 #### 内容总结
-- 2~3 句;
-- explain what the linked article is about;
-- surface the core idea, method, or observation;
-- say why the item matters on today's HN list.
+- 2~3 句；
+- directly summarize the article's information, argument, mechanism, evidence, example, or conclusion;
+- prioritize what the reader can learn without clicking through;
+- do **not** explain why it ranked, why HN users would like it, or why it is worth attention.
 
 #### 评论总结
-- 2~3 句;
-- summarize the real HN discussion direction;
-- identify the main disagreement, tradeoff, or constraint;
-- avoid empty filler phrasing.
+- 2~3 句；
+- directly summarize what the HN comments added, argued about, challenged, or constrained;
+- identify the real disagreement, tradeoff, or missing background surfaced by the comments;
+- avoid empty filler phrasing like “主要围绕……展开” unless followed by concrete substance.
+
+#### Hard writing constraints
+- `内容总结` only summarizes **article information**;
+- `评论总结` only summarizes **comment information**;
+- every paragraph should contain at least one concrete information point;
+- do not use “为什么会上榜 / 为什么值得关注 / 对 HN 读者来说 …” as summary framing.
 
 ### Allowed unevenness
 Not every item needs identical length:
