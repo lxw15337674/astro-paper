@@ -368,6 +368,22 @@ def build_hn_description(text: str, fallback: str) -> str:
             return f"Hacker News Top 10：{title}"[:140]
     return fallback[:140]
 
+
+def build_morning_market_description(text: str) -> str:
+    sections = re.split(r"\n##\s+", text)
+    key_points = ""
+    for sec in sections:
+        if sec.startswith("今日要点"):
+            key_points = sec
+            break
+    bullets = re.findall(r"^-\s+(.+)$", key_points, flags=re.MULTILINE)
+    if bullets:
+        summary = "；".join(b.strip().rstrip("。") for b in bullets[:3])
+        if not summary.endswith("。"):
+            summary += "。"
+        return summary[:140]
+    return "汇总隔夜美股、A股收盘、港股收盘与 BTC 动态的晨间市场观察。"[:140]
+
 def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
@@ -657,7 +673,8 @@ def main() -> int:
     task = TASKS[args.task]
     period_key = slug_date(dt, args.period)
     post_path = target_path(repo, args.task, str(task["task_tag"]), period_key)
-    title = f"{task['title_prefix']} - {period_key.upper() if args.period == 'weekly' else period_key}"
+    sep = " - " if args.period == "weekly" else "｜"
+    title = f"{task['title_prefix']}{sep}{period_key.upper() if args.period == 'weekly' else period_key}"
 
     raw_text = load_context_text()
     body = normalize_markdown(raw_text)
@@ -665,6 +682,8 @@ def main() -> int:
     description = first_paragraph_summary(body, str(task["summary"]))
     if args.task == "hn-top10":
         description = build_hn_description(body, str(task["summary"]))
+    if args.task == "morning-market":
+        description = build_morning_market_description(body)
     tags = [TOTAL_TAG, str(task["task_tag"]), *args.extra_tag]
     if args.task == "mdblist-weekly":
         cover_image = ""
