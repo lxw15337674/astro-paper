@@ -299,13 +299,38 @@ def classify_hn_topic(title: str, summary: str) -> str:
     return "技术 / 观察"
 
 
+def extract_hn_bullets(raw: str) -> list[str]:
+    bullets: list[str] = []
+    for line in raw.splitlines():
+        m = re.match(r"^•\s*(.+)$", line.strip())
+        if m:
+            bullets.append(m.group(1).strip())
+    return bullets
+
+
+def split_hn_summary_and_comment(summary: str) -> tuple[str, str]:
+    text = summary.strip()
+    if not text:
+        return "", ""
+    parts = [p.strip(" ；;。.!？?，,") for p in re.split(r"[；;]\s*", text) if p.strip()]
+    if len(parts) >= 2:
+        return parts[0], "；".join(parts[1:])
+    sentences = [p.strip(" 。！？!?，,") for p in re.split(r"(?<=[。！？!?])\s*", text) if p.strip()]
+    if len(sentences) >= 2:
+        return sentences[0], " ".join(sentences[1:])
+    return text, ""
+
+
 def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
-    points = extract_line(r"^•\s*⭐\s*(.+)$", raw)
-    summary = extract_line(r"^•\s*(?!⭐|原文|HN 讨论)(.+)$", raw)
-    link = extract_line(r"^•\s*蚊帐连?接?：\s*(.+)$", raw) or extract_line(r"^•\s*原文：\s*(.+)$", raw)
-    hn_link = extract_line(r"^•\s*HN 讨论：\s*(.+)$", raw)
-    topic = classify_hn_topic(title, summary)
+    bullets = extract_hn_bullets(raw)
+    points = next((b.removeprefix("⭐").strip() for b in bullets if b.startswith("⭐")), "")
+    link = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("原文：") or b.startswith("蚊帐连接：") or b.startswith("蚊帐链接：")), "")
+    hn_link = next((b.split("：", 1)[1].strip() for b in bullets if b.startswith("HN 讨论：")), "")
+    summary_candidates = [b for b in bullets if not re.match(r"^(⭐|原文：|HN 讨论：|蚊帐连接：|蚊帐链接：)", b)]
+    summary = summary_candidates[0] if summary_candidates else ""
+    content_summary, comment_summary = split_hn_summary_and_comment(summary)
+    topic = classify_hn_topic(title, content_summary or summary)
 
     if not hn_link:
         item_id = extract_line(r"news\.ycombinator\.com/item\?id=(\d+)", raw)
@@ -316,8 +341,10 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str]:
     if points:
         block.append(f"- **热度**：{points}")
     block.append(f"- **主题**：{topic}")
-    if summary:
-        block.append(f"- **摘要**：{summary}")
+    if content_summary:
+        block.append(f"- **内容总结**：{content_summary}")
+    if comment_summary:
+        block.append(f"- **评论总结**：{comment_summary}")
     if link:
         block.append(f"- **原文**：{link}")
     if hn_link:
@@ -348,17 +375,10 @@ def format_hn_top10(text: str) -> str:
         topic_counts[topic] = topic_counts.get(topic, 0) + 1
     topic_lines = [f"- {topic}：{count} 条" for topic, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]]
 
-    lead = "今天的 Hacker News 热门内容同时覆盖了教育政策、工程文化、分布式系统与基础设施议题，说明社区关注点并不只停留在单一技术热点，而是明显横跨工具、社会影响与系统设计。"
     close = "从今天的榜单看，Hacker News 讨论重心仍然偏向‘技术如何影响现实系统’，而不是单纯追逐新产品发布。"
 
     lines = [
         title_line,
-        "",
-        "## 今日总览",
-        "",
-        lead,
-        "",
-        f"如果时间有限，优先看：{'; '.join(top_titles[:3])}。",
         "",
         "## 今日看点",
         "",
@@ -428,8 +448,9 @@ def main() -> int:
     parser.add_argument("--period", default="daily", choices=["daily", "weekly"])
     parser.add_argument("--repo", default=str(DEFAULT_REPO))
     parser.add_argument("--extra-tag", action="append", default=[])
-    parser.add_argument("--date", help="Override date in YYYY-MM-DD (Asia/Shanghai)")
+    parser.add_argument("--date", help="Override cycle date (YYYY-MM-DD) in Asia/Shanghai")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--skip-git-pull", action="store_true", help="Skip git pull before writing (useful when local formatter code is dirty)")
     args = parser.parse_args()
 
     repo = Path(args.repo).expanduser().resolve()
@@ -478,7 +499,8 @@ def main() -> int:
         }, ensure_ascii=False, indent=2))
         return 0
 
-    git_pull(repo)
+    if not args.skip_git_pull:
+        git_pull(repo)
     post_path.write_text(content, encoding="utf-8")
     commit_message = f"feat: archive {safe_slug_component(str(task['task_tag']))} {period_key}"
     commit, push_output = git_commit_push(repo, rel_path, commit_message)
