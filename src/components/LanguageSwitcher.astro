@@ -1,12 +1,19 @@
 ---
-import { getRelativeLocaleUrl } from "astro:i18n";
-import { DEFAULT_LOCALE, ENGLISH_LOCALE } from "@/i18n/locales";
+import { getCollection } from "astro:content";
+import {
+  DEFAULT_LOCALE,
+  ENGLISH_LOCALE,
+  isSupportedLocale,
+} from "@/i18n/locales";
+import { resolveLocalizedUrl } from "@/utils/resolveLocalizedUrl";
 import { stripBase, stripLocale } from "@/utils/withBase";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
 const locale = Astro.currentLocale ?? config.site.lang;
+const currentLocale = isSupportedLocale(locale) ? locale : DEFAULT_LOCALE;
 const t = useTranslations(locale);
+const posts = await getCollection("posts");
 
 const relativePath = stripBase(Astro.url.pathname);
 const normalizedPath =
@@ -17,20 +24,30 @@ const pathWithoutLocale = stripLocale(normalizedPath, locale);
 
 const links = [
   {
-    label: "中文",
+    label: t.language.zhCn,
     locale: DEFAULT_LOCALE,
-    href: getRelativeLocaleUrl(DEFAULT_LOCALE, pathWithoutLocale),
+    href: resolveLocalizedUrl({
+      pathWithoutLocale,
+      sourceLocale: currentLocale,
+      targetLocale: DEFAULT_LOCALE,
+      posts,
+    }),
   },
   {
-    label: "English",
+    label: t.language.en,
     locale: ENGLISH_LOCALE,
-    href: getRelativeLocaleUrl(ENGLISH_LOCALE, pathWithoutLocale),
+    href: resolveLocalizedUrl({
+      pathWithoutLocale,
+      sourceLocale: currentLocale,
+      targetLocale: ENGLISH_LOCALE,
+      posts,
+    }),
   },
 ];
 
 const currentLabel =
-  links.find(({ locale: targetLocale }) => targetLocale === locale)?.label ??
-  t.a11y.languageSwitcher;
+  links.find(({ locale: targetLocale }) => targetLocale === currentLocale)
+    ?.label ?? t.a11y.languageSwitcher;
 ---
 
 <div
@@ -75,7 +92,7 @@ const currentLabel =
   >
     {
       links.map(({ label, locale: targetLocale, href }) => {
-        const isCurrent = targetLocale === locale;
+        const isCurrent = targetLocale === currentLocale;
         return isCurrent ? (
           <span
             class="bg-surface-hover text-accent block rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap"

@@ -47,15 +47,15 @@ const homePath = getRelativeLocaleUrl(locale, "");
         target="_blank"
         href={getLocalizedRssPath(locale)}
         class="inline-block"
-        aria-label="RSS Feed"
-        title="RSS Feed"
+        aria-label={t.a11y.rssFeed}
+        title={t.a11y.rssFeed}
       >
         <IconRss
           width={20}
           height={20}
           class="stroke-accent scale-125 stroke-3 rtl:-rotate-90"
         />
-        <span class="sr-only">RSS Feed</span>
+        <span class="sr-only">{t.a11y.rssFeed}</span>
       </a>
 
       <p class="text-muted-foreground leading-7">{t.home.intro}</p>

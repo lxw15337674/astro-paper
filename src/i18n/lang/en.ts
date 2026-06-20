@@ -26,6 +26,27 @@ export default {
     prev: "Prev",
     next: "Next",
     page: "Page",
+    pageNumber: "page {{page}}",
+    navigation: "Pagination navigation",
+  },
+  language: {
+    zhCn: "Chinese",
+    en: "English",
+  },
+  social: {
+    emailToSite: "Send an email to {{siteTitle}}",
+    siteOnPlatform: "{{siteTitle}} on {{platform}}",
+  },
+  code: {
+    copy: "Copy",
+    copied: "Copied",
+  },
+  lightbox: {
+    zoomImage: "Zoom image",
+    zoomImageWithAlt: "Zoom image: {{alt}}",
+    imagePreview: "Image preview",
+    imagePreviewWithAlt: "Image preview: {{alt}}",
+    closeImagePreview: "Close image preview",
   },
   home: {
     socialLinks: "Social Links",
@@ -46,6 +67,8 @@ export default {
   pages: {
     tagTitle: "Tag",
     tagDesc: "All the articles with the tag",
+    tagTitleWithName: "Tag: {{tagName}}",
+    tagDescWithName: 'All the articles with the tag "{{tagName}}".',
 
     tagsTitle: "Tags",
     tagsDesc: "All the tags used in posts.",
@@ -61,9 +84,12 @@ export default {
   },
   a11y: {
     skipToContent: "Skip to content",
+    rssFeed: "RSS Feed",
     openMenu: "Open menu",
     closeMenu: "Close menu",
     toggleTheme: "Toggle theme",
+    lightTheme: "Light theme",
+    darkTheme: "Dark theme",
     languageSwitcher: "Switch language",
     searchPlaceholder: "Search posts...",
     noResults: "No results found",
@@ -74,5 +100,31 @@ export default {
     title: "404 Not Found",
     message: "Page Not Found",
     goHome: "Go back home",
+  },
+  search: {
+    devModeWarningTitle: "DEV mode warning!",
+    devModeWarningText:
+      "You need to build the project at least once to see search results during development.",
+    buildCommandLabel: "Build command",
+    pagefind: {
+      language: "en",
+      placeholder: "Search",
+      clear_search: "Clear",
+      load_more: "Load more results",
+      search_label: "Search this site",
+      filters_label: "Filters",
+      zero_results: "No results for [SEARCH_TERM]",
+      many_results: "[COUNT] results for [SEARCH_TERM]",
+      one_result: "[COUNT] result for [SEARCH_TERM]",
+      alt_search:
+        "No results for [SEARCH_TERM]. Showing results for [DIFFERENT_TERM] instead",
+      search_suggestion:
+        "No results for [SEARCH_TERM]. Try one of the following searches:",
+      searching: "Searching for [SEARCH_TERM]...",
+      total_results: "[COUNT] total results",
+      total_result: "[COUNT] total result",
+      total_zero_results: "No results",
+      loading: "Loading",
+    },
   },
 } satisfies UIStrings;

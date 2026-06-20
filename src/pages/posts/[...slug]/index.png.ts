@@ -5,17 +5,19 @@ import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { getPostOgPaths } from "@/utils/localeStaticPaths";
 import config from "@/config";
 import { loadOgFonts, OG_FONT_FAMILY } from "@/utils/ogFonts";
+import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 
 export async function getStaticPaths() {
   return getPostOgPaths(DEFAULT_LOCALE);
 }
 
-export const GET: APIRoute = async ({ props, url }) => {
+export const GET: APIRoute = async ({ props, url, currentLocale }) => {
   if (!config.features.dynamicOgImage) {
     return new Response(null, { status: 404, statusText: "Not found" });
   }
 
   const fonts = await loadOgFonts(url);
+  const siteTitle = getLocalizedSiteTitle(currentLocale ?? DEFAULT_LOCALE);
 
   const svg = await satori(
     {
@@ -129,7 +131,7 @@ export const GET: APIRoute = async ({ props, url }) => {
                             type: "span",
                             props: {
                               style: { overflow: "hidden", fontWeight: "bold" },
-                              children: config.site.title,
+                              children: siteTitle,
                             },
                           },
                         ],

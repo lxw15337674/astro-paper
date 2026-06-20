@@ -11,7 +11,7 @@ import {
   getEntryLocaleFromFilePath,
   getEntryLocaleFromId,
 } from "./contentLocale";
-import { getPostSlug, getPostUrl } from "./getPostPaths";
+import { getPostUrl } from "./getPostPaths";
 import { postFilter } from "./postFilter";
 import { getLocaleLangTag } from "@/utils/localeMeta";
 
@@ -42,20 +42,20 @@ function getEntryLocale(entry: CollectionEntry<"posts">): SiteLocale {
 }
 
 /**
- * Builds article-level hreflang links only for posts that share the same
- * locale-free slug path across locales. This avoids inventing translation
- * relationships for independent Chinese/English articles.
+ * Builds article-level hreflang links only for posts that explicitly share a
+ * translationKey. Slugs are not translation contracts; many real bilingual
+ * articles use different slugs, and posts without a key are independent.
  */
 export function getPostLocaleAlternates(
   post: CollectionEntry<"posts">,
   posts: CollectionEntry<"posts">[]
 ): LocaleAlternate[] {
-  const slug = getPostSlug(post.id, post.filePath);
+  const translationKey = post.data.translationKey;
+  if (!translationKey) return [];
+
   const matchingPosts = posts
     .filter(postFilter)
-    .filter(
-      candidate => getPostSlug(candidate.id, candidate.filePath) === slug
-    );
+    .filter(candidate => candidate.data.translationKey === translationKey);
 
   const entriesByLocale = new Map<SiteLocale, CollectionEntry<"posts">>();
 

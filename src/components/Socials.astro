@@ -1,11 +1,13 @@
 ---
 import config from "@/config";
+import { tplStr, useTranslations } from "@/i18n";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import LinkButton from "./LinkButton.astro";
 
 const { site, socials } = config;
 const locale = Astro.currentLocale ?? site.lang;
 const siteTitle = getLocalizedSiteTitle(locale);
+const t = useTranslations(locale);
 
 const icons = import.meta.glob<{
   default: (_props: Record<string, unknown>) => unknown;
@@ -15,11 +17,12 @@ const items = await Promise.all(
   socials.map(async ({ name, url, linkTitle }) => {
     const mod = await icons[`/src/assets/icons/socials/${name}.svg`]?.();
     const Icon = mod?.default;
+    const platform = name.charAt(0).toUpperCase() + name.slice(1);
     const title =
       linkTitle ??
       (url.startsWith("mailto:") || name === "mail"
-        ? `Send an email to ${siteTitle}`
-        : `${siteTitle} on ${name.charAt(0).toUpperCase() + name.slice(1)}`);
+        ? tplStr(t.social.emailToSite, { siteTitle })
+        : tplStr(t.social.siteOnPlatform, { siteTitle, platform }));
     return { url, title, Icon };
   })
 );

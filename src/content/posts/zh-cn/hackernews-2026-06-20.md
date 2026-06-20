@@ -29,6 +29,7 @@ timezone: Asia/Shanghai
 
 - **热度**：67 points · 21 评论
 - **主题**：技术 / 观察
+
 #### 内容总结
 
 内容总结：这篇文章介绍了一部关于独裁者私人厨师的纪录片，切入点不是传统政治史，而是通过“吃什么、怎么吃、谁来伺候”来观察权力的日常运作。
@@ -44,11 +45,11 @@ timezone: Asia/Shanghai
 - **原文**：https://www.theguardian.com/film/2026/jun/09/how-to-feed-a-dictator-film
 - **HN 讨论**：https://news.ycombinator.com/item?id=48605301
 
-
 ### 2. Think of the children: How to force real ID for all internet traffic (2023)
 
 - **热度**：130 points · 75 评论
 - **主题**：政策 / 社会议题
+
 #### 内容总结
 
 内容总结：作者把近年来的年龄验证、成人网站实名、社交平台身份核验等政策串成一条线，论点是这些措施会逐步把“儿童保护”扩展为整个互联网的实名追踪基础设施。
@@ -64,11 +65,11 @@ timezone: Asia/Shanghai
 - **原文**：https://nochan.net/b/Internet-Crap/20230829-Think-Of-The-Children/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48602817
 
-
 ### 3. There are no instances in ATProto
 
 - **热度**：356 points · 198 评论
 - **主题**：基础设施 / 系统
+
 #### 内容总结
 
 内容总结：Dan Abramov 试图澄清一个常见误解：ATProto/Bluesky 里的“去中心化”并不是 Mastodon 式的“实例”模式，而是把身份、托管与聚合拆开。
@@ -84,11 +85,11 @@ timezone: Asia/Shanghai
 - **原文**：https://overreacted.io/there-are-no-instances-in-atproto/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48599515
 
-
 ### 4. Norway imposes near ban on AI in elementary school
 
 - **热度**：474 points · 329 评论
 - **主题**：AI / 模型
+
 #### 内容总结
 
 内容总结：路透报道挪威将在小学阶段对生成式 AI 的使用实施近乎全面的限制，核心理由是儿童基础读写、表达与独立思考能力尚在形成，不应过早依赖自动生成工具。
@@ -104,11 +105,11 @@ timezone: Asia/Shanghai
 - **原文**：https://www.reuters.com/technology/norway-imposes-near-ban-ai-elementary-school-2026-06-19/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48600093
 
-
 ### 5. Aikido Code Audit
 
 - **热度**：20 points · 8 评论
 - **主题**：AI / 模型
+
 #### 内容总结
 
 内容总结：Aikido 推出的 Code Audit 被定位在传统 SAST 与人工渗透测试之间，目标是发现需要跨文件、跨步骤推理才能识别的复杂逻辑漏洞。
@@ -124,11 +125,11 @@ timezone: Asia/Shanghai
 - **原文**：https://www.aikido.dev/blog/introducing-code-audit-find-complex-vulnerabilities-hidden-in-your-codebase
 - **HN 讨论**：https://news.ycombinator.com/item?id=48604741
 
-
 ### 6. Surprising Economics of Load-Balanced Systems
 
 - **热度**：51 points · 15 评论
 - **主题**：基础设施 / 系统
+
 #### 内容总结
 
 内容总结：Marc Brooker 用经典的 M/M/c 排队模型讨论一个反直觉现象：在保持单机利用率不变的情况下，随着后端服务器数量增加，平均等待时间会明显下降，而不是保持不变。
@@ -144,11 +145,11 @@ timezone: Asia/Shanghai
 - **原文**：https://brooker.co.za/blog/2020/08/06/erlang.html
 - **HN 讨论**：https://news.ycombinator.com/item?id=48602918
 
-
 ### 7. Hyundai buys Boston Dynamics
 
 - **热度**：683 points · 315 评论
 - **主题**：AI / 模型
+
 #### 内容总结
 
 内容总结：文章称现代汽车集团将收购软银持有的波士顿动力剩余股份，从而实现对这家机器人公司的完全控股。
@@ -164,11 +165,11 @@ timezone: Asia/Shanghai
 - **原文**：https://startupfortune.com/hyundai-takes-full-control-of-boston-dynamics-as-softbank-exits-for-325-million/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48600312
 
-
 ### 8. I used sound waves to make espresso
 
 - **热度**：207 points · 140 评论
 - **主题**：文化 / 杂项
+
 #### 内容总结
 
 内容总结：作者介绍了一种“超声波浓缩咖啡”方案：用高频声波在常温条件下增强萃取，通过空化效应加速咖啡中的风味物质、油脂与咖啡因释放。
@@ -184,11 +185,11 @@ timezone: Asia/Shanghai
 - **原文**：https://theconversation.com/i-used-sound-waves-to-make-espresso-it-could-cut-coffee-brewing-energy-use-by-75-284929
 - **HN 讨论**：https://news.ycombinator.com/item?id=48514843
 
-
 ### 9. Data Compression Explained
 
 - **热度**：6 points · 0 评论
 - **主题**：AI / 模型
+
 #### 内容总结
 
 内容总结：这是 Matt Mahoney 的长篇压缩教程，系统梳理了信息论、编码方法、建模策略、LZ/BWT 等变换，以及图像、音频、视频中的有损与无损压缩实践。
@@ -204,11 +205,11 @@ timezone: Asia/Shanghai
 - **原文**：https://mattmahoney.net/dc/dce.html
 - **HN 讨论**：https://news.ycombinator.com/item?id=48562662
 
-
 ### 10. Digital Printing of Arabic: explaining the problem
 
 - **热度**：25 points · 0 评论
 - **主题**：AI / 模型
+
 #### 内容总结
 
 内容总结：文章解释了为什么阿拉伯文在印刷与数字排版中长期比拉丁字母更难处理：它天然依赖连写、字块、字形变化和书写方向，而活字印刷与早期计算机都建立在“一个字符一个独立块”的假设上。
@@ -223,7 +224,6 @@ timezone: Asia/Shanghai
 
 - **原文**：https://digitalorientalist.com/2017/08/21/digital-printing-of-arabic-explaining-the-problem/
 - **HN 讨论**：https://news.ycombinator.com/item?id=48563047
-
 
 ## 结尾观察
 

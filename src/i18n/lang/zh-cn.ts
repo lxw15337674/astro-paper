@@ -26,6 +26,27 @@ export default {
     prev: "上一页",
     next: "下一页",
     page: "第",
+    pageNumber: "第 {{page}} 页",
+    navigation: "分页导航",
+  },
+  language: {
+    zhCn: "中文",
+    en: "English",
+  },
+  social: {
+    emailToSite: "发送邮件给 {{siteTitle}}",
+    siteOnPlatform: "{{siteTitle}} 的 {{platform}}",
+  },
+  code: {
+    copy: "复制",
+    copied: "已复制",
+  },
+  lightbox: {
+    zoomImage: "放大图片",
+    zoomImageWithAlt: "放大图片：{{alt}}",
+    imagePreview: "图片预览",
+    imagePreviewWithAlt: "图片预览：{{alt}}",
+    closeImagePreview: "关闭图片预览",
   },
   home: {
     socialLinks: "社交链接",
@@ -46,6 +67,8 @@ export default {
   pages: {
     tagTitle: "标签",
     tagDesc: "包含该标签的所有文章",
+    tagTitleWithName: "标签：{{tagName}}",
+    tagDescWithName: "包含“{{tagName}}”标签的所有文章。",
 
     tagsTitle: "标签",
     tagsDesc: "博客中使用到的所有标签。",
@@ -61,9 +84,12 @@ export default {
   },
   a11y: {
     skipToContent: "跳转到正文",
+    rssFeed: "RSS 订阅",
     openMenu: "打开菜单",
     closeMenu: "关闭菜单",
     toggleTheme: "切换主题",
+    lightTheme: "浅色主题",
+    darkTheme: "深色主题",
     languageSwitcher: "切换语言",
     searchPlaceholder: "搜索文章……",
     noResults: "未找到结果",
@@ -74,5 +100,29 @@ export default {
     title: "404 未找到",
     message: "页面不存在",
     goHome: "返回首页",
+  },
+  search: {
+    devModeWarningTitle: "开发模式提示！",
+    devModeWarningText: "开发环境需要至少构建一次项目，才能看到搜索结果。",
+    buildCommandLabel: "构建命令",
+    pagefind: {
+      language: "zh-cn",
+      placeholder: "搜索",
+      clear_search: "清除",
+      load_more: "加载更多结果",
+      search_label: "站内搜索",
+      filters_label: "筛选",
+      zero_results: "未找到 [SEARCH_TERM] 的相关结果",
+      many_results: "找到 [COUNT] 条关于 [SEARCH_TERM] 的结果",
+      one_result: "找到 [COUNT] 条关于 [SEARCH_TERM] 的结果",
+      alt_search:
+        "未找到 [SEARCH_TERM] 的相关结果。改为显示 [DIFFERENT_TERM] 的结果",
+      search_suggestion: "未找到 [SEARCH_TERM] 的相关结果。可以尝试以下搜索：",
+      searching: "正在搜索 [SEARCH_TERM]……",
+      total_results: "共 [COUNT] 条结果",
+      total_result: "共 [COUNT] 条结果",
+      total_zero_results: "没有结果",
+      loading: "正在加载",
+    },
   },
 } satisfies UIStrings;
