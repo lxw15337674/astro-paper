@@ -86,11 +86,11 @@ title: \"海外科技访谈播客笔记｜2026-06-20\"
 
     formatted = archive.format_foreign_podcast(raw, "海外科技访谈播客笔记｜2026-06-21", repo=tmp_path)
 
-    assert formatted.count("## Old Episode") == 1
-    assert "https://example.com/ep1" in formatted
-    assert formatted.count("## New Episode") == 1
+    assert "https://example.com/ep1" not in formatted
+    assert "## Old Episode" not in formatted
     assert "https://example.com/ep2" in formatted
-    assert "- **Old Episode**" not in formatted
+    assert "## New Episode" in formatted
+    assert "- **《今日国外热门科技访谈播客》**" not in formatted
 
 
 def test_foreign_podcast_filters_seen_episode_by_show_and_title_when_url_differs(tmp_path):
@@ -160,8 +160,8 @@ title: \"海外科技访谈播客笔记｜2026-06-20\"
 
     formatted = archive.format_foreign_podcast(raw, "海外科技访谈播客笔记｜2026-06-21", repo=tmp_path)
 
-    assert formatted.count("## GitHub's plan for Agents — Kyle Daigle, GitHub") == 1
-    assert "https://site.example.com/github-agents" in formatted
-    assert formatted.count("## Another Episode") == 1
+    assert "https://site.example.com/github-agents" not in formatted
+    assert "## GitHub's plan for Agents — Kyle Daigle, GitHub" not in formatted
     assert "https://example.com/ep2" in formatted
-    assert "- **GitHub's plan for Agents — Kyle Daigle, GitHub**" not in formatted
+    assert "## Another Episode" in formatted
+    assert "- **《今日国外热门科技访谈播客》**" not in formatted

@@ -529,22 +529,27 @@ def load_seen_podcast_keys(repo: Path) -> tuple[set[str], set[tuple[str, str]]]:
 
 
 def format_foreign_podcast(text: str, title: str, repo: Path = DEFAULT_REPO) -> str:
-    sections = split_sections(text)
     seen_urls, seen_show_title_pairs = load_seen_podcast_keys(repo)
+
+    sections = [chunk.strip() for chunk in re.split(r"\n\s*---\s*\n", text.strip()) if chunk.strip()]
     episode_sections = []
     checklist = []
     for chunk in sections:
-        if re.search(r"^\d+\.\s+", chunk, flags=re.M):
-            heading = extract_line(r"^\d+\.\s*(.+)$", chunk)
-            show = extract_line(r"^-\s*节目：\s*(.+)$", chunk)
-            url = extract_line(r"^-\s*链接：\s*(.+)$", chunk) or extract_url(chunk)
-            if url and url.strip() in seen_urls:
-                continue
-            if heading and show and (normalize_podcast_key(show), normalize_podcast_key(heading)) in seen_show_title_pairs:
-                continue
-            section_md, checklist_line = build_podcast_section(chunk)
-            episode_sections.append(section_md)
-            checklist.append(checklist_line)
+        if not chunk.startswith("## "):
+            continue
+        heading = extract_line(r"^##\s+(.+)$", chunk)
+        show = extract_line(r"^-\s*节目：\s*(.+)$", chunk)
+        url = extract_line(r"^-\s*链接：\s*(.+)$", chunk) or extract_url(chunk)
+        if url and url.strip() in seen_urls:
+            continue
+        if heading and show and (normalize_podcast_key(show), normalize_podcast_key(heading)) in seen_show_title_pairs:
+            continue
+        normalized_chunk = chunk
+        if not re.search(r"^\d+\.\s+", chunk, flags=re.M):
+            normalized_chunk = f"1. {chunk}"
+        section_md, checklist_line = build_podcast_section(normalized_chunk)
+        episode_sections.append(section_md)
+        checklist.append(checklist_line)
     if not episode_sections:
         return text
 
