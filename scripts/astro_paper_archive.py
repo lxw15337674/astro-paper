@@ -386,7 +386,7 @@ def build_market_daily_description(text: str) -> str:
 def build_morning_market_description(text: str) -> str:
     return build_market_daily_description(text)
 
-def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
+def build_hn_item_block(index: int, raw: str, payload_item: dict[str, object] | None = None) -> tuple[str, str, str, str, int]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
     points = next((b.removeprefix("⭐").strip() for b in bullets if b.startswith("⭐")), "")
@@ -401,6 +401,16 @@ def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
         parsed_content, parsed_comment = split_hn_summary_and_comment(fallback_summary)
         content_summary = content_summary or parsed_content
         comment_summary = comment_summary or parsed_comment
+
+    if payload_item and isinstance(payload_item, dict):
+        _topic_override = str(payload_item.get("topic") or "")
+        _content_override = str(payload_item.get("content_summary") or "")
+        _comment_override = str(payload_item.get("comment_summary") or "")
+        if _content_override and _content_override != content_summary:
+            content_summary = _content_override
+        if _comment_override and _comment_override != comment_summary:
+            comment_summary = _comment_override
+
     topic = topic_from_source or classify_hn_topic(title, content_summary or fallback_summary)
     source_image = fetch_og_image(link)
     points_num_match = re.search(r"(\d+)", points)
@@ -431,6 +441,22 @@ def format_hn_top10(text: str) -> tuple[str, str]:
     cleaned = text.strip()
     title_line = "1. 🔥 今日 HackerNews 热门文章 Top 10"
     cleaned = HN_HEADER_RE.sub("", cleaned, count=1).strip()
+
+    payload_items_by_rank: dict[int, dict[str, object]] = {}
+    marker_pos = cleaned.find(ARCHIVE_PAYLOAD_MARKER)
+    if marker_pos != -1:
+        body_part = cleaned[:marker_pos].strip()
+        payload_part = cleaned[marker_pos + len(ARCHIVE_PAYLOAD_MARKER):].strip()
+        cleaned = body_part
+        try:
+            payload = json.loads(payload_part)
+            for p_item in payload.get("items") or payload.get("payload_items") or []:
+                rank = int(p_item.get("rank") or 0)
+                if rank:
+                    payload_items_by_rank[rank] = dict(p_item)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+
     matches = list(HN_ITEM_SPLIT_RE.finditer(cleaned))
     item_chunks: list[str] = []
     for i, m in enumerate(matches):
@@ -447,7 +473,8 @@ def format_hn_top10(text: str) -> tuple[str, str]:
     cover_image = ""
     best_points = -1
     for idx, chunk in enumerate(item_chunks, start=1):
-        block, topic, _title, source_image, points_num = build_hn_item_block(idx, chunk)
+        payload_item = payload_items_by_rank.get(idx)
+        block, topic, _title, source_image, points_num = build_hn_item_block(idx, chunk, payload_item)
         item_blocks.append(block)
         topics.append(topic)
         if source_image and points_num > best_points:

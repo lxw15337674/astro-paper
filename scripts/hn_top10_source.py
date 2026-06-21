@@ -136,11 +136,40 @@ def item_summary(title: str, text: str) -> tuple[str, str]:
     return content, comment
 
 
+def build_item_payload(item: dict[str, Any], rank: int) -> dict[str, Any]:
+    item_id = int(item.get('id') or 0)
+    title = compact(item.get('title', f'Item {item_id or rank}'))
+    url = item.get('url') or (f'https://news.ycombinator.com/item?id={item_id}' if item_id else '')
+    comments = int(item.get('descendants') or 0)
+    score = int(item.get('score') or 0)
+    hn_link = f'https://news.ycombinator.com/item?id={item_id}' if item_id else ''
+    topic = classify(title)
+    source_text = compact(item.get('text', ''))
+    content_summary = source_text if source_text else '文章信息需从原文提取。'
+    comment_summary = ''
+    return {
+        'rank': rank,
+        'id': item_id,
+        'title': title,
+        'url': url,
+        'hn_link': hn_link,
+        'topic': topic,
+        'score': score,
+        'comments': comments,
+        'source_text': source_text,
+        'content_summary': content_summary,
+        'comment_summary': comment_summary,
+    }
+
+
 def main() -> None:
     ids = scrape_top_ids()
     lines = ['1. 🔥 今日 HackerNews 热门文章 Top 10', '']
+    payload_items = []
     for rank, item_id in enumerate(ids[:10], start=1):
         item = fetch_json(HN_API_ITEM.format(id=item_id))
+        payload = build_item_payload(item, rank)
+        payload_items.append(payload)
         title = compact(item.get('title', f'Item {item_id}'))
         url = item.get('url') or f'https://news.ycombinator.com/item?id={item_id}'
         comments = int(item.get('descendants') or 0)
@@ -158,6 +187,7 @@ def main() -> None:
             f'- 评论总结：{comment_summary}',
             '',
         ])
+    lines.extend(['===ARCHIVE_PAYLOAD===', json.dumps({'items': payload_items}, ensure_ascii=False)])
     print('\n'.join(lines).rstrip() + '\n')
 
 
