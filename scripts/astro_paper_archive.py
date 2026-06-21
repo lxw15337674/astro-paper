@@ -497,12 +497,50 @@ def format_hn_top10(text: str) -> tuple[str, str]:
     return "\n".join(lines).rstrip() + "\n", cover_image
 
 
-def format_foreign_podcast(text: str, title: str) -> str:
+def normalize_podcast_key(text: str) -> str:
+    normalized = compact_text(text).lower()
+    normalized = normalized.replace("—", "-").replace("–", "-")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def load_seen_podcast_keys(repo: Path) -> tuple[set[str], set[tuple[str, str]]]:
+    posts_dir = repo / "src/content/posts/zh-cn"
+    seen_urls: set[str] = set()
+    seen_show_title_pairs: set[tuple[str, str]] = set()
+    if not posts_dir.exists():
+        return seen_urls, seen_show_title_pairs
+
+    for post_path in sorted(posts_dir.glob("海外科技播客-*.md")):
+        text = post_path.read_text(encoding="utf-8")
+        chunks = [chunk.strip() for chunk in re.split(r"\n\s*---\s*\n", text) if chunk.strip()]
+        for chunk in chunks:
+            if not chunk.startswith("## "):
+                continue
+            heading = extract_line(r"^##\s+(.+)$", chunk)
+            show = extract_line(r"^-\s*\*\*节目\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*节目：\s*(.+)$", chunk)
+            url = extract_line(r"^-\s*\*\*链接\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*链接：\s*(.+)$", chunk)
+            if url:
+                seen_urls.add(url.strip())
+            if heading and show:
+                seen_show_title_pairs.add((normalize_podcast_key(show), normalize_podcast_key(heading)))
+    return seen_urls, seen_show_title_pairs
+
+
+def format_foreign_podcast(text: str, title: str, repo: Path = DEFAULT_REPO) -> str:
     sections = split_sections(text)
+    seen_urls, seen_show_title_pairs = load_seen_podcast_keys(repo)
     episode_sections = []
     checklist = []
     for chunk in sections:
         if re.search(r"^\d+\.\s+", chunk, flags=re.M):
+            heading = extract_line(r"^\d+\.\s*(.+)$", chunk)
+            show = extract_line(r"^-\s*节目：\s*(.+)$", chunk)
+            url = extract_line(r"^-\s*链接：\s*(.+)$", chunk) or extract_url(chunk)
+            if url and url.strip() in seen_urls:
+                continue
+            if heading and show and (normalize_podcast_key(show), normalize_podcast_key(heading)) in seen_show_title_pairs:
+                continue
             section_md, checklist_line = build_podcast_section(chunk)
             episode_sections.append(section_md)
             checklist.append(checklist_line)
@@ -585,7 +623,35 @@ def translate_mdblist_summary(text: str) -> str:
     return cleaned or "待补充。"
 
 
-def format_mdblist_weekly(text: str) -> str:
+def normalize_watchlist_title_keys(title: str) -> tuple[str, str]:
+    raw = title.strip()
+    m = re.match(r"^(.*?)（(.*?)）$", raw)
+    if m:
+        zh = compact_text(m.group(1))
+        en = normalize_podcast_key(m.group(2))
+        return en, zh
+    return "", compact_text(raw)
+
+
+def load_seen_watchlist_titles(repo: Path) -> tuple[set[str], set[str]]:
+    posts_dir = repo / "src/content/posts/zh-cn"
+    seen_english: set[str] = set()
+    seen_chinese: set[str] = set()
+    if not posts_dir.exists():
+        return seen_english, seen_chinese
+
+    for post_path in sorted(posts_dir.glob("每周影视推荐-*.md")):
+        text = post_path.read_text(encoding="utf-8")
+        for heading in re.findall(r"(?m)^##\s+(.+)$", text):
+            en_key, zh_key = normalize_watchlist_title_keys(heading)
+            if en_key:
+                seen_english.add(en_key)
+            if zh_key:
+                seen_chinese.add(zh_key)
+    return seen_english, seen_chinese
+
+
+def format_mdblist_weekly(text: str, repo: Path = DEFAULT_REPO) -> str:
     cleaned = text.strip()
     if ARCHIVE_PAYLOAD_MARKER in cleaned:
         cleaned = cleaned.split(ARCHIVE_PAYLOAD_MARKER, 1)[0].strip()
@@ -593,18 +659,34 @@ def format_mdblist_weekly(text: str) -> str:
     cleaned = re.sub(r"\s*```\s*$", "", cleaned).strip()
     cleaned = re.sub(r"^#\s+.*$", "", cleaned, count=1, flags=re.MULTILINE).strip()
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.rstrip() + "\n"
+
+    seen_english, seen_chinese = load_seen_watchlist_titles(repo)
+    sections = [chunk.strip() for chunk in re.split(r"\n(?=##\s+)", cleaned) if chunk.strip()]
+    kept_sections: list[str] = []
+    for section in sections:
+        if not section.startswith("## "):
+            kept_sections.append(section)
+            continue
+        heading = extract_line(r"^##\s+(.+)$", section)
+        en_key, zh_key = normalize_watchlist_title_keys(heading)
+        if en_key and en_key in seen_english:
+            continue
+        if (not en_key) and zh_key and zh_key in seen_chinese:
+            continue
+        kept_sections.append(section)
+
+    return "\n\n".join(kept_sections).rstrip() + "\n"
 
 
 def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
     task = TASKS[task_name]
     formatter = task.get("formatter")
     if formatter == "podcast":
-        return format_foreign_podcast(body, title), ""
+        return format_foreign_podcast(body, title, DEFAULT_REPO), ""
     if formatter == "hn":
         return format_hn_top10(body)
     if formatter == "mdblist-weekly":
-        return format_mdblist_weekly(body), ""
+        return format_mdblist_weekly(body, DEFAULT_REPO), ""
     if formatter in {"morning-market", "market-daily"}:
         return body, ""
     return body, ""
