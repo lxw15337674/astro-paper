@@ -103,3 +103,21 @@ title: \"每周影视推荐｜2026 W25\"
 
     assert "## 雾港谜案" not in formatted
     assert "## 另一部（Another One）" in formatted
+
+
+def test_watchlist_history_loader_supports_legacy_numbered_list_format():
+    text = """---
+title: \"每周影视推荐｜2026-W25\"
+---
+
+### 电影推荐
+1. **Sinners**
+   - 类型：动作
+2. **Perfect Crown**
+   - 类型：爱情
+"""
+
+    seen_english, seen_chinese = archive.load_seen_watchlist_titles_from_text(text)
+
+    assert "sinners" in seen_chinese
+    assert "perfect crown" in seen_chinese

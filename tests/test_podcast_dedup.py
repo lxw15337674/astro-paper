@@ -165,3 +165,77 @@ title: \"海外科技访谈播客笔记｜2026-06-20\"
     assert "https://example.com/ep2" in formatted
     assert "## Another Episode" in formatted
     assert "- **《今日国外热门科技访谈播客》**" not in formatted
+
+
+def test_foreign_podcast_does_not_self_dedup_existing_target_file(tmp_path):
+    posts_dir = tmp_path / "src/content/posts/zh-cn"
+    posts_dir.mkdir(parents=True, exist_ok=True)
+    target = posts_dir / "海外科技播客-2026-06-21.md"
+    target.write_text(
+        """---
+title: \"海外科技访谈播客笔记｜2026-06-21\"
+---
+
+## Existing Episode
+
+### 基本信息
+- 节目：Latent Space
+- 链接：https://example.com/existing
+""",
+        encoding="utf-8",
+    )
+
+    raw = """《今日国外热门科技访谈播客》
+
+## 今日总览
+测试
+
+## 今日播客清单
+- Existing Episode
+- Fresh Episode
+
+---
+
+## Existing Episode
+### 基本信息
+- 节目：Latent Space
+- 嘉宾：A
+- 日期：2026-06-21
+- 来源：Example
+- 链接：https://example.com/existing
+
+### 一句话总结
+当天重跑时不该被自己过滤
+
+### Highlights
+- a
+
+### 长文笔记
+旧稿重跑
+
+---
+
+## Fresh Episode
+### 基本信息
+- 节目：The Pragmatic Engineer
+- 嘉宾：B
+- 日期：2026-06-21
+- 来源：Example
+- 链接：https://example.com/fresh
+
+### 一句话总结
+新的
+
+### Highlights
+- b
+
+### 长文笔记
+新的
+"""
+
+    formatted = archive.format_foreign_podcast(raw, "海外科技访谈播客笔记｜2026-06-21", repo=tmp_path)
+
+    assert "## Existing Episode" in formatted
+    assert "https://example.com/existing" in formatted
+    assert "## Fresh Episode" in formatted
+    assert "https://example.com/fresh" in formatted

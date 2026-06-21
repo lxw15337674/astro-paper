@@ -94,9 +94,17 @@ def run(cmd: list[str], cwd: Path | None = None) -> str:
 def load_context_text() -> str:
     text = sys.stdin.read().strip()
     if text:
+        response_match = re.search(r"^##\s+Response\s*$", text, flags=re.MULTILINE)
+        if response_match:
+            return text[response_match.end():].strip()
         return text
     env_text = os.environ.get("HERMES_CRON_CONTEXT") or os.environ.get("SCRIPT_OUTPUT") or ""
-    return env_text.strip()
+    env_text = env_text.strip()
+    if env_text:
+        response_match = re.search(r"^##\s+Response\s*$", env_text, flags=re.MULTILINE)
+        if response_match:
+            return env_text[response_match.end():].strip()
+    return env_text
 
 
 def strip_headers(text: str) -> str:
@@ -272,24 +280,36 @@ def summarize_heading(heading: str, note: str) -> str:
 
 
 def build_podcast_section(raw: str) -> tuple[str, str]:
-    heading = extract_line(r"^\d+\.\s*(.+)$", raw)
-    show = extract_line(r"^-\s*节目：\s*(.+)$", raw)
-    guest = extract_line(r"^-\s*嘉宾：\s*(.+)$", raw)
-    date = extract_line(r"^-\s*日期：\s*(.+)$", raw)
-    source = extract_line(r"^-\s*来源：\s*(.+)$", raw)
-    url = extract_line(r"^-\s*链接：\s*(.+)$", raw) or extract_url(raw)
+    raw = raw.strip()
+    heading = extract_line(r"^##\s+(.+)$", raw) or extract_line(r"^\d+\.\s*(.+)$", raw)
+    heading = re.sub(r"^#+\s*", "", heading).strip()
+    show = extract_line(r"^-\s*\*\*节目\*\*：\s*(.+)$", raw) or extract_line(r"^-\s*节目：\s*(.+)$", raw)
+    guest = extract_line(r"^-\s*\*\*嘉宾\*\*：\s*(.+)$", raw) or extract_line(r"^-\s*嘉宾：\s*(.+)$", raw)
+    date = extract_line(r"^-\s*\*\*日期\*\*：\s*(.+)$", raw) or extract_line(r"^-\s*日期：\s*(.+)$", raw)
+    source = extract_line(r"^-\s*\*\*来源\*\*：\s*(.+)$", raw) or extract_line(r"^-\s*来源：\s*(.+)$", raw)
+    url = extract_line(r"^-\s*\*\*链接\*\*：\s*(.+)$", raw) or extract_line(r"^-\s*链接：\s*(.+)$", raw) or extract_url(raw)
     cover = infer_cover(url)
 
-    note_match = re.search(r"-\s*长文笔记：\s*\n(.+)$", raw, flags=re.S)
-    note = note_match.group(1).strip() if note_match else raw.strip()
-
-    summary = first_paragraph_summary(note, heading or show or "")
+    summary_match = re.search(r"###\s*一句话总结\s*(.+?)(?=\n###\s|\Z)", raw, flags=re.S)
+    summary = summary_match.group(1).strip() if summary_match else ""
+    highlights_match = re.search(r"###\s*Highlights\s*(.+?)(?=\n###\s|\Z)", raw, flags=re.S)
+    highlights_block = highlights_match.group(1).strip() if highlights_match else ""
+    note_match = re.search(r"###\s*长文笔记\s*(.+)$", raw, flags=re.S)
+    note = note_match.group(1).strip() if note_match else raw
+    if not summary:
+        summary = first_paragraph_summary(note, heading or show or "")
     cn_topic = summarize_heading(heading or show or "", note)
 
-    highlight_candidates = [p.strip() for p in re.split(r"\n\s*\n", note) if p.strip()]
     highlights = []
-    for para in highlight_candidates[:4]:
-        highlights.append(f"- {shorten_sentence(para, limit=60)}")
+    if highlights_block:
+        for line in highlights_block.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("-"):
+                highlights.append(stripped)
+    if not highlights:
+        highlight_candidates = [p.strip() for p in re.split(r"\n\s*\n", note) if p.strip()]
+        for para in highlight_candidates[:4]:
+            highlights.append(f"- {shorten_sentence(para, limit=60)}")
 
     parts = [f"## {heading or show or '未命名播客'}", "", "### 中文主题", "", cn_topic, "", "### 基本信息", ""]
     if show:
@@ -322,7 +342,7 @@ def build_podcast_section(raw: str) -> tuple[str, str]:
         "---",
         "",
     ])
-    checklist_line = f"- **{heading or show or '未命名播客'}** — {summary}"
+    checklist_line = f"- {heading or show or '未命名播客'}"
     return "\n".join(parts), checklist_line
 
 
@@ -504,42 +524,82 @@ def normalize_podcast_key(text: str) -> str:
     return normalized
 
 
-def load_seen_podcast_keys(repo: Path) -> tuple[set[str], set[tuple[str, str]]]:
+def load_seen_podcast_keys(repo: Path, exclude_paths: set[Path] | None = None) -> tuple[set[str], set[tuple[str, str]]]:
     posts_dir = repo / "src/content/posts/zh-cn"
     seen_urls: set[str] = set()
     seen_show_title_pairs: set[tuple[str, str]] = set()
+    exclude_resolved = {p.resolve() for p in (exclude_paths or set())}
     if not posts_dir.exists():
         return seen_urls, seen_show_title_pairs
 
     for post_path in sorted(posts_dir.glob("海外科技播客-*.md")):
+        if post_path.resolve() in exclude_resolved:
+            continue
         text = post_path.read_text(encoding="utf-8")
-        for chunk in re.split(r"(?m)^##\s+", text):
-            chunk = chunk.strip()
-            if not chunk or chunk.startswith("今日总览") or chunk.startswith("今日播客清单"):
-                continue
-            chunk = "## " + chunk
-            heading = extract_line(r"^##\s+(.+)$", chunk)
-            show = extract_line(r"^-\s*\*\*节目\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*节目：\s*(.+)$", chunk)
-            url = extract_line(r"^-\s*\*\*链接\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*链接：\s*(.+)$", chunk)
-            if url:
-                seen_urls.add(url.strip())
-            if heading and show:
-                seen_show_title_pairs.add((normalize_podcast_key(show), normalize_podcast_key(heading)))
+        file_urls, file_pairs = load_seen_podcast_keys_from_text(text)
+        seen_urls.update(file_urls)
+        seen_show_title_pairs.update(file_pairs)
+    return seen_urls, seen_show_title_pairs
+
+
+def load_seen_podcast_keys_from_text(text: str) -> tuple[set[str], set[tuple[str, str]]]:
+    seen_urls: set[str] = set()
+    seen_show_title_pairs: set[tuple[str, str]] = set()
+    for chunk in re.split(r"(?m)^##\s+", text):
+        chunk = chunk.strip()
+        if not chunk or chunk.startswith("今日总览") or chunk.startswith("今日播客清单"):
+            continue
+        chunk = "## " + chunk
+        heading = extract_line(r"^##\s+(.+)$", chunk)
+        show = extract_line(r"^-\s*\*\*节目\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*节目：\s*(.+)$", chunk)
+        url = extract_line(r"^-\s*\*\*链接\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*链接：\s*(.+)$", chunk)
+        if url:
+            seen_urls.add(url.strip())
+        if heading and show:
+            seen_show_title_pairs.add((normalize_podcast_key(show), normalize_podcast_key(heading)))
     return seen_urls, seen_show_title_pairs
 
 
 def format_foreign_podcast(text: str, title: str, repo: Path = DEFAULT_REPO) -> str:
-    seen_urls, seen_show_title_pairs = load_seen_podcast_keys(repo)
+    current_path: Path | None = None
+    current_date_match = re.search(r"(\d{4}-\d{2}-\d{2})", title)
+    if current_date_match:
+        current_path = repo / "src/content/posts/zh-cn" / f"海外科技播客-{current_date_match.group(1)}.md"
 
-    sections = [chunk.strip() for chunk in re.split(r"\n\s*---\s*\n", text.strip()) if chunk.strip()]
+    seen_urls, seen_show_title_pairs = load_seen_podcast_keys(
+        repo,
+        exclude_paths={current_path} if current_path else None,
+    )
+
+    response_match = re.search(r"^##\s+Response\s*$", text, flags=re.MULTILINE)
+    if response_match:
+        text = text[response_match.end():].strip()
+    title_line_match = re.search(r"^《今日国外热门科技访谈播客》\s*$", text, flags=re.MULTILINE)
+    if title_line_match:
+        text = text[title_line_match.end():].strip()
+
+    overview_match = re.search(r"##\s*今日总览\s*(.+?)(?=\n##\s*今日播客清单|\Z)", text, flags=re.S)
+    summary_line = first_paragraph_summary(
+        overview_match.group(1).strip() if overview_match else "",
+        "今天的内容主要集中在两条主线：一是 AI 正从工具走向组织级基础设施，二是讨论边界正从软件扩展到数据中心、工业系统与工程设计。",
+    )
+
+    body_start = text.find("---")
+    episode_text = text[body_start + 3 :].strip() if body_start != -1 else text.strip()
+
+    sections = [
+        match.group(1).strip()
+        for match in re.finditer(r"(?sm)(##\s+.+?)(?=\n##\s+.+|\Z)", episode_text)
+        if match.group(1).strip()
+    ]
     episode_sections = []
     checklist = []
     for chunk in sections:
         if not chunk.startswith("## "):
             continue
         heading = extract_line(r"^##\s+(.+)$", chunk)
-        show = extract_line(r"^-\s*节目：\s*(.+)$", chunk)
-        url = extract_line(r"^-\s*链接：\s*(.+)$", chunk) or extract_url(chunk)
+        show = extract_line(r"^-\s*\*\*节目\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*节目：\s*(.+)$", chunk)
+        url = extract_line(r"^-\s*\*\*链接\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*链接：\s*(.+)$", chunk) or extract_url(chunk)
         if url and url.strip() in seen_urls:
             continue
         if heading and show and (normalize_podcast_key(show), normalize_podcast_key(heading)) in seen_show_title_pairs:
@@ -553,7 +613,6 @@ def format_foreign_podcast(text: str, title: str, repo: Path = DEFAULT_REPO) -> 
     if not episode_sections:
         return text
 
-    summary_line = "今天的内容主要集中在两条主线：一是 AI 正从工具走向组织级基础设施，二是讨论边界正从软件扩展到数据中心、工业系统与工程设计。"
     lines = [
         "《今日国外热门科技访谈播客》",
         "",
@@ -636,7 +695,30 @@ def normalize_watchlist_title_keys(title: str) -> tuple[str, str]:
         zh = compact_text(m.group(1))
         en = normalize_podcast_key(m.group(2))
         return en, zh
-    return "", compact_text(raw)
+    normalized = compact_text(raw)
+    return "", normalize_podcast_key(normalized)
+
+
+def load_seen_watchlist_titles_from_text(text: str) -> tuple[set[str], set[str]]:
+    seen_english: set[str] = set()
+    seen_chinese: set[str] = set()
+    for heading in re.findall(r"(?m)^##\s+(.+)$", text):
+        en_key, zh_key = normalize_watchlist_title_keys(heading)
+        if en_key:
+            seen_english.add(en_key)
+        if zh_key:
+            seen_chinese.add(zh_key)
+
+    if not seen_english and not seen_chinese:
+        for match in re.finditer(r"(?m)^\s*\d+\.\s+\*\*(.+?)\*\*\s*$", text):
+            heading = match.group(1).strip()
+            en_key, zh_key = normalize_watchlist_title_keys(heading)
+            if en_key:
+                seen_english.add(en_key)
+            if zh_key:
+                seen_chinese.add(zh_key)
+
+    return seen_english, seen_chinese
 
 
 def load_seen_watchlist_titles(repo: Path) -> tuple[set[str], set[str]]:
@@ -648,12 +730,9 @@ def load_seen_watchlist_titles(repo: Path) -> tuple[set[str], set[str]]:
 
     for post_path in sorted(posts_dir.glob("每周影视推荐-*.md")):
         text = post_path.read_text(encoding="utf-8")
-        for heading in re.findall(r"(?m)^##\s+(.+)$", text):
-            en_key, zh_key = normalize_watchlist_title_keys(heading)
-            if en_key:
-                seen_english.add(en_key)
-            if zh_key:
-                seen_chinese.add(zh_key)
+        file_english, file_chinese = load_seen_watchlist_titles_from_text(text)
+        seen_english.update(file_english)
+        seen_chinese.update(file_chinese)
     return seen_english, seen_chinese
 
 
