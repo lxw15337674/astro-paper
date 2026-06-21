@@ -746,6 +746,9 @@ def format_mdblist_weekly(text: str, repo: Path = DEFAULT_REPO) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 
     seen_english, seen_chinese = load_seen_watchlist_titles(repo)
+    if re.search(r"(?m)^##\s+(电影推荐|剧集推荐)\s*$", cleaned) and re.search(r"(?m)^###\s+.+$", cleaned):
+        return format_mdblist_weekly_structured(cleaned, seen_english, seen_chinese)
+
     sections = [chunk.strip() for chunk in re.split(r"\n(?=##\s+)", cleaned) if chunk.strip()]
     kept_sections: list[str] = []
     for section in sections:
@@ -761,6 +764,62 @@ def format_mdblist_weekly(text: str, repo: Path = DEFAULT_REPO) -> str:
         kept_sections.append(section)
 
     return "\n\n".join(kept_sections).rstrip() + "\n"
+
+
+def format_mdblist_weekly_structured(cleaned: str, seen_english: set[str], seen_chinese: set[str]) -> str:
+    output_sections: list[str] = []
+    current_block: list[str] = []
+    current_heading: str | None = None
+    current_items: list[str] = []
+
+    def flush_heading() -> None:
+        nonlocal current_heading, current_items
+        if current_heading is None:
+            return
+        section_lines = [f"## {current_heading}"]
+        if current_items:
+            section_lines.append("")
+            for item in current_items:
+                section_lines.append(item.strip())
+                section_lines.append("")
+        output_sections.append("\n".join(section_lines).strip())
+        current_heading = None
+        current_items = []
+
+    def maybe_add_block(block_lines: list[str]) -> None:
+        nonlocal current_items
+        block = "\n".join(block_lines).strip()
+        if not block:
+            return
+        title = extract_line(r"^###\s+(.+)$", block)
+        en_key, zh_key = normalize_watchlist_title_keys(title)
+        if en_key and (en_key in seen_english or en_key in seen_chinese):
+            return
+        if zh_key and (zh_key in seen_chinese or zh_key in seen_english):
+            return
+        current_items.append(block)
+
+    for line in cleaned.splitlines():
+        if line.startswith("## "):
+            if current_block:
+                maybe_add_block(current_block)
+                current_block = []
+            flush_heading()
+            current_heading = line[3:].strip()
+            continue
+        if line.startswith("### "):
+            if current_block:
+                maybe_add_block(current_block)
+            current_block = [line]
+            continue
+        if current_block:
+            current_block.append(line)
+
+    if current_block:
+        maybe_add_block(current_block)
+    flush_heading()
+
+    return "\n\n".join(section for section in output_sections if section.strip()).rstrip() + "\n"
 
 
 def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
