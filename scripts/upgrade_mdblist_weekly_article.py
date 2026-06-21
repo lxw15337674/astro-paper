@@ -56,48 +56,67 @@ def build_context_markdown(payload: dict) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def extract_json_object(text: str) -> dict | None:
+    json_match = re.search(r"\{.*\}", text, flags=re.S)
+    if not json_match:
+        return None
+    try:
+        return json.loads(json_match.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
 def fetch_review_context(payload: dict) -> str:
     items = payload.get("items") or []
-    urls: list[str] = []
-    url_to_label: dict[str, str] = {}
-    for item in items[:4]:
-        title = str(item.get("title") or "").strip()
-        mdblist_url = str(item.get("url") or "").strip()
-        douban_url = str(item.get("douban_url") or "").strip()
-        if douban_url:
-            review_url = douban_url.rstrip("/") + "/comments"
-            urls.append(review_url)
-            url_to_label[review_url] = f"{title} 豆瓣短评页"
-        if mdblist_url:
-            urls.append(mdblist_url)
-            url_to_label[mdblist_url] = f"{title} MDBList详情页"
-
-    if not urls:
+    if not items:
         return "# REVIEW CONTEXT\n\n无可用评论来源。\n"
 
-    extract_input = json.dumps({"urls": urls}, ensure_ascii=False)
-    extracted_raw = run(["hermes", "chat", "-q", "用 web_extract 抓取这些 URL 的页面正文，原样返回 JSON。输入如下：\n" + extract_input])
-    json_match = re.search(r"\{.*\}", extracted_raw, flags=re.S)
-    if not json_match:
-        return "# REVIEW CONTEXT\n\n无可提取评论文本。\n"
-    try:
-        extracted = json.loads(json_match.group(0))
-    except json.JSONDecodeError:
-        return "# REVIEW CONTEXT\n\n无可提取评论文本。\n"
-
-    results = extracted.get("results") or []
     lines = ["# REVIEW CONTEXT", ""]
-    for result in results:
-        url = str(result.get("url") or "")
-        label = url_to_label.get(url, url)
-        content = str(result.get("content") or "").strip()
-        if not content:
+    batch_size = 4
+    for start in range(0, len(items), batch_size):
+        batch = items[start : start + batch_size]
+        urls: list[str] = []
+        url_to_label: dict[str, str] = {}
+        for item in batch:
+            title = str(item.get("title") or "").strip()
+            mdblist_url = str(item.get("url") or "").strip()
+            douban_url = str(item.get("douban_url") or "").strip()
+            if douban_url:
+                review_url = douban_url.rstrip("/") + "/comments"
+                urls.append(review_url)
+                url_to_label[review_url] = f"{title} 豆瓣短评页"
+            if mdblist_url:
+                urls.append(mdblist_url)
+                url_to_label[mdblist_url] = f"{title} MDBList详情页"
+
+        if not urls:
             continue
-        lines.extend([
-            f"## {label}",
-            content[:4000],
-            "",
-        ])
+
+        extract_input = json.dumps({"urls": urls}, ensure_ascii=False)
+        extracted_raw = run(
+            [
+                "hermes",
+                "chat",
+                "-q",
+                "用 web_extract 抓取这些 URL 的页面正文，原样返回 JSON。输入如下：\n" + extract_input,
+            ]
+        )
+        extracted = extract_json_object(extracted_raw)
+        if not extracted:
+            continue
+
+        results = extracted.get("results") or []
+        for result in results:
+            url = str(result.get("url") or "")
+            label = url_to_label.get(url, url)
+            content = str(result.get("content") or "").strip()
+            if not content:
+                continue
+            lines.extend([
+                f"## {label}",
+                content[:4000],
+                "",
+            ])
 
     if len(lines) == 2:
         lines.append("无可提取评论文本。")
