@@ -20,7 +20,7 @@ HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg"
 TASKS: dict[str, dict[str, object]] = {
     "morning-market": {
         "title_prefix": "全球市场晨报",
-        "task_tag": "市场日报",
+        "task_tag": "全球市场晨报",
         "summary": "每日全球市场晨报，汇总隔夜或最近一个交易日的主要市场动态、BTC变化与可申购港股打新附录。",
         "formatter": "morning-market",
     },
@@ -386,7 +386,7 @@ def build_morning_market_description(text: str) -> str:
         if not summary.endswith("。"):
             summary += "。"
         return summary[:140]
-    return "汇总隔夜美股、A股收盘、港股收盘与 BTC 动态的晨间市场观察。"[:140]
+    return "每日全球市场晨报，汇总隔夜或最近一个交易日的主要市场动态与 BTC 变化。"[:140]
 
 def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
