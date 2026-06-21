@@ -184,10 +184,6 @@ def safe_slug_component(text: str) -> str:
 
 
 def target_path(repo: Path, task_name: str, task_tag: str, period_key: str) -> Path:
-    if task_name == "foreign-tech-podcast":
-        legacy = repo / "src/content/posts/zh-cn" / f"foreign-tech-podcast-{period_key}.md"
-        if legacy.exists():
-            return legacy
     return repo / "src/content/posts/zh-cn" / f"{safe_slug_component(task_tag)}-{period_key}.md"
 
 
