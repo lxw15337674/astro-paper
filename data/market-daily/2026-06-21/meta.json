@@ -17,8 +17,8 @@
     "reason": ""
   },
   "btc": {
-    "generated_at": "2026-06-21T11:09:07.665799+08:00",
-    "status": "ok",
-    "reason": ""
+    "generated_at": "2026-06-21T11:09:07+08:00",
+    "status": "skipped",
+    "reason": "BTC natural day has not reached Beijing 24:00 cutoff"
   }
 }

@@ -5,7 +5,7 @@ import argparse
 import json
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -138,6 +138,9 @@ def clean_macro_for_summary(macro: str) -> str:
 def sanitize_market_daily_text(text: str) -> str:
     text = text.replace("隔夜美股", "美股")
     text = text.replace("隔夜", "")
+    text = text.replace("A股当天", "A股最近一个交易日")
+    text = text.replace("港股当天", "港股最近一个交易日")
+    text = re.sub(r"最近一个交易日的港股收盘数据未能从单一稳定来源完整抓取到全部指数点位，因此这里不机械堆数字。可以确认的是，", "最近一个交易日，", text)
     text = re.sub(r"关注{2,}", "关注", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -177,12 +180,12 @@ def build_us_sections(us: dict[str, str]) -> list[str]:
     lines: list[str] = ["## 美股", ""]
     if us.get("indexes") or us.get("sentiment"):
         lines.extend(["### 指数表现", ""])
-        parts = ["本自然日归档的美股部分，采用最近一次已完整落地的收盘数据。"]
+        sentence = "本自然日归档的美股部分采用最近一次已完整落地的收盘数据。"
         if us.get("indexes"):
-            parts.append(f"三大指数表现为：{us['indexes']}。")
+            sentence += f"三大指数表现为：{us['indexes']}。"
         if us.get("sentiment"):
-            parts.append(f"从指数层面看，整体呈现{us['sentiment']}。")
-        lines.extend([compact_join(parts), ""])
+            sentence += f"从指数层面看，整体呈现{us['sentiment']}。"
+        lines.extend([sentence, ""])
     if us.get("tech"):
         lines.extend([
             "### 科技股与结构",
@@ -216,7 +219,7 @@ def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
         "本自然日 A 股未开盘，无新增收盘数据。以下回顾最近一个交易日表现。",
         "",
     ]
-    labels = ["### 最近一个交易日指数与成交", "### 最近一个交易日强弱板块", "### 最近一个交易日主线"]
+    labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
     for label, para in zip(labels, ah_paras[:3]):
         lines.extend([label, "", para, ""])
     return lines
@@ -236,23 +239,27 @@ def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
         "本自然日港股未开盘，无新增收盘数据。以下回顾最近一个交易日表现。",
         "",
     ]
-    labels = ["### 最近一个交易日指数与资金", "### 最近一个交易日强弱板块", "### 最近一个交易日主线"]
+    labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
     for label, para in zip(labels, hk_paras[:3]):
         lines.extend([label, "", para, ""])
     return lines
+
+
+def is_btc_natural_day_complete(date_str: str | None = None, now: datetime | None = None) -> bool:
+    if not date_str:
+        return True
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=BJT)
+    now_dt = now or datetime.now(BJT)
+    return now_dt >= target_dt + timedelta(days=1)
 
 
 def build_btc_sections(btc: dict[str, str]) -> list[str]:
     lines: list[str] = ["## BTC 市场动态", "", "### 自然日价格与涨跌", ""]
     current = []
     if btc.get("price"):
-        current.append(f"截至发文时，BTC 报 {btc['price']}。")
-    if btc.get("change_24h") and btc.get("change_12h"):
-        current.append(
-            f"过去 24 小时变动为 {btc['change_24h']}，过去 12 小时变动为 {btc['change_12h']}。"
-        )
-    elif btc.get("change_24h"):
-        current.append(f"过去 24 小时变动为 {btc['change_24h']}。")
+        current.append(f"北京时间自然日收口后，BTC 报 {btc['price']}。")
+    if btc.get("change_24h"):
+        current.append(f"本自然日价格变动为 {btc['change_24h']}。")
     lines.extend([compact_join(current), "", "### 市场观察", ""])
     observation = []
     if btc.get("mtd"):
@@ -390,6 +397,14 @@ def build_section(section: str, date_str: str) -> Path | None:
     }
     if section not in builders:
         raise ValueError(f"unsupported section: {section}")
+    if section == "btc" and not is_btc_natural_day_complete(date_str):
+        section_dir = section_dir_for(date_str)
+        section_dir.mkdir(parents=True, exist_ok=True)
+        write_meta(section_dir, section, "skipped", "BTC natural day has not reached Beijing 24:00 cutoff")
+        section_path = section_dir / "btc.md"
+        if section_path.exists():
+            section_path.unlink()
+        return None
     return write_section(section_dir_for(date_str), section, builders[section]())
 
 

@@ -37,6 +37,8 @@ def test_market_daily_assembler_omits_missing_sections_and_has_no_key_points(tmp
     assert "美股内容。" in body
     assert "## BTC 市场动态" in body
     assert "BTC 内容。" in body
+    assert generate.is_btc_natural_day_complete("2026-06-21", generate.datetime(2026, 6, 21, 23, 59, tzinfo=generate.BJT)) is False
+    assert generate.is_btc_natural_day_complete("2026-06-21", generate.datetime(2026, 6, 22, 0, 0, tzinfo=generate.BJT)) is True
     assert "## A股" not in body
     assert "## 港股" not in body
     assert "暂未" not in body
