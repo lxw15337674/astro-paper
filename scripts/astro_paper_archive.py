@@ -513,10 +513,11 @@ def load_seen_podcast_keys(repo: Path) -> tuple[set[str], set[tuple[str, str]]]:
 
     for post_path in sorted(posts_dir.glob("海外科技播客-*.md")):
         text = post_path.read_text(encoding="utf-8")
-        chunks = [chunk.strip() for chunk in re.split(r"\n\s*---\s*\n", text) if chunk.strip()]
-        for chunk in chunks:
-            if not chunk.startswith("## "):
+        for chunk in re.split(r"(?m)^##\s+", text):
+            chunk = chunk.strip()
+            if not chunk or chunk.startswith("今日总览") or chunk.startswith("今日播客清单"):
                 continue
+            chunk = "## " + chunk
             heading = extract_line(r"^##\s+(.+)$", chunk)
             show = extract_line(r"^-\s*\*\*节目\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*节目：\s*(.+)$", chunk)
             url = extract_line(r"^-\s*\*\*链接\*\*：\s*(.+)$", chunk) or extract_line(r"^-\s*链接：\s*(.+)$", chunk)
