@@ -19,10 +19,16 @@ HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg"
 
 TASKS: dict[str, dict[str, object]] = {
     "morning-market": {
-        "title_prefix": "全球市场晨报",
-        "task_tag": "全球市场晨报",
-        "summary": "每日全球市场晨报，汇总隔夜或最近一个交易日的主要市场动态、BTC变化与可申购港股打新附录。",
-        "formatter": "morning-market",
+        "title_prefix": "全球市场日报",
+        "task_tag": "全球市场日报",
+        "summary": "每日全球市场日报，按北京时间自然日汇总全球主要市场动态。",
+        "formatter": "market-daily",
+    },
+    "global-market-daily": {
+        "title_prefix": "全球市场日报",
+        "task_tag": "全球市场日报",
+        "summary": "每日全球市场日报，按北京时间自然日汇总全球主要市场动态。",
+        "formatter": "market-daily",
     },
     "hn-top10": {
         "title_prefix": "HackerNews Top 10",
@@ -373,20 +379,12 @@ def build_hn_description(text: str, fallback: str) -> str:
     return fallback[:140]
 
 
+def build_market_daily_description(text: str) -> str:
+    return "每日全球市场日报，按北京时间自然日汇总全球主要市场动态。"
+
+
 def build_morning_market_description(text: str) -> str:
-    sections = re.split(r"\n##\s+", text)
-    key_points = ""
-    for sec in sections:
-        if sec.startswith("今日要点"):
-            key_points = sec
-            break
-    bullets = re.findall(r"^-\s+(.+)$", key_points, flags=re.MULTILINE)
-    if bullets:
-        summary = "；".join(b.strip().rstrip("。") for b in bullets[:3])
-        if not summary.endswith("。"):
-            summary += "。"
-        return summary[:140]
-    return "每日全球市场晨报，汇总隔夜或最近一个交易日的主要市场动态与 BTC 变化。"[:140]
+    return build_market_daily_description(text)
 
 def build_hn_item_block(index: int, raw: str) -> tuple[str, str, str, str, int]:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
@@ -584,7 +582,7 @@ def format_task_body(task_name: str, title: str, body: str) -> tuple[str, str]:
         return format_hn_top10(body)
     if formatter == "mdblist-weekly":
         return format_mdblist_weekly(body), ""
-    if formatter == "morning-market":
+    if formatter in {"morning-market", "market-daily"}:
         return body, ""
     return body, ""
 
@@ -624,8 +622,8 @@ def main() -> int:
     description = first_paragraph_summary(body, str(task["summary"]))
     if args.task == "hn-top10":
         description = build_hn_description(body, str(task["summary"]))
-    if args.task == "morning-market":
-        description = build_morning_market_description(body)
+    if args.task in {"morning-market", "global-market-daily"}:
+        description = build_market_daily_description(body)
     tags = [TOTAL_TAG, str(task["task_tag"]), *args.extra_tag]
     if args.task == "mdblist-weekly":
         cover_image = ""

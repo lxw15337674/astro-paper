@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import shlex
+import argparse
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 REPO = Path("/home/bhwa233/code/astro-paper")
-PROMPT_PATH = REPO / "scripts" / "morning_market_prompt.md"
-OUTPUT_PATH = Path("/tmp/morning_market_ai_output.md")
+GENERATOR = REPO / "scripts" / "generate_morning_market_digest.py"
 ARCHIVE_SCRIPT = REPO / "scripts" / "astro_paper_archive.py"
+BJT = ZoneInfo("Asia/Shanghai")
 
 
-def run(command: list[str]) -> str:
-    result = subprocess.run(command, text=True, capture_output=True)
+def run(command: list[str], *, input_text: str | None = None) -> str:
+    result = subprocess.run(command, input=input_text, text=True, capture_output=True)
     if result.returncode != 0:
         raise RuntimeError(
-            f"command failed: {' '.join(shlex.quote(p) for p in command)}\n"
+            f"command failed: {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
@@ -23,38 +25,31 @@ def run(command: list[str]) -> str:
 
 
 def main() -> int:
-    prompt = PROMPT_PATH.read_text(encoding="utf-8")
-    if OUTPUT_PATH.exists():
-        OUTPUT_PATH.unlink()
+    parser = argparse.ArgumentParser(description="Build and archive a natural-day Global Market Daily post")
+    parser.add_argument("--date", help="Archive date YYYY-MM-DD in Asia/Shanghai")
+    parser.add_argument("--skip-git-pull", action="store_true")
+    args = parser.parse_args()
 
-    run(["hermes", "chat", "-q", prompt])
+    date_str = args.date or datetime.now(BJT).strftime("%Y-%m-%d")
 
-    if not OUTPUT_PATH.exists():
-        raise FileNotFoundError(f"AI output not found: {OUTPUT_PATH}")
-
-    body = OUTPUT_PATH.read_text(encoding="utf-8").strip()
+    run(["python3", str(GENERATOR), "--date", date_str, "--build-sections"])
+    body = run(["python3", str(GENERATOR), "--date", date_str, "--assemble"]).strip()
     if not body:
-        raise ValueError("AI output markdown is empty")
+        raise ValueError("assembled global market daily body is empty")
 
-    proc = subprocess.run(
-        [
-            "python3",
-            str(ARCHIVE_SCRIPT),
-            "--task",
-            "morning-market",
-            "--period",
-            "daily",
-            "--skip-git-pull",
-        ],
-        input=body,
-        text=True,
-        capture_output=True,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"archive failed\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-        )
-    print(proc.stdout.strip())
+    archive_cmd = [
+        "python3",
+        str(ARCHIVE_SCRIPT),
+        "--task",
+        "global-market-daily",
+        "--period",
+        "daily",
+        "--date",
+        date_str,
+    ]
+    if args.skip_git_pull:
+        archive_cmd.append("--skip-git-pull")
+    print(run(archive_cmd, input_text=body).strip())
     return 0
 
 

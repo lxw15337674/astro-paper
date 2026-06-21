@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 from datetime import datetime
@@ -11,7 +12,19 @@ from zoneinfo import ZoneInfo
 BJT = ZoneInfo("Asia/Shanghai")
 ROOT = Path("/home/bhwa233")
 HERMES_SCRIPTS = ROOT / ".hermes" / "scripts"
-ASTRO_POSTS = ROOT / "code" / "astro-paper" / "src" / "content" / "posts" / "zh-cn"
+REPO = ROOT / "code" / "astro-paper"
+ASTRO_POSTS = REPO / "src" / "content" / "posts" / "zh-cn"
+MARKET_DAILY_ROOT = REPO / "data" / "market-daily"
+SECTION_ORDER = ["us", "a-share", "hk", "btc"]
+QUALITY_BLOCK_PATTERNS = [
+    r"\{\{[^}]+\}\}",
+    r"待补充",
+    r"暂无数据",
+    r"稍后补充",
+    r"示例",
+    r"关注关注",
+    r"市场关注.+上",
+]
 
 
 def run_cmd(cmd: list[str]) -> str:
@@ -100,7 +113,7 @@ def extract_section(text: str, heading: str) -> str:
 def normalize_paragraphs(text: str) -> list[str]:
     text = strip_frontmatter(text)
     paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-    return [p for p in paras if not p.startswith("### ")]
+    return [sanitize_market_daily_text(p) for p in paras if not p.startswith("### ")]
 
 
 def first_sentence(text: str) -> str:
@@ -120,6 +133,14 @@ def clean_macro_for_summary(macro: str) -> str:
     macro = re.sub(r"^消息面", "", macro)
     macro = re.sub(r"^主要围绕", "", macro)
     return macro.lstrip("，,：:；; ")
+
+
+def sanitize_market_daily_text(text: str) -> str:
+    text = text.replace("隔夜美股", "美股")
+    text = text.replace("隔夜", "")
+    text = re.sub(r"关注{2,}", "关注", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def build_key_points(
@@ -149,16 +170,16 @@ def build_key_points(
         points.append("；".join(bits) + "。")
     if has_ipo:
         points.append("今天有处于可申购期的港股新股，文末附录已整理相关打新信息。")
-    return points[:4]
+    return points
 
 
 def build_us_sections(us: dict[str, str]) -> list[str]:
-    lines: list[str] = ["## 隔夜美股", ""]
+    lines: list[str] = ["## 美股", ""]
     if us.get("indexes") or us.get("sentiment"):
         lines.extend(["### 指数表现", ""])
-        parts = []
+        parts = ["本自然日归档的美股部分，采用最近一次已完整落地的收盘数据。"]
         if us.get("indexes"):
-            parts.append(f"隔夜美股收盘方面，{us['indexes']}。")
+            parts.append(f"三大指数表现为：{us['indexes']}。")
         if us.get("sentiment"):
             parts.append(f"从指数层面看，整体呈现{us['sentiment']}。")
         lines.extend([compact_join(parts), ""])
@@ -172,26 +193,27 @@ def build_us_sections(us: dict[str, str]) -> list[str]:
     if us.get("macro") or us.get("risk"):
         lines.extend(["### 消息面", ""])
         if us.get("macro"):
-            macro = us["macro"]
+            macro = sanitize_market_daily_text(us["macro"])
             lines.append(macro if macro.startswith("消息面") else f"消息面上，{macro}")
         if us.get("risk"):
-            lines.extend(["", f"后续仍可继续关注{us['risk']}"])
+            risk = re.sub(r"^关注", "", sanitize_market_daily_text(us["risk"]))
+            lines.extend(["", f"后续仍可继续关注{risk}"])
         lines.append("")
     return lines
 
 
 def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
     if market_open:
-        lines: list[str] = ["## A股收盘回顾", ""]
+        lines: list[str] = ["## A股", ""]
         labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
         for label, para in zip(labels, ah_paras[:3]):
             lines.extend([label, "", para, ""])
         return lines
 
     lines = [
-        "## A股（今日未开盘）",
+        "## A股",
         "",
-        "今日 A 股未开盘，无新增收盘数据。以下内容仅回顾最近一个交易日的盘面表现。",
+        "本自然日 A 股未开盘，无新增收盘数据。以下回顾最近一个交易日表现。",
         "",
     ]
     labels = ["### 最近一个交易日指数与成交", "### 最近一个交易日强弱板块", "### 最近一个交易日主线"]
@@ -202,16 +224,16 @@ def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
 
 def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
     if market_open:
-        lines: list[str] = ["## 港股收盘回顾", ""]
+        lines: list[str] = ["## 港股", ""]
         labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
         for label, para in zip(labels, hk_paras[:3]):
             lines.extend([label, "", para, ""])
         return lines
 
     lines = [
-        "## 港股（今日未开盘）",
+        "## 港股",
         "",
-        "今日港股未开盘，无新增收盘数据。以下内容仅回顾最近一个交易日的市场表现。",
+        "本自然日港股未开盘，无新增收盘数据。以下回顾最近一个交易日表现。",
         "",
     ]
     labels = ["### 最近一个交易日指数与资金", "### 最近一个交易日强弱板块", "### 最近一个交易日主线"]
@@ -221,7 +243,7 @@ def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
 
 
 def build_btc_sections(btc: dict[str, str]) -> list[str]:
-    lines: list[str] = ["## BTC 市场动态", "", "### 当前价格与短线变化", ""]
+    lines: list[str] = ["## BTC 市场动态", "", "### 自然日价格与涨跌", ""]
     current = []
     if btc.get("price"):
         current.append(f"截至发文时，BTC 报 {btc['price']}。")
@@ -246,7 +268,7 @@ def build_btc_sections(btc: dict[str, str]) -> list[str]:
 def build_summary(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> str:
     lines = []
     if us.get("macro"):
-        macro = clean_macro_for_summary(us["macro"])
+        macro = sanitize_market_daily_text(clean_macro_for_summary(us["macro"]))
         lines.append(f"今天早上把几类市场放在一起看，海外市场主线仍集中在{macro}上。")
     if btc.get("change_24h"):
         lines.append(
@@ -270,31 +292,138 @@ def build_markdown(
     ah_paras = normalize_paragraphs(ah_text)
     hk_paras = normalize_paragraphs(hk_text)
     ipo = parse_hk_ipo(ipo_text)
-    key_points = build_key_points(us, ah_paras, hk_paras, btc, bool(ipo.get("has_ipo")))
-
     target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=BJT)
     weekday = target_dt.weekday()
     cn_market_open = weekday < 5
 
-    lines: list[str] = ["## 今日要点", ""]
-    lines.extend([f"- {point}" for point in key_points])
-    lines.extend([""])
+    lines: list[str] = []
     lines.extend(build_us_sections(us))
     lines.extend(build_ah_sections(ah_paras, cn_market_open))
     lines.extend(build_hk_sections(hk_paras, cn_market_open))
     lines.extend(build_btc_sections(btc))
-    lines.extend(["## 总结", "", build_summary(us, btc, bool(ipo.get("has_ipo"))), ""])
+    summary = build_summary(us, btc, bool(ipo.get("has_ipo")))
+    if summary:
+        lines.extend(["## 总结", "", summary, ""])
     if ipo.get("has_ipo"):
         lines.extend(["## 附录：港股打新", "", str(ipo["body"]).strip(), ""])
     return "\n".join(lines).strip() + "\n"
 
 
+
+def section_dir_for(date_str: str, root: Path = MARKET_DAILY_ROOT) -> Path:
+    return root / date_str
+
+
+def is_publishable_section(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped or not stripped.startswith("## "):
+        return False
+    return not any(re.search(pattern, stripped, flags=re.I | re.S) for pattern in QUALITY_BLOCK_PATTERNS)
+
+
+def write_meta(section_dir: Path, section: str, status: str, reason: str = "") -> None:
+    meta_path = section_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            meta = {}
+    else:
+        meta = {}
+    meta.setdefault("date", section_dir.name)
+    meta.setdefault("timezone", "Asia/Shanghai")
+    meta[section] = {
+        "generated_at": datetime.now(BJT).isoformat(),
+        "status": status,
+        "reason": reason,
+    }
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_section(section_dir: Path, section: str, lines: list[str]) -> Path | None:
+    section_dir.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(lines).strip() + "\n"
+    if not is_publishable_section(text):
+        write_meta(section_dir, section, "skipped", "section failed publishability check")
+        return None
+    path = section_dir / f"{section}.md"
+    path.write_text(text, encoding="utf-8")
+    write_meta(section_dir, section, "ok")
+    return path
+
+
+def assemble_market_daily_body(section_dir: Path) -> str:
+    parts: list[str] = []
+    for section in SECTION_ORDER:
+        path = section_dir / f"{section}.md"
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8").strip()
+        if is_publishable_section(text):
+            parts.append(text)
+        else:
+            write_meta(section_dir, section, "skipped", "section failed publishability check during assembly")
+    if not parts:
+        raise ValueError(f"no publishable market daily sections found in {section_dir}")
+    return "\n\n".join(parts).strip() + "\n"
+
+
+def build_section(section: str, date_str: str) -> Path | None:
+    us_raw = run_script(HERMES_SCRIPTS / "us_market_close_summary.py")
+    btc_raw = run_script(HERMES_SCRIPTS / "daily_btc_change.py")
+    market_post = read_latest_post("市场日报-*.md")
+    ah_text = extract_section(market_post, "A股收盘回顾")
+    hk_text = extract_section(market_post, "港股收盘回顾")
+
+    us = parse_us_market(us_raw)
+    btc = parse_btc(btc_raw)
+    ah_paras = normalize_paragraphs(ah_text)
+    hk_paras = normalize_paragraphs(hk_text)
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=BJT)
+    cn_market_open = target_dt.weekday() < 5
+
+    builders = {
+        "us": lambda: build_us_sections(us),
+        "a-share": lambda: build_ah_sections(ah_paras, cn_market_open),
+        "hk": lambda: build_hk_sections(hk_paras, cn_market_open),
+        "btc": lambda: build_btc_sections(btc),
+    }
+    if section not in builders:
+        raise ValueError(f"unsupported section: {section}")
+    return write_section(section_dir_for(date_str), section, builders[section]())
+
+
+def build_all_sections(date_str: str) -> list[Path]:
+    paths = []
+    for section in SECTION_ORDER:
+        path = build_section(section, date_str)
+        if path is not None:
+            paths.append(path)
+    return paths
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Generate natural-day Global Market Daily sections")
     parser.add_argument("--date", help="Override output date YYYY-MM-DD in Asia/Shanghai")
+    parser.add_argument("--section", choices=SECTION_ORDER, help="Generate one intermediate section file")
+    parser.add_argument("--build-sections", action="store_true", help="Generate all intermediate section files")
+    parser.add_argument("--assemble", action="store_true", help="Assemble existing section files into final Markdown body")
     args = parser.parse_args()
     now = datetime.now(BJT)
     target_date = args.date or now.strftime("%Y-%m-%d")
+
+    if args.section:
+        path = build_section(args.section, target_date)
+        if path:
+            print(path)
+        return 0
+    if args.build_sections:
+        for path in build_all_sections(target_date):
+            print(path)
+        return 0
+    if args.assemble:
+        print(assemble_market_daily_body(section_dir_for(target_date)))
+        return 0
 
     us_raw = run_script(HERMES_SCRIPTS / "us_market_close_summary.py")
     btc_raw = run_script(HERMES_SCRIPTS / "daily_btc_change.py")

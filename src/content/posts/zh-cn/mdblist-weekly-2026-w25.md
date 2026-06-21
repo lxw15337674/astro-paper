@@ -4,7 +4,7 @@ pubDatetime: 2026-06-18T16:00:00Z
 modDatetime: 2026-06-19T14:32:00Z
 title: "MDBList 高分热播推荐 - 2026-W25"
 featured: false
-draft: false
+draft: true
 tags:
   - scheduled-posts
   - mdblist-weekly
