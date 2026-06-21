@@ -180,17 +180,41 @@ def build_us_sections(us: dict[str, str]) -> list[str]:
     return lines
 
 
-def build_ah_sections(ah_paras: list[str]) -> list[str]:
-    lines: list[str] = ["## A股收盘回顾", ""]
-    labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
+def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
+    if market_open:
+        lines: list[str] = ["## A股收盘回顾", ""]
+        labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
+        for label, para in zip(labels, ah_paras[:3]):
+            lines.extend([label, "", para, ""])
+        return lines
+
+    lines = [
+        "## A股（今日未开盘）",
+        "",
+        "今日 A 股未开盘，无新增收盘数据。以下内容仅回顾最近一个交易日的盘面表现。",
+        "",
+    ]
+    labels = ["### 最近一个交易日指数与成交", "### 最近一个交易日强弱板块", "### 最近一个交易日主线"]
     for label, para in zip(labels, ah_paras[:3]):
         lines.extend([label, "", para, ""])
     return lines
 
 
-def build_hk_sections(hk_paras: list[str]) -> list[str]:
-    lines: list[str] = ["## 港股收盘回顾", ""]
-    labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
+def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
+    if market_open:
+        lines: list[str] = ["## 港股收盘回顾", ""]
+        labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
+        for label, para in zip(labels, hk_paras[:3]):
+            lines.extend([label, "", para, ""])
+        return lines
+
+    lines = [
+        "## 港股（今日未开盘）",
+        "",
+        "今日港股未开盘，无新增收盘数据。以下内容仅回顾最近一个交易日的市场表现。",
+        "",
+    ]
+    labels = ["### 最近一个交易日指数与资金", "### 最近一个交易日强弱板块", "### 最近一个交易日主线"]
     for label, para in zip(labels, hk_paras[:3]):
         lines.extend([label, "", para, ""])
     return lines
@@ -248,12 +272,16 @@ def build_markdown(
     ipo = parse_hk_ipo(ipo_text)
     key_points = build_key_points(us, ah_paras, hk_paras, btc, bool(ipo.get("has_ipo")))
 
+    target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=BJT)
+    weekday = target_dt.weekday()
+    cn_market_open = weekday < 5
+
     lines: list[str] = ["## 今日要点", ""]
     lines.extend([f"- {point}" for point in key_points])
     lines.extend([""])
     lines.extend(build_us_sections(us))
-    lines.extend(build_ah_sections(ah_paras))
-    lines.extend(build_hk_sections(hk_paras))
+    lines.extend(build_ah_sections(ah_paras, cn_market_open))
+    lines.extend(build_hk_sections(hk_paras, cn_market_open))
     lines.extend(build_btc_sections(btc))
     lines.extend(["## 总结", "", build_summary(us, btc, bool(ipo.get("has_ipo"))), ""])
     if ipo.get("has_ipo"):

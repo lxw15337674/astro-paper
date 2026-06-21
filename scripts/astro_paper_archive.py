@@ -19,9 +19,9 @@ HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg"
 
 TASKS: dict[str, dict[str, object]] = {
     "morning-market": {
-        "title_prefix": "晨间市场观察",
+        "title_prefix": "全球市场晨报",
         "task_tag": "市场日报",
-        "summary": "每日晨间市场观察，汇总隔夜美股、A股收盘、港股收盘、BTC动态与可申购港股打新附录。",
+        "summary": "每日全球市场晨报，汇总隔夜或最近一个交易日的主要市场动态、BTC变化与可申购港股打新附录。",
         "formatter": "morning-market",
     },
     "hn-top10": {
