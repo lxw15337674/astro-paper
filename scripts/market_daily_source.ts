@@ -306,6 +306,13 @@ function boardLine(label: string, rows: BoardRow[]): string {
   return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
 }
 
+function laggingLabel(base: string, rows: { pct: number }[]): string {
+  if (!rows.length) return base;
+  if (rows.some(row => row.pct < -0.005)) return base;
+  if (rows.every(row => row.pct > 0.005)) return base.replace("跌幅靠前", "涨幅相对靠后");
+  return base.replace("跌幅靠前", "表现靠后");
+}
+
 function sectorLine(label: string, rows: SectorRow[]): string {
   if (!rows.length) return `${label}：未获取到稳定行业 ETF 数据。`;
   return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
@@ -352,7 +359,7 @@ function buildAShareSection(rows: QuoteRows, date: string, industryRows: BoardRo
       "## A股行业板块",
       "",
       boardLine("涨幅靠前行业", top),
-      boardLine("跌幅靠前行业", bottom),
+      boardLine(laggingLabel("跌幅靠前行业", bottom), bottom),
       boardBoundary,
     ].join("\n"),
   };
@@ -488,6 +495,13 @@ async function buildCryptoSection(): Promise<MarketSection> {
   try {
     const [global, coins, categories] = await Promise.all([cryptoGlobal(), cryptoCoins(), cryptoCategories()]);
     const topCoins = coins.slice(0, 10);
+    const missingCore: string[] = [];
+    if (!(global.marketCap > 0)) missingCore.push("全市场总市值");
+    if (!(global.volume > 0)) missingCore.push("24小时成交量");
+    if (!(global.btcDominance > 0)) missingCore.push("BTC 占比");
+    if (!(global.ethDominance > 0)) missingCore.push("ETH 占比");
+    if (topCoins.length < 10) missingCore.push("主流资产列表");
+    if (missingCore.length) throw new Error(missingCore.join("、"));
     const { top: coinTop, bottom: coinBottom } = topAndBottom(coins.filter(row => row.marketCap >= 1_000_000_000));
     const { top: categoryTop, bottom: categoryBottom } = topAndBottom(categories);
     return {
@@ -507,23 +521,18 @@ async function buildCryptoSection(): Promise<MarketSection> {
         "## 市场强弱结构",
         "",
         cryptoLine("市值不低于 10 亿美元资产中涨幅靠前", coinTop),
-        cryptoLine("市值不低于 10 亿美元资产中跌幅靠前", coinBottom),
+        cryptoLine(laggingLabel("市值不低于 10 亿美元资产中跌幅靠前", coinBottom), coinBottom),
         boardLine("分类板块涨幅靠前", categoryTop),
-        boardLine("分类板块跌幅靠前", categoryBottom),
+        boardLine(laggingLabel("分类板块跌幅靠前", categoryBottom), categoryBottom),
         "",
         "## 数据边界",
         "",
         "本篇采用公开聚合行情接口，覆盖全市场市值、成交量、BTC/ETH 占比、主流币与部分分类板块。分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响，不生成交易动作或资产配置结论。",
       ].join("\n"),
     };
-  } catch {
-    return {
-      key: "crypto",
-      title: "数字货币市场",
-      open: false,
-      summary: "数字货币当日未获取到可用公开市场数据",
-      markdown: ["## 全市场概览", "", "数字货币当日未获取到可用公开市场数据，本篇不做价格变化、分类板块或市值结构判断。"].join("\n"),
-    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`数字货币日报核心数据未完整获取，停止生成：${reason}`);
   }
 }
 
