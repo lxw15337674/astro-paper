@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -23,10 +25,19 @@ EASTMONEY_INDEX_SECS = {
 }
 
 
-def fetch_text(url: str, timeout: int = 20) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        return response.read().decode("utf-8", errors="replace")
+def fetch_text(url: str, timeout: int = 20, attempts: int = 3) -> str:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                return response.read().decode("utf-8", errors="replace")
+        except (TimeoutError, urllib.error.URLError) as error:
+            last_error = error
+            if attempt == attempts:
+                break
+            time.sleep(2 * attempt)
+    raise RuntimeError(f"failed to fetch {url}: {last_error}")
 
 
 def fetch_json(url: str, timeout: int = 20) -> object:
