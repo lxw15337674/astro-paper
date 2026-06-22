@@ -2,7 +2,12 @@
 
 This document is a lightweight navigation index for the blog-oriented cron pipelines in this repo.
 
-Use it to discover which pipeline exists and which skill/doc/script to open next. Do **not** treat this file as the single source of truth for each pipeline's detailed formatting rules — those belong in the pipeline-specific skills.
+Use it to discover which pipeline exists and which skill/doc/script to open next.
+
+For the shared implementation architecture, operational boundaries, and verification model, see:
+- `docs/blog-cron-technical-design.md`
+
+Do **not** treat this file as the single source of truth for each pipeline's detailed formatting rules — those belong in the pipeline-specific skills.
 
 ## Current blog pipelines
 
@@ -42,6 +47,43 @@ Use it to discover which pipeline exists and which skill/doc/script to open next
 - Cron jobs:
   - upstream: `404c8660ee38` — `mdblist-weekly-hot-highscore`
   - downstream: `e226a7117f05` — `mdblist-weekly-astro-archive`
+
+## Global blog maintenance cron
+
+### 5. Blog generation check-and-repair
+- Purpose: verifies whether the day’s Astro blog generation completed successfully and attempts repair when failures are detected.
+- Cron job:
+  - main: `9d09cf6e77f5` — `daily-blog-generation-check-and-repair`
+- Scope note:
+  - this is a maintenance/supervisor job for the blog pipelines rather than a content-generation pipeline itself
+  - when pausing all blog-related automation, pause this job together with the content jobs so it does not continue re-triggering or repairing disabled pipelines
+
+## Pause-all-blog-crons runbook
+
+Use this procedure when the goal is to stop all blog-oriented scheduled publishing and its automatic repair loop, while leaving unrelated automations untouched.
+
+### Included in the pause set
+- `bc96c9bab5e7` — `daily-morning-market-blog`
+- `0373c42e95ea` — `hn-top10-local-markdown`
+- `8640cfe88f41` — `hn-top10-astro-archive`
+- `e226a7117f05` — `mdblist-weekly-astro-archive`
+- `9d09cf6e77f5` — `daily-blog-generation-check-and-repair`
+
+### Intentionally excluded from the pause set
+- `95d01fa1f5c7` — weather brief; not a blog pipeline
+- `c771b111d8e8` / `9f9bc5f373fc` — foreign-tech-podcast chain; keep running unless the user explicitly wants podcast publishing paused too
+- `404c8660ee38` — weekly recommendation upstream digest; pause only if the user wants the source brief itself stopped, not just the Astro publishing leg
+
+### Operational rule
+- Default interpretation of “暂停现在的所有博客定时任务” in this repo is:
+  - pause every cron that directly generates, archives, publishes, or repairs Astro blog posts
+  - do not pause unrelated utility/news jobs unless they are explicitly included by the user
+
+### Verification checklist
+1. List cron jobs and identify every blog generation, archive, and repair job by purpose, not only by name.
+2. Pause the selected jobs.
+3. Re-check job state and confirm each target job is in `paused` state.
+4. Record the inclusion/exclusion rationale in repo docs when the pause set changes or the boundary becomes ambiguous.
 
 ## Maintenance rule
 
