@@ -176,13 +176,18 @@ def build_key_points(
     return points
 
 
-def build_us_sections(us: dict[str, str]) -> list[str]:
+def build_us_sections(us: dict[str, str], market_open: bool = True) -> list[str]:
+    if not market_open:
+        return ["## 美股", "", "本自然日美股未开盘，无新增市场数据。", ""]
+
     lines: list[str] = ["## 美股", ""]
     if us.get("indexes") or us.get("sentiment"):
         lines.extend(["### 指数表现", ""])
-        sentence = "本自然日归档的美股部分采用最近一次已完整落地的收盘数据。"
+        sentence = "三大指数表现为："
         if us.get("indexes"):
-            sentence += f"三大指数表现为：{us['indexes']}。"
+            sentence += f"{us['indexes']}。"
+        else:
+            sentence = "本自然日美股有交易，但指数数据暂未完整落地。"
         if us.get("sentiment"):
             sentence += f"从指数层面看，整体呈现{us['sentiment']}。"
         lines.extend([sentence, ""])
@@ -213,16 +218,12 @@ def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
             lines.extend([label, "", para, ""])
         return lines
 
-    lines = [
+    return [
         "## A股",
         "",
-        "本自然日 A 股未开盘，无新增收盘数据。以下回顾最近一个交易日表现。",
+        "本自然日 A 股未开盘，无新增收盘数据。",
         "",
     ]
-    labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
-    for label, para in zip(labels, ah_paras[:3]):
-        lines.extend([label, "", para, ""])
-    return lines
 
 
 def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
@@ -233,16 +234,12 @@ def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
             lines.extend([label, "", para, ""])
         return lines
 
-    lines = [
+    return [
         "## 港股",
         "",
-        "本自然日港股未开盘，无新增收盘数据。以下回顾最近一个交易日表现。",
+        "本自然日港股未开盘，无新增收盘数据。",
         "",
     ]
-    labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
-    for label, para in zip(labels, hk_paras[:3]):
-        lines.extend([label, "", para, ""])
-    return lines
 
 
 def is_btc_natural_day_complete(date_str: str | None = None, now: datetime | None = None) -> bool:
@@ -302,9 +299,10 @@ def build_markdown(
     target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=BJT)
     weekday = target_dt.weekday()
     cn_market_open = weekday < 5
+    us_market_open = weekday < 5
 
     lines: list[str] = []
-    lines.extend(build_us_sections(us))
+    lines.extend(build_us_sections(us, us_market_open))
     lines.extend(build_ah_sections(ah_paras, cn_market_open))
     lines.extend(build_hk_sections(hk_paras, cn_market_open))
     lines.extend(build_btc_sections(btc))
@@ -388,9 +386,10 @@ def build_section(section: str, date_str: str) -> Path | None:
     hk_paras = normalize_paragraphs(hk_text)
     target_dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=BJT)
     cn_market_open = target_dt.weekday() < 5
+    us_market_open = target_dt.weekday() < 5
 
     builders = {
-        "us": lambda: build_us_sections(us),
+        "us": lambda: build_us_sections(us, us_market_open),
         "a-share": lambda: build_ah_sections(ah_paras, cn_market_open),
         "hk": lambda: build_hk_sections(hk_paras, cn_market_open),
         "btc": lambda: build_btc_sections(btc),
