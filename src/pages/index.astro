@@ -6,7 +6,6 @@ import IconArrowRight from "@/assets/icons/IconArrowRight.svg";
 import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
-import Socials from "@/components/Socials.astro";
 import Card from "@/components/Card.astro";
 import LinkButton from "@/components/LinkButton.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
@@ -17,7 +16,7 @@ import { getLocalizedRssPath } from "@/utils/localeMeta";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
-const { socials, posts: postsConfig } = config;
+const { posts: postsConfig } = config;
 
 const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
 const t = useTranslations(locale);
@@ -59,28 +58,6 @@ const homePath = getRelativeLocaleUrl(locale, "");
       </a>
 
       <p class="text-muted-foreground leading-7">{t.home.intro}</p>
-      <p class="text-muted-foreground mt-2 leading-7">
-        {t.home.introCtaPrefix}
-        {" "}
-        <LinkButton
-          class="text-accent hover:text-accent-active underline underline-offset-4"
-          href="https://github.com/satnaing/astro-paper#readme"
-        >
-          {t.home.introCtaLabel}
-        </LinkButton>
-        {" "}
-        {t.home.introCtaSuffix}
-      </p>
-      {
-        socials.length > 0 && (
-          <div class="mt-4 flex max-sm:flex-col sm:items-center">
-            <div class="me-2 mb-1 whitespace-nowrap sm:mb-0">
-              {t.home.socialLinks}:
-            </div>
-            <Socials />
-          </div>
-        )
-      }
     </section>
 
     {

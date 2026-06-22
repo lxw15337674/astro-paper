@@ -47,15 +47,11 @@ export interface UIStrings {
     closeImagePreview: string;
   };
   home: {
-    socialLinks: string;
     featured: string;
     recentPosts: string;
     allPosts: string;
     heroTitle: string;
     intro: string;
-    introCtaPrefix: string;
-    introCtaLabel: string;
-    introCtaSuffix: string;
   };
   footer: {
     copyright: string;
