@@ -5,7 +5,7 @@ import argparse
 import json
 import re
 import subprocess
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -25,6 +25,7 @@ QUALITY_BLOCK_PATTERNS = [
     r"关注关注",
     r"市场关注.+上",
 ]
+MARKET_POST_MAX_AGE_DAYS = 3
 
 
 def run_cmd(cmd: list[str]) -> str:
@@ -45,6 +46,30 @@ def read_latest_post(pattern: str) -> str:
     if not files:
         raise FileNotFoundError(f"no post files matched {pattern} in {ASTRO_POSTS}")
     return files[-1].read_text(encoding="utf-8")
+
+
+def read_latest_post_for_target(pattern: str, target_date_str: str, *, max_age_days: int) -> str:
+    files = sorted(ASTRO_POSTS.glob(pattern))
+    if not files:
+        raise FileNotFoundError(f"no post files matched {pattern} in {ASTRO_POSTS}")
+    target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    dated_candidates: list[tuple[date, Path]] = []
+    for path in files:
+        match = re.search(r"(\d{4}-\d{2}-\d{2})", path.name)
+        if not match:
+            continue
+        post_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+        if post_date <= target_date:
+            dated_candidates.append((post_date, path))
+    if not dated_candidates:
+        raise FileNotFoundError(f"no dated post files matched {pattern} on or before {target_date_str}")
+    post_date, post_path = dated_candidates[-1]
+    age_days = (target_date - post_date).days
+    if age_days > max_age_days:
+        raise ValueError(
+            f"latest {pattern} is stale for target {target_date_str}: {post_path.name} is {age_days} days old"
+        )
+    return post_path.read_text(encoding="utf-8")
 
 
 def strip_frontmatter(text: str) -> str:
@@ -376,7 +401,11 @@ def assemble_market_daily_body(section_dir: Path) -> str:
 def build_section(section: str, date_str: str) -> Path | None:
     us_raw = run_script(HERMES_SCRIPTS / "us_market_close_summary.py")
     btc_raw = run_script(HERMES_SCRIPTS / "daily_btc_change.py")
-    market_post = read_latest_post("市场日报-*.md")
+    market_post = read_latest_post_for_target(
+        "市场日报-*.md",
+        date_str,
+        max_age_days=MARKET_POST_MAX_AGE_DAYS,
+    )
     ah_text = extract_section(market_post, "A股收盘回顾")
     hk_text = extract_section(market_post, "港股收盘回顾")
 
@@ -442,7 +471,11 @@ def main() -> int:
     us_raw = run_script(HERMES_SCRIPTS / "us_market_close_summary.py")
     btc_raw = run_script(HERMES_SCRIPTS / "daily_btc_change.py")
 
-    market_post = read_latest_post("市场日报-*.md")
+    market_post = read_latest_post_for_target(
+        "市场日报-*.md",
+        target_date,
+        max_age_days=MARKET_POST_MAX_AGE_DAYS,
+    )
     ah_text = extract_section(market_post, "A股收盘回顾")
     hk_text = extract_section(market_post, "港股收盘回顾")
     ipo_text = extract_section(market_post, "附录：港股打新") or "今日无可申购港股新股。"
