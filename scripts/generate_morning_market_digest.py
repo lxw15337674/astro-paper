@@ -206,8 +206,8 @@ def build_us_sections(us: dict[str, str], market_open: bool = True) -> list[str]
         return ["## 美股", "", "本自然日美股未开盘，无新增市场数据。", ""]
 
     lines: list[str] = ["## 美股", ""]
+    paragraphs: list[str] = []
     if us.get("indexes") or us.get("sentiment"):
-        lines.extend(["### 指数表现", ""])
         sentence = "三大指数表现为："
         if us.get("indexes"):
             sentence += f"{us['indexes']}。"
@@ -215,32 +215,29 @@ def build_us_sections(us: dict[str, str], market_open: bool = True) -> list[str]
             sentence = "本自然日美股有交易，但指数数据暂未完整落地。"
         if us.get("sentiment"):
             sentence += f"从指数层面看，整体呈现{us['sentiment']}。"
-        lines.extend([sentence, ""])
+        paragraphs.append(sentence)
     if us.get("tech"):
-        lines.extend([
-            "### 科技股与结构",
-            "",
-            f"科技权重方面，{us['tech']}",
-            "",
-        ])
+        paragraphs.append(f"科技权重方面，{us['tech']}")
     if us.get("macro") or us.get("risk"):
-        lines.extend(["### 消息面", ""])
+        message_bits: list[str] = []
         if us.get("macro"):
             macro = sanitize_market_daily_text(us["macro"])
-            lines.append(macro if macro.startswith("消息面") else f"消息面上，{macro}")
+            message_bits.append(macro if macro.startswith("消息面") else f"消息面上，{macro}")
         if us.get("risk"):
             risk = re.sub(r"^关注", "", sanitize_market_daily_text(us["risk"]))
-            lines.extend(["", f"后续仍可继续关注{risk}"])
-        lines.append("")
+            message_bits.append(f"盘后仍需单独留意的是{risk}")
+        if message_bits:
+            paragraphs.append(" ".join(message_bits))
+    for paragraph in paragraphs:
+        lines.extend([paragraph, ""])
     return lines
 
 
 def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
     if market_open:
         lines: list[str] = ["## A股", ""]
-        labels = ["### 指数与成交", "### 强弱板块", "### 当日主线"]
-        for label, para in zip(labels, ah_paras[:3]):
-            lines.extend([label, "", para, ""])
+        for para in ah_paras[:3]:
+            lines.extend([para, ""])
         return lines
 
     return [
@@ -254,9 +251,8 @@ def build_ah_sections(ah_paras: list[str], market_open: bool) -> list[str]:
 def build_hk_sections(hk_paras: list[str], market_open: bool) -> list[str]:
     if market_open:
         lines: list[str] = ["## 港股", ""]
-        labels = ["### 指数与资金", "### 强弱板块", "### 当日主线"]
-        for label, para in zip(labels, hk_paras[:3]):
-            lines.extend([label, "", para, ""])
+        for para in hk_paras[:3]:
+            lines.extend([para, ""])
         return lines
 
     return [
@@ -276,13 +272,14 @@ def is_btc_natural_day_complete(date_str: str | None = None, now: datetime | Non
 
 
 def build_btc_sections(btc: dict[str, str]) -> list[str]:
-    lines: list[str] = ["## BTC 市场动态", "", "### 自然日价格与涨跌", ""]
+    lines: list[str] = ["## BTC 市场动态", ""]
     current = []
     if btc.get("price"):
         current.append(f"北京时间自然日收口后，BTC 报 {btc['price']}。")
     if btc.get("change_24h"):
         current.append(f"本自然日价格变动为 {btc['change_24h']}。")
-    lines.extend([compact_join(current), "", "### 市场观察", ""])
+    if current:
+        lines.extend([compact_join(current), ""])
     observation = []
     if btc.get("mtd"):
         observation.append(
@@ -290,7 +287,8 @@ def build_btc_sections(btc: dict[str, str]) -> list[str]:
         )
     if btc.get("note") and "获取失败" in btc["note"]:
         observation.append(f"备注：{btc['note']}")
-    lines.extend([compact_join(observation), ""])
+    if observation:
+        lines.extend([compact_join(observation), ""])
     return lines
 
 
@@ -298,13 +296,13 @@ def build_summary(us: dict[str, str], btc: dict[str, str], has_ipo: bool) -> str
     lines = []
     if us.get("macro"):
         macro = sanitize_market_daily_text(clean_macro_for_summary(us["macro"]))
-        lines.append(f"今天早上把几类市场放在一起看，海外市场主线仍集中在{macro}上。")
+        lines.append(f"把几类市场放在一起看，海外市场当天最强的驱动仍集中在{macro}。")
     if btc.get("change_24h"):
         lines.append(
-            f"A股与港股的科技方向仍是主要观察重点，而 BTC 的近 24 小时表现为 {btc['change_24h']}，更适合作为风险情绪的辅助指标。"
+            f"BTC 这一天的自然日变动为 {btc['change_24h']}，更适合作为风险偏好变化的辅助坐标，而不是单独拿来解释所有板块波动。"
         )
     if has_ipo:
-        lines.append("若需要关注一级市场机会，还可以结合文末的港股打新附录继续看。")
+        lines.append("如果当天有港股新股处于可申购期，文末附录保留了对应信息入口。")
     return "\n\n".join(lines[:3])
 
 

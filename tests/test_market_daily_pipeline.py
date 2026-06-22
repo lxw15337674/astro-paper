@@ -60,3 +60,22 @@ def test_market_daily_uses_daily_title_tag_slug_and_description():
     assert archive.build_market_daily_description("## 美股\n\n美股内容。") == (
         "每日全球市场日报，按北京时间自然日汇总全球主要市场动态。"
     )
+
+
+def test_market_daily_section_builders_use_natural_paragraphs():
+    us_lines = generate.build_us_sections(
+        {
+            "indexes": "纳指上涨 1.2%，标普上涨 0.6%",
+            "sentiment": "分化整理",
+            "tech": "英伟达与微软继续走强。",
+            "macro": "美债收益率回落，市场重新计价降息预期。",
+            "risk": "本周仍要留意通胀数据。",
+        },
+        market_open=True,
+    )
+    joined = "\n".join(us_lines)
+
+    assert "### 指数表现" not in joined
+    assert "### 科技股与结构" not in joined
+    assert "### 消息面" not in joined
+    assert "后续仍可继续关注" not in joined

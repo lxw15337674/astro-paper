@@ -82,3 +82,31 @@ def test_archive_prefers_ai_summary_fields_from_payload():
     assert "评论区主要补充了反向代理、CDN 和本地开发场景下最容易踩坑的缓存与凭证问题" in formatted
     assert "旧的模板摘要" not in formatted
     assert "旧的模板评论" not in formatted
+    assert "#### 内容总结" not in formatted
+    assert "#### 评论总结" not in formatted
+    assert "## 今日总览" in formatted
+
+
+def test_archive_sanitizes_dirty_tokens_and_skips_failed_extraction_items():
+    text = """1. 🔥 今日 HackerNews 热门文章 Top 10
+
+1. 🔥 Colors your screen can't show you
+- ⭐ 120 points · 31 评论
+- 原文：https://example.com/colors
+- HN 讨论：https://news.ycombinator.com/item?id=1
+- 内容总结：这篇文章讨论显示器色域与人眼可感知颜色之间的差距 обычный，并解释为什么有些颜色从设备能力上就无法完整显示。
+- 评论总结：讨论补充了摄影、印刷和广色域显示器在实际工作流里的差异。
+
+2. 🔥 Broken extraction item
+- ⭐ 66 points · 8 评论
+- 原文：https://example.com/broken
+- HN 讨论：https://news.ycombinator.com/item?id=2
+- 内容总结：原文页面提取失败，暂只保留链接。
+- 评论总结：评论信息不足。
+"""
+
+    formatted, _cover = archive.format_hn_top10(text)
+
+    assert "обычный" not in formatted
+    assert "Broken extraction item" not in formatted
+    assert "评论信息不足" not in formatted

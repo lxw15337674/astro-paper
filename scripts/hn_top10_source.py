@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import html
 import json
 import re
 import subprocess
@@ -36,6 +37,12 @@ def fetch_json(url: str) -> Any:
 def compact(text: str) -> str:
     text = re.sub(r'\s+', ' ', text or '').strip()
     return text
+
+
+def strip_html(text: str) -> str:
+    text = html.unescape(text or '')
+    text = re.sub(r'<[^>]+>', ' ', text)
+    return compact(text)
 
 
 def classify(title: str) -> str:
@@ -144,7 +151,7 @@ def build_item_payload(item: dict[str, Any], rank: int) -> dict[str, Any]:
     score = int(item.get('score') or 0)
     hn_link = f'https://news.ycombinator.com/item?id={item_id}' if item_id else ''
     topic = classify(title)
-    source_text = compact(item.get('text', ''))
+    source_text = strip_html(item.get('text', ''))
     content_summary = source_text if source_text else '文章信息需从原文提取。'
     comment_summary = ''
     return {

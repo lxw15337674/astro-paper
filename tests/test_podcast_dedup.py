@@ -91,6 +91,9 @@ title: \"海外科技访谈播客笔记｜2026-06-20\"
     assert "https://example.com/ep2" in formatted
     assert "## New Episode" in formatted
     assert "- **《今日国外热门科技访谈播客》**" not in formatted
+    assert "### 一句话总结" not in formatted
+    assert "### Highlights" not in formatted
+    assert "### 长文笔记" not in formatted
 
 
 def test_foreign_podcast_filters_seen_episode_by_show_and_title_when_url_differs(tmp_path):
@@ -239,3 +242,65 @@ title: \"海外科技访谈播客笔记｜2026-06-21\"
     assert "https://example.com/existing" in formatted
     assert "## Fresh Episode" in formatted
     assert "https://example.com/fresh" in formatted
+
+
+def test_foreign_podcast_skips_truncated_episode_paragraphs(tmp_path):
+    posts_dir = tmp_path / "src/content/posts/zh-cn"
+    posts_dir.mkdir(parents=True, exist_ok=True)
+
+    raw = """《今日国外热门科技访谈播客》
+
+## 今日总览
+测试
+
+## 今日播客清单
+- Broken Episode
+- Good Episode
+
+---
+
+## Broken Episode
+### 基本信息
+- 节目：Latent Space
+- 嘉宾：A
+- 日期：2026-06-21
+- 来源：Example
+- 链接：https://example.com/broken
+
+### 一句话总结
+这期内容最值得存档的地方，是它把当前 AI 产业最容易被。
+
+### Highlights
+- 因为它没。
+
+### 长文笔记
+这期内容最值得存档的地方，是它把当前 AI 产业最容易被。
+
+---
+
+## Good Episode
+### 基本信息
+- 节目：The Pragmatic Engineer
+- 嘉宾：B
+- 日期：2026-06-21
+- 来源：Example
+- 链接：https://example.com/good
+
+### 一句话总结
+这期对话把开发者平台、数据基础设施和 AI 代理之间的关系讲得很清楚，重点不在概念翻新，而在于平台边界正在被重新划分。
+
+### Highlights
+- 讨论了平台层为什么会重新抢占接口与工作流。
+
+### 长文笔记
+主持人与嘉宾把今天开发者平台的新压力讲得很直接：当 AI 工具开始替用户执行任务，平台不再只是托管代码或提供 API，而是在重新定义谁拥有入口、上下文和执行权。
+
+这期最有价值的地方，是它没有把竞争只理解成模型能力竞赛，而是把数据接入、身份体系、执行环境和结算链路一起放回平台策略里看。
+"""
+
+    formatted = archive.format_foreign_podcast(raw, "海外科技访谈播客笔记｜2026-06-21", repo=tmp_path)
+
+    assert "## Broken Episode" not in formatted
+    assert "最容易被。" not in formatted
+    assert "因为它没。" not in formatted
+    assert "## Good Episode" in formatted

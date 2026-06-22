@@ -69,6 +69,23 @@ FAIL_PATTERNS = [
     r"BLOCKED:",
 ]
 
+LOW_SIGNAL_PATTERNS = [
+    r"评论(?:补充)?信息不足",
+    r"信息不足",
+    r"评论信号不足",
+    r"从可见讨论线索看",
+    r"原文页面提取失败",
+    r"页面提取失败",
+    r"现有页面只表明",
+    r"文章信息需从原文提取",
+    r"仍可回到原文查看完整论证",
+]
+
+TRUNCATED_FRAGMENT_PATTERNS = [
+    r"最容易被。",
+    r"因为它没。",
+]
+
 HN_TOPIC_RULES = [
     (r"ai|openai|llm|model|anthropic|gemini|copilot", "AI / 模型"),
     (r"school|education|teacher|children|policy|government|id|internet traffic", "政策 / 社会议题"),
@@ -138,6 +155,68 @@ def compact_text(text: str) -> str:
     cleaned = re.sub(r"[^\w\s\u4e00-\u9fff·：:，,。！？!?（）()/+-]", "", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
+
+
+def split_paragraphs(text: str) -> list[str]:
+    return [chunk.strip() for chunk in re.split(r"\n\s*\n", text.strip()) if chunk.strip()]
+
+
+def sanitize_generated_text(text: str) -> str:
+    cleaned = text.replace("\r\n", "\n")
+    cleaned = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", cleaned)
+    cleaned = re.sub(r"(?m)^#{1,6}\s+.+$", "", cleaned)
+    cleaned = re.sub(r"\b[А-Яа-яЁё]+\b", "", cleaned)
+    cleaned = re.sub(r"[`*_]+", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -\t")
+    cleaned = re.sub(r"\s+([，。！？；：,.!?;:])", r"\1", cleaned)
+    if cleaned and not re.search(r"[。！？!?]$", cleaned):
+        cleaned += "。"
+    return cleaned
+
+
+def looks_like_low_signal(text: str) -> bool:
+    compact = compact_text(text)
+    if not compact:
+        return True
+    if re.search(r"[А-Яа-яЁё]", text):
+        return True
+    return any(re.search(pattern, compact, flags=re.IGNORECASE) for pattern in LOW_SIGNAL_PATTERNS)
+
+
+def looks_truncated(text: str) -> bool:
+    compact = compact_text(text)
+    if not compact:
+        return True
+    return any(re.search(pattern, compact) for pattern in TRUNCATED_FRAGMENT_PATTERNS)
+
+
+def collect_clean_paragraphs(text: str, *, min_length: int) -> list[str]:
+    paragraphs: list[str] = []
+    seen: set[str] = set()
+    for chunk in split_paragraphs(text):
+        cleaned = sanitize_generated_text(chunk)
+        key = compact_text(cleaned).lower()
+        if not key or key in seen:
+            continue
+        if len(compact_text(cleaned)) < min_length:
+            continue
+        if looks_like_low_signal(cleaned) or looks_truncated(cleaned):
+            continue
+        paragraphs.append(cleaned)
+        seen.add(key)
+    return paragraphs
+
+
+def dedupe_paragraphs(paragraphs: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for paragraph in paragraphs:
+        key = compact_text(paragraph).lower()
+        if not key or key in seen:
+            continue
+        deduped.append(paragraph)
+        seen.add(key)
+    return deduped
 
 
 def first_paragraph_summary(text: str, fallback: str, limit: int = 140) -> str:
@@ -296,22 +375,39 @@ def build_podcast_section(raw: str) -> tuple[str, str]:
     highlights_block = highlights_match.group(1).strip() if highlights_match else ""
     note_match = re.search(r"###\s*长文笔记\s*(.+)$", raw, flags=re.S)
     note = note_match.group(1).strip() if note_match else raw
-    if not summary:
-        summary = first_paragraph_summary(note, heading or show or "")
-    cn_topic = summarize_heading(heading or show or "", note)
 
     highlights = []
     if highlights_block:
         for line in highlights_block.splitlines():
             stripped = line.strip()
             if stripped.startswith("-"):
-                highlights.append(stripped)
-    if not highlights:
-        highlight_candidates = [p.strip() for p in re.split(r"\n\s*\n", note) if p.strip()]
-        for para in highlight_candidates[:4]:
-            highlights.append(f"- {shorten_sentence(para, limit=60)}")
+                highlights.append(stripped.removeprefix("-").strip())
 
-    parts = [f"## {heading or show or '未命名播客'}", "", "### 中文主题", "", cn_topic, "", "### 基本信息", ""]
+    paragraphs: list[str] = []
+    if summary:
+        paragraphs.extend(collect_clean_paragraphs(summary, min_length=18))
+    else:
+        summary = first_paragraph_summary(note, heading or show or "")
+        paragraphs.extend(collect_clean_paragraphs(summary, min_length=18))
+    paragraphs.extend(collect_clean_paragraphs(note, min_length=28))
+    if len(paragraphs) < 2 and highlights:
+        highlight_bits = []
+        for item in highlights[:3]:
+            cleaned = sanitize_generated_text(item)
+            if len(compact_text(cleaned)) >= 12 and not looks_like_low_signal(cleaned) and not looks_truncated(cleaned):
+                highlight_bits.append(cleaned.rstrip("。"))
+        if highlight_bits:
+            paragraphs.extend(
+                collect_clean_paragraphs(
+                    "这期对话里值得记住的点主要有：" + "；".join(highlight_bits) + "。",
+                    min_length=24,
+                )
+            )
+    paragraphs = dedupe_paragraphs(paragraphs)
+    if len(paragraphs) < 2:
+        return "", ""
+
+    parts = [f"## {heading or show or '未命名播客'}", "", "### 基本信息", ""]
     if show:
         parts.append(f"- **节目**：{show}")
     if guest:
@@ -326,22 +422,9 @@ def build_podcast_section(raw: str) -> tuple[str, str]:
     if cover:
         parts.append(f"![{heading or show}]({cover})")
         parts.append("")
-    parts.extend([
-        "### 一句话总结",
-        "",
-        summary,
-        "",
-        "### Highlights",
-        "",
-        *highlights,
-        "",
-        "### 长文笔记",
-        "",
-        note,
-        "",
-        "---",
-        "",
-    ])
+    for paragraph in paragraphs[:4]:
+        parts.extend([paragraph, ""])
+    parts.extend(["---", ""])
     checklist_line = f"- {heading or show or '未命名播客'}"
     return "\n".join(parts), checklist_line
 
@@ -380,8 +463,7 @@ def split_hn_summary_and_comment(summary: str) -> tuple[str, str]:
 
 
 def normalize_hn_paragraph(text: str) -> str:
-    text = text.strip()
-    text = re.sub(r"\s+", " ", text)
+    text = sanitize_generated_text(text)
     text = re.sub(r"([。！？!?])([^\n])", r"\1\n\n\2", text)
     return text.strip()
 
@@ -395,6 +477,24 @@ def build_hn_description(text: str, fallback: str) -> str:
     return fallback[:140]
 
 
+def build_hn_overview(topics: list[str]) -> str:
+    if not topics:
+        return "今天前十的话题分布比较平均，既有技术原理，也有平台、基础设施和社会议题。"
+    topic_counts: dict[str, int] = {}
+    for topic in topics:
+        topic_counts[topic] = topic_counts.get(topic, 0) + 1
+    ranked = sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    leaders = [name for name, _count in ranked[:2]]
+    if len(leaders) == 1:
+        lead_text = leaders[0]
+    else:
+        lead_text = "和".join(leaders)
+    if len(ranked) > 2:
+        tail = "、".join(name for name, _count in ranked[2:4])
+        return f"今天前十里，{lead_text}最集中，另外也夹杂了{tail}，整体比单纯产品发布更偏原理、系统和制度讨论。"
+    return f"今天前十里，{lead_text}最集中，整体更偏技术原理与基础设施，而不是单纯的产品新闻。"
+
+
 def build_market_daily_description(text: str) -> str:
     return "每日全球市场日报，按北京时间自然日汇总全球主要市场动态。"
 
@@ -402,7 +502,7 @@ def build_market_daily_description(text: str) -> str:
 def build_morning_market_description(text: str) -> str:
     return build_market_daily_description(text)
 
-def build_hn_item_block(index: int, raw: str, payload_item: dict[str, object] | None = None) -> tuple[str, str, str, str, int]:
+def build_hn_item_block(index: int, raw: str, payload_item: dict[str, object] | None = None) -> tuple[str, str, str, str, int] | None:
     title = extract_line(rf"^{index}\.\s*🔥?\s*(.+)$", raw) or extract_line(r"^\d+\.\s*🔥?\s*(.+)$", raw)
     bullets = extract_hn_bullets(raw)
     points = next((b.removeprefix("⭐").strip() for b in bullets if b.startswith("⭐")), "")
@@ -431,25 +531,40 @@ def build_hn_item_block(index: int, raw: str, payload_item: dict[str, object] | 
     source_image = fetch_og_image(link)
     points_num_match = re.search(r"(\d+)", points)
     points_num = int(points_num_match.group(1)) if points_num_match else 0
+    comments_num_match = re.search(r"(\d+)\s*评论", points)
+    comments_num = int(comments_num_match.group(1)) if comments_num_match else 0
 
     if not hn_link:
         item_id = extract_line(r"news\.ycombinator\.com/item\?id=(\d+)", raw)
         if item_id:
             hn_link = f"https://news.ycombinator.com/item?id={item_id}"
 
+    content_summary = sanitize_generated_text(content_summary)
+    comment_summary = sanitize_generated_text(comment_summary)
+    fallback_summary = sanitize_generated_text(fallback_summary)
+    if looks_like_low_signal(content_summary) or looks_truncated(content_summary):
+        content_summary = ""
+    if looks_like_low_signal(comment_summary) or looks_truncated(comment_summary):
+        comment_summary = ""
+    if not content_summary and fallback_summary and not looks_like_low_signal(fallback_summary):
+        content_summary = fallback_summary
+    if not content_summary:
+        return None
+    if comment_summary and compact_text(comment_summary).lower() == compact_text(content_summary).lower():
+        comment_summary = ""
+    if not comment_summary and comments_num >= 20:
+        comment_summary = "讨论主要补充了个人经验和适用边界，但没有形成比原文更强的新结论。"
+
     block = [f"### {index}. {title}", ""]
     if points:
         block.append(f"- **热度**：{points}")
-    block.append(f"- **主题**：{topic}")
-    if content_summary:
-        block.extend(["", "#### 内容总结", "", normalize_hn_paragraph(content_summary), ""])
-    if comment_summary:
-        block.extend(["#### 评论总结", "", normalize_hn_paragraph(comment_summary), ""])
     if link:
         block.append(f"- **原文**：{link}")
     if hn_link:
         block.append(f"- **HN 讨论**：{hn_link}")
-    block.append("")
+    block.extend(["", normalize_hn_paragraph(content_summary), ""])
+    if comment_summary:
+        block.extend([normalize_hn_paragraph(comment_summary), ""])
     return "\n".join(block), topic, title, source_image, points_num
 
 
@@ -490,26 +605,24 @@ def format_hn_top10(text: str) -> tuple[str, str]:
     best_points = -1
     for idx, chunk in enumerate(item_chunks, start=1):
         payload_item = payload_items_by_rank.get(idx)
-        block, topic, _title, source_image, points_num = build_hn_item_block(idx, chunk, payload_item)
+        built = build_hn_item_block(idx, chunk, payload_item)
+        if not built:
+            continue
+        block, topic, _title, source_image, points_num = built
         item_blocks.append(block)
         topics.append(topic)
         if source_image and points_num > best_points:
             best_points = points_num
             cover_image = source_image
-
-    topic_counts: dict[str, int] = {}
-    for topic in topics:
-        topic_counts[topic] = topic_counts.get(topic, 0) + 1
-    topic_lines = [f"- {topic}：{count} 条" for topic, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:5]]
+    if not item_blocks:
+        raise ValueError("no publishable Hacker News items after quality checks")
 
     lines = [
         title_line,
         "",
-        "## 今日看点",
+        "## 今日总览",
         "",
-        *topic_lines,
-        "",
-        "## 今日 Hacker News Top 10",
+        build_hn_overview(topics),
         "",
     ]
     for block in item_blocks:
@@ -608,10 +721,12 @@ def format_foreign_podcast(text: str, title: str, repo: Path = DEFAULT_REPO) -> 
         if not re.search(r"^\d+\.\s+", chunk, flags=re.M):
             normalized_chunk = f"1. {chunk}"
         section_md, checklist_line = build_podcast_section(normalized_chunk)
+        if not section_md:
+            continue
         episode_sections.append(section_md)
         checklist.append(checklist_line)
     if not episode_sections:
-        return text
+        raise ValueError("no publishable podcast episodes after quality checks")
 
     lines = [
         "《今日国外热门科技访谈播客》",
@@ -629,9 +744,9 @@ def format_foreign_podcast(text: str, title: str, repo: Path = DEFAULT_REPO) -> 
     ]
     for sec in episode_sections:
         lines.append(sec.rstrip())
-    if lines[-1] == "---":
-        lines = lines[:-1]
-    return "\n".join(lines).rstrip() + "\n"
+    body = "\n".join(lines).rstrip() + "\n"
+    body = re.sub(r"\n\s*---\s*\n\s*---\s*\n", "\n\n---\n\n", body)
+    return body
 
 
 def compact_mdblist_summary(text: str) -> str:
