@@ -19,6 +19,12 @@ TOPIC_RULES = [
     (r'spacex|gpu|datacenter|load-balanced|systems|atproto|boston dynamics|robot|compression|printing', '基础设施 / 系统'),
 ]
 
+LOW_SIGNAL_PATTERNS = [
+    r'文章信息需从原文提取',
+    r'这篇文章讨论了一个具有现实意义的技术或社会议题',
+    r'评论区通常会补充原文没有展开的现实约束',
+]
+
 
 def curl(url: str) -> str:
     result = subprocess.run(
@@ -43,6 +49,13 @@ def strip_html(text: str) -> str:
     text = html.unescape(text or '')
     text = re.sub(r'<[^>]+>', ' ', text)
     return compact(text)
+
+
+def is_low_signal(text: str) -> bool:
+    cleaned = compact(strip_html(text))
+    if not cleaned:
+        return True
+    return any(re.search(pattern, cleaned, flags=re.I) for pattern in LOW_SIGNAL_PATTERNS)
 
 
 def classify(title: str) -> str:
@@ -169,6 +182,20 @@ def build_item_payload(item: dict[str, Any], rank: int) -> dict[str, Any]:
     }
 
 
+def summarize_response_body(text: str) -> tuple[int, int]:
+    content_count = 0
+    comment_count = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('- 内容总结：'):
+            if not is_low_signal(stripped.split('：', 1)[1]):
+                content_count += 1
+        elif stripped.startswith('- 评论总结：'):
+            if not is_low_signal(stripped.split('：', 1)[1]):
+                comment_count += 1
+    return content_count, comment_count
+
+
 def main() -> None:
     ids = scrape_top_ids()
     lines = ['1. 🔥 今日 HackerNews 热门文章 Top 10', '']
@@ -194,6 +221,11 @@ def main() -> None:
             f'- 评论总结：{comment_summary}',
             '',
         ])
+    content_count, comment_count = summarize_response_body('\n'.join(lines))
+    if content_count < 10 or comment_count < 10:
+        raise RuntimeError(
+            f'low-signal HN source output: content_count={content_count}, comment_count={comment_count}'
+        )
     lines.extend(['===ARCHIVE_PAYLOAD===', json.dumps({'items': payload_items}, ensure_ascii=False)])
     print('\n'.join(lines).rstrip() + '\n')
 
