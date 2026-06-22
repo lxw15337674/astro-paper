@@ -7,7 +7,13 @@ import test from "node:test";
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
+import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
+
+test("BJT archive dates use UTC instants for Beijing midnight", () => {
+  assert.equal(bjtArchiveInstant("2026-06-22"), "2026-06-21T16:00:00Z");
+  assert.equal(bjtArchiveInstant("2099-01-02"), "2099-01-01T16:00:00Z");
+});
 
 test("AI writer renders prompts and normalizes chat completions URLs", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prompt-"));
@@ -77,10 +83,12 @@ BTC 当前参考价约为 100000 美元，近 24 小时变动 +1.50%。该数据
 `;
   const hn = archivePost({ task: "hn-top10", date: "2099-01-02", repo, body: hnBody, force: true });
   const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
+  assert.match(hnMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
   assert.doesNotMatch(hnMarkdown, /今日 HackerNews 热门文章 Top 10|今日总览/);
   assert.match(hnMarkdown, /^## 1\. Developers don't understand CORS/m);
   const market = archivePost({ task: "global-market-daily", date: "2099-01-02", repo, body: marketBody, force: true });
   const marketMarkdown = fs.readFileSync(path.join(repo, market.path), "utf8");
+  assert.match(marketMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
   const marketBodyStart = marketMarkdown.split("---\n\n").at(-1) || "";
   assert.match(marketBodyStart, /^## 总结/m);
   assert.match(marketMarkdown, /A股当日未产生完整常规交易数据，本节不做指数表现与市场结构判断。/);
