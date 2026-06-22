@@ -1,5 +1,10 @@
 #!/usr/bin/env tsx
-import { bjtDateString, fetchJson, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { CoinGeckoClient } from "coingecko-api-v3";
+import YahooFinance from "yahoo-finance2";
+import { bjtDateString, fetchJson, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+
+const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
+const coinGecko = new CoinGeckoClient({ timeout: 20_000, autoRetry: false });
 
 const EASTMONEY_FIELDS = "f12,f14,f2,f3,f4,f5,f6,f17,f18";
 const EASTMONEY_INDEX_SECS = {
@@ -56,15 +61,7 @@ type BoardRow = { name: string; pct: number; amount?: number };
 type SectorRow = { symbol: string; name: string; pct: number; close: number };
 type CryptoCoin = { name: string; symbol: string; price: number; pct: number; marketCap: number; volume: number };
 
-type YahooChart = {
-  chart?: {
-    result?: {
-      meta?: { exchangeTimezoneName?: string };
-      timestamp?: number[];
-      indicators?: { quote?: { close?: (number | null)[]; volume?: (number | null)[] }[] };
-    }[];
-  };
-};
+type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
 
 type YahooSymbol = { symbol: string; code: string; name: string };
 
@@ -92,6 +89,12 @@ function pct(value: unknown): string {
   return `${num > 0 ? "+" : ""}${num.toFixed(2)}%`;
 }
 
+function ratioPct(value: unknown): string {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return `${num.toFixed(2)}%`;
+}
+
 function number(value: unknown, digits = 2): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
@@ -110,12 +113,6 @@ function amountYi(value: unknown): string {
   return `${(num / 100_000_000).toFixed(0)}亿元`;
 }
 
-function amountWanYi(value: unknown): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "";
-  return `${(num / 1_000_000_000_000).toFixed(2)}万亿元`;
-}
-
 function usdWanYi(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
@@ -126,6 +123,12 @@ function parseDate(date: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`invalid date: ${date}`);
   const [year, month, day] = date.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function offsetDateString(date: string, days: number): string {
+  const next = parseDate(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
 }
 
 function isWeekday(date: string): boolean {
@@ -143,23 +146,11 @@ async function eastmoneyIndices(secids: string[]): Promise<QuoteRows> {
   return rows;
 }
 
-function localDateFromUnix(timestamp: number, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(timestamp * 1000));
-  const get = (type: string) => parts.find(part => part.type === type)?.value;
-  return `${get("year")}-${get("month")}-${get("day")}`;
-}
-
 async function yahooQuote({ symbol, code, name }: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
-  const encoded = encodeURIComponent(symbol);
-  const payload = await fetchJson<YahooChart>(`https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?range=10d&interval=1d`, { timeoutMs: 20_000 });
-  const result = payload.chart?.result?.[0];
-  const timestamps = result?.timestamp || [];
-  const closes = result?.indicators?.quote?.[0]?.close || [];
-  const volumes = result?.indicators?.quote?.[0]?.volume || [];
-  const timeZone = result?.meta?.exchangeTimezoneName || "UTC";
-  const points = timestamps
-    .map((timestamp, index) => ({ timestamp, close: Number(closes[index]), volume: Number(volumes[index] || 0), localDate: localDateFromUnix(timestamp, timeZone) }))
-    .filter(point => Number.isFinite(point.close) && point.close > 0 && point.localDate <= date);
+  const rows = (await yahooFinance.historical(symbol, { period1: offsetDateString(date, -21), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
+  const points = rows
+    .map(row => ({ close: Number(row.close), volume: Number(row.volume || 0), localDate: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : "" }))
+    .filter(point => Number.isFinite(point.close) && point.close > 0 && point.localDate && point.localDate <= date);
   if (points.length < 2) return null;
   const last = points.at(-1)!;
   const prev = points.at(-2)!;
@@ -248,30 +239,37 @@ function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T
 
 function buildAShareSection(rows: QuoteRows, date: string, industryRows: BoardRow[]): MarketSection {
   if (!isWeekday(date)) return closedSection("aShare", "A股", CLOSED_TEXT.aShare);
-  const sh = byCode(rows, "000001");
-  const sz = byCode(rows, "399001");
-  const cyb = byCode(rows, "399006");
-  if ([sh, sz, cyb].some(isMissingQuote)) return closedSection("aShare", "A股", UNAVAILABLE_TEXT.aShare);
-  const turnover = [sh, sz, cyb].reduce((sum, row) => sum + Number(row.f6 || 0), 0);
-  const sorted = [sh, sz, cyb].toSorted((a, b) => Number(b.f3 || 0) - Number(a.f3 || 0));
+  const quotes = [
+    { name: "上证指数", row: byCode(rows, "000001") },
+    { name: "深证成指", row: byCode(rows, "399001") },
+    { name: "创业板指", row: byCode(rows, "399006") },
+  ];
+  const available = quotes.filter(item => !isMissingQuote(item.row));
+  if (!available.length) return closedSection("aShare", "A股", UNAVAILABLE_TEXT.aShare);
+  const missingNames = quotes.filter(item => isMissingQuote(item.row)).map(item => item.name);
+  const sorted = available.toSorted((a, b) => Number(b.row.f3 || 0) - Number(a.row.f3 || 0));
+  const indexText = available.map(({ name, row }) => `${row.f14 || name}收报 ${number(row.f2)} 点，${pct(row.f3)}`).join("；");
+  const turnoverText = "成交额口径未获取到完整可比数据。";
+  const missingText = missingNames.length ? `未获取到完整数据的指数：${missingNames.join("、")}。` : "";
   const { top, bottom } = topAndBottom(industryRows);
+  const boardBoundary = industryRows.length ? "当前板块口径来自公开行业板块涨跌排行，用于描述市场结构，不替代个股分布或资金流向。" : "未获取到稳定行业板块数据时，本节只保留板块数据边界，不外推行业强弱。";
   return {
     key: "aShare",
     title: "A股",
     open: true,
-    summary: `A股三大宽基分别为上证指数 ${pct(sh.f3)}、深证成指 ${pct(sz.f3)}、创业板指 ${pct(cyb.f3)}`,
+    summary: `A股可用宽基指数为${available.map(({ name, row }) => `${row.f14 || name} ${pct(row.f3)}`).join("、")}`,
     markdown: [
       "## A股",
       "",
-      `A股最近一个交易日，上证指数收报 ${number(sh.f2)} 点，${pct(sh.f3)}；深证成指收报 ${number(sz.f2)} 点，${pct(sz.f3)}；创业板指收报 ${number(cyb.f2)} 点，${pct(cyb.f3)}。三项指数口径合计成交额约 ${amountWanYi(turnover)}。`,
+      `A股最近一个交易日，${indexText}。${turnoverText}${missingText}`,
       "",
-      `从宽基指数强弱看，${sorted[0].f14}相对占优，${sorted.at(-1)?.f14}表现偏弱。`,
+      `从已获取的宽基指数强弱看，${sorted[0].row.f14 || sorted[0].name}相对占优，${sorted.at(-1)?.row.f14 || sorted.at(-1)?.name}表现偏弱。`,
       "",
       "## A股行业板块",
       "",
       boardLine("涨幅靠前行业", top),
       boardLine("跌幅靠前行业", bottom),
-      "当前板块口径来自公开行业板块涨跌排行，用于描述市场结构，不替代个股分布或资金流向。",
+      boardBoundary,
     ].join("\n"),
   };
 }
@@ -283,6 +281,7 @@ function buildHkSection(rows: QuoteRows, date: string): MarketSection {
   const hstech = byCode(rows, "HSTECH");
   if ([hsi, hscei].some(isMissingQuote)) return closedSection("hk", "港股", UNAVAILABLE_TEXT.hk);
   const totalTurnover = Number(hsi.f6 || 0) + Number(hscei.f6 || 0) + Number(hstech.f6 || 0);
+  const turnoverText = totalTurnover > 0 ? `主要指数口径成交额合计约 ${amountYi(totalTurnover)}。` : "成交额口径未获取到完整可比数据。";
   const techText = isMissingQuote(hstech) ? "恒生科技指数未获取到完整数据" : `恒生科技指数收报 ${number(hstech.f2)} 点，${pct(hstech.f3)}`;
   return {
     key: "hk",
@@ -292,7 +291,7 @@ function buildHkSection(rows: QuoteRows, date: string): MarketSection {
     markdown: [
       "## 港股",
       "",
-      `港股最近一个交易日，恒生指数收报 ${number(hsi.f2)} 点，${pct(hsi.f3)}；国企指数收报 ${number(hscei.f2)} 点，${pct(hscei.f3)}；${techText}。主要指数口径成交额合计约 ${amountYi(totalTurnover)}。`,
+      `港股最近一个交易日，恒生指数收报 ${number(hsi.f2)} 点，${pct(hsi.f3)}；国企指数收报 ${number(hscei.f2)} 点，${pct(hscei.f3)}；${techText}。${turnoverText}`,
       "",
       "当前港股部分使用主要指数与成交额数据描述大盘方向；若未获取到稳定行业板块数据，本节不外推行业强弱、南向资金或个别成分股影响。",
     ].join("\n"),
@@ -330,30 +329,15 @@ function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow[]): Ma
   };
 }
 
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let current = "";
-  let quoted = false;
-  for (const char of line) {
-    if (char === '"') quoted = !quoted;
-    else if (char === "," && !quoted) {
-      out.push(current);
-      current = "";
-    } else current += char;
-  }
-  out.push(current);
-  return out;
-}
-
-async function stooqDaily(symbol: string): Promise<SectorRow | null> {
+async function yahooSectorDaily(symbol: string, date: string): Promise<SectorRow | null> {
   try {
-    const csv = await fetchText(`https://stooq.com/q/d/l/?s=${symbol.toLowerCase()}.us&i=d`, { timeoutMs: 12_000, maxChars: 200_000 });
-    const lines = csv.trim().split("\n").slice(1).filter(Boolean);
-    if (lines.length < 2) return null;
-    const prev = parseCsvLine(lines.at(-2) || "");
-    const last = parseCsvLine(lines.at(-1) || "");
-    const prevClose = Number(prev[4]);
-    const close = Number(last[4]);
+    const rows = (await yahooFinance.historical(symbol, { period1: offsetDateString(date, -21), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
+    const points = rows
+      .map(row => ({ close: Number(row.close), localDate: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : "" }))
+      .filter(point => Number.isFinite(point.close) && point.close > 0 && point.localDate && point.localDate <= date);
+    if (points.length < 2) return null;
+    const prevClose = points.at(-2)!.close;
+    const close = points.at(-1)!.close;
     if (!Number.isFinite(prevClose) || !Number.isFinite(close) || prevClose <= 0) return null;
     return { symbol, name: US_SECTOR_ETFS[symbol] || symbol, close, pct: ((close - prevClose) / prevClose) * 100 };
   } catch {
@@ -361,19 +345,19 @@ async function stooqDaily(symbol: string): Promise<SectorRow | null> {
   }
 }
 
-async function usSectorEtfs(): Promise<SectorRow[]> {
-  const rows = await Promise.all(Object.keys(US_SECTOR_ETFS).map(symbol => stooqDaily(symbol)));
+async function usSectorEtfs(date: string): Promise<SectorRow[]> {
+  const rows = await Promise.all(Object.keys(US_SECTOR_ETFS).map(symbol => yahooSectorDaily(symbol, date)));
   return rows.filter((row): row is SectorRow => Boolean(row));
 }
 
 async function cryptoGlobal(): Promise<{ marketCap: number; volume: number; btcDominance: number; ethDominance: number }> {
-  const payload = await fetchJson<{
+  const payload = (await coinGecko.global()) as {
     data?: {
       total_market_cap?: { usd?: number };
       total_volume?: { usd?: number };
       market_cap_percentage?: { btc?: number; eth?: number };
     };
-  }>("https://api.coingecko.com/api/v3/global", { timeoutMs: 15_000 });
+  };
   return {
     marketCap: Number(payload.data?.total_market_cap?.usd || 0),
     volume: Number(payload.data?.total_volume?.usd || 0),
@@ -383,8 +367,7 @@ async function cryptoGlobal(): Promise<{ marketCap: number; volume: number; btcD
 }
 
 async function cryptoCoins(): Promise<CryptoCoin[]> {
-  const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=30&page=1&sparkline=false&price_change_percentage=24h";
-  const rows = await fetchJson<
+  const rows = (await coinGecko.coinMarket({ vs_currency: "usd", order: "market_cap_desc", per_page: 30, page: 1, sparkline: false, price_change_percentage: "24h" })) as
     {
       name?: string;
       symbol?: string;
@@ -392,8 +375,7 @@ async function cryptoCoins(): Promise<CryptoCoin[]> {
       price_change_percentage_24h?: number;
       market_cap?: number;
       total_volume?: number;
-    }[]
-  >(url, { timeoutMs: 20_000 });
+    }[];
   return rows
     .map(row => ({
       name: row.name || row.symbol || "",
@@ -408,7 +390,7 @@ async function cryptoCoins(): Promise<CryptoCoin[]> {
 
 async function cryptoCategories(): Promise<BoardRow[]> {
   try {
-    const rows = await fetchJson<{ name?: string; market_cap_change_24h?: number; market_cap?: number }[]>("https://api.coingecko.com/api/v3/coins/categories", { timeoutMs: 20_000 });
+    const rows = (await coinGecko.coinCategoriesListWithMarketData()) as { name?: string; market_cap_change_24h?: number; market_cap?: number }[];
     return rows
       .map(row => ({ name: row.name || "", pct: Number(row.market_cap_change_24h), amount: Number(row.market_cap || 0) }))
       .filter(row => row.name && Number.isFinite(row.pct) && Number(row.amount || 0) > 1_000_000_000)
@@ -428,11 +410,11 @@ async function buildCryptoSection(): Promise<MarketSection> {
       key: "crypto",
       title: "数字货币市场",
       open: true,
-      summary: `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}，BTC 占比 ${pct(global.btcDominance)}，ETH 占比 ${pct(global.ethDominance)}`,
+      summary: `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}，BTC 占比 ${ratioPct(global.btcDominance)}，ETH 占比 ${ratioPct(global.ethDominance)}`,
       markdown: [
         "## 全市场概览",
         "",
-        `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}。BTC 市值占比 ${pct(global.btcDominance)}，ETH 市值占比 ${pct(global.ethDominance)}。`,
+        `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}。BTC 市值占比 ${ratioPct(global.btcDominance)}，ETH 市值占比 ${ratioPct(global.ethDominance)}。`,
         "",
         "## 主流资产表现",
         "",
@@ -487,7 +469,7 @@ export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<s
 
 export async function generateUsMarketDaily(date = bjtDateString()): Promise<string> {
   const rows = await quoteRowsWithFallback(date, [EASTMONEY_INDEX_SECS.dji, EASTMONEY_INDEX_SECS.nasdaq, EASTMONEY_INDEX_SECS.spx], YAHOO_SYMBOLS.us);
-  const sectors = isWeekday(date) ? await usSectorEtfs() : [];
+  const sectors = isWeekday(date) ? await usSectorEtfs(date) : [];
   const sections = [buildUsSection(rows, date, sectors)];
   return `${[buildSummary(sections, "美股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
