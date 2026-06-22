@@ -108,8 +108,36 @@ async function callAi(prompt: string, model: string): Promise<string> {
   return content;
 }
 
-function canFallbackToSource(task: Task): boolean {
-  return task === "asia-market-daily" || task === "crypto-market-daily" || task === "us-market-daily";
+function retryAttempts(): number {
+  const raw = Number(process.env.AI_RETRY_ATTEMPTS || "3");
+  return Number.isInteger(raw) && raw > 0 ? raw : 3;
+}
+
+function retryDelayMs(attempt: number): number {
+  const raw = Number(process.env.AI_RETRY_DELAY_MS || "10000");
+  const base = Number.isFinite(raw) && raw >= 0 ? raw : 10_000;
+  return attempt <= 1 ? 0 : base * (attempt - 1);
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms > 0) await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function renderLiveAiMarkdown(prompt: string, model: string, task: Task, artifactsDir: string): Promise<string> {
+  const attempts = retryAttempts();
+  let lastError = "";
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await sleep(retryDelayMs(attempt));
+    try {
+      const rawMarkdown = await callAi(prompt, model);
+      return validateMarkdown(rawMarkdown);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      writeArtifact(artifactsDir, task, `ai-error-attempt-${attempt}.txt`, lastError);
+      if (attempt < attempts) writeStderr(`WARN: ${task} AI generation attempt ${attempt}/${attempts} failed; retrying: ${lastError}`);
+    }
+  }
+  throw new Error(`${task} AI generation failed after ${attempts} attempts: ${lastError}`);
 }
 
 async function renderWithAi({
@@ -136,19 +164,8 @@ async function renderWithAi({
   const prompt = renderPrompt({ task, date, sourceText: source, promptDir: resolvedPromptDir });
   const promptArtifact = writeArtifact(artifactsDir, task, "prompt.md", prompt);
   const mockFile = mockResponseDir ? path.join(mockResponseDir, `${task}.md`) : "";
-  let markdown = "";
-  let fallbackReason = "";
-  try {
-    const rawMarkdown = mockFile ? fs.readFileSync(mockFile, "utf8") : await callAi(prompt, model);
-    markdown = validateMarkdown(rawMarkdown);
-  } catch (error) {
-    if (!canFallbackToSource(task)) throw error;
-    fallbackReason = error instanceof Error ? error.message : String(error);
-    markdown = validateMarkdown(source);
-    writeArtifact(artifactsDir, task, "ai-fallback-error.txt", fallbackReason);
-    writeStderr(`WARN: ${task} AI generation failed; falling back to source markdown: ${fallbackReason}`);
-  }
-  const responseArtifact = writeArtifact(artifactsDir, task, fallbackReason ? "source-fallback.md" : "ai-response.md", markdown);
+  const markdown = mockFile ? validateMarkdown(fs.readFileSync(mockFile, "utf8")) : await renderLiveAiMarkdown(prompt, model, task, artifactsDir);
+  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", markdown);
   return {
     markdown,
     metadata: {
