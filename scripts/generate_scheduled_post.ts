@@ -54,10 +54,7 @@ function fixtureSource(task: Task, sourceFixtureDir: string): string {
 async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): Promise<string> {
   if (sourceFixtureDir) return fixtureSource(task, sourceFixtureDir);
   if (task === "hn-top10") return buildHnSource();
-  if (task === "global-market-daily") {
-    void date;
-    return generateMarketDaily();
-  }
+  if (task === "global-market-daily") return generateMarketDaily(date);
   throw new Error(`unsupported task: ${task}`);
 }
 

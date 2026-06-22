@@ -61,7 +61,7 @@ test("archive and verifier accept generated HN and market posts", () => {
 
 ## A股
 
-A股最近一个交易日，上证指数小幅震荡，成交额维持在可观察区间。自动化日报只保留可复核指数信息，不在行业数据不足时硬编板块结论。
+A股当日未产生完整常规交易数据，本节不做指数表现与市场结构判断。
 
 ## 港股
 
@@ -73,13 +73,18 @@ BTC 当前参考价约为 100000 美元，近 24 小时变动 +1.50%。该数据
 
 ## 总结
 
-本篇自动化日报覆盖美股、A股、港股和 BTC，并明确把数据边界写进正文。
+本篇日报先汇总当天可复核市场状态：美股宽基指数提供了完整数据，A股当日未产生完整常规交易数据，港股主要指数同步整理，BTC 近 24 小时上涨。
 `;
   const hn = archivePost({ task: "hn-top10", date: "2099-01-02", repo, body: hnBody, force: true });
   const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
   assert.doesNotMatch(hnMarkdown, /今日 HackerNews 热门文章 Top 10|今日总览/);
   assert.match(hnMarkdown, /^## 1\. Developers don't understand CORS/m);
   const market = archivePost({ task: "global-market-daily", date: "2099-01-02", repo, body: marketBody, force: true });
+  const marketMarkdown = fs.readFileSync(path.join(repo, market.path), "utf8");
+  const marketBodyStart = marketMarkdown.split("---\n\n").at(-1) || "";
+  assert.match(marketBodyStart, /^## 总结/m);
+  assert.match(marketMarkdown, /A股当日未产生完整常规交易数据，本节不做指数表现与市场结构判断。/);
+  assert.doesNotMatch(marketMarkdown, /建议关注|值得关注|继续关注|最看好|赚钱点子|操作|布局/);
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [hn, market] }));
   assert.equal(verifyResultJson(repo, resultJson), 2);

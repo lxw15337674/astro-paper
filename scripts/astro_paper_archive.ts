@@ -142,8 +142,32 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   };
 }
 
+function reorderMarketSummaryFirst(markdown: string): string {
+  const blocks = markdown
+    .split(/(?=^##\s+)/gm)
+    .map(block => block.trim())
+    .filter(Boolean);
+  const frontMatter = blocks.filter(block => !block.startsWith("## "));
+  const headingBlocks = blocks.filter(block => block.startsWith("## "));
+  const summaryIndex = headingBlocks.findIndex(block => /^##\s+总结(?:\s|$)/m.test(block));
+  if (summaryIndex < 0) throw new Error("market daily missing top-level summary section");
+  const [summary] = headingBlocks.splice(summaryIndex, 1);
+  return [...frontMatter, summary, ...headingBlocks].join("\n\n").trim();
+}
+
+function rejectMarketGuidance(markdown: string): void {
+  const forbidden = [/建议关注/, /值得关注/, /继续关注/, /后续.*关注/, /最看好/, /赚钱点子/, /操作/, /布局/, /机会/, /交易建议/, /投资建议/];
+  for (const pattern of forbidden) {
+    if (pattern.test(markdown)) throw new Error(`market daily contains action-guidance language: ${pattern.source}`);
+  }
+}
+
 function formatMarketDaily(text: string): string {
-  return normalizeMarkdown(text);
+  const normalized = normalizeMarkdown(text);
+  rejectMarketGuidance(normalized);
+  const ordered = reorderMarketSummaryFirst(normalized);
+  if (!ordered.startsWith("## 总结")) throw new Error("market daily summary must be the first section");
+  return `${ordered}\n`;
 }
 
 function taskInfo(task: string): { titlePrefix: string; tag: string; description: string; fileName: string } {
