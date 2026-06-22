@@ -108,6 +108,10 @@ async function callAi(prompt: string, model: string): Promise<string> {
   return content;
 }
 
+function canFallbackToSource(task: Task): boolean {
+  return task === "asia-market-daily" || task === "crypto-market-daily" || task === "us-market-daily";
+}
+
 async function renderWithAi({
   task,
   date,
@@ -132,9 +136,19 @@ async function renderWithAi({
   const prompt = renderPrompt({ task, date, sourceText: source, promptDir: resolvedPromptDir });
   const promptArtifact = writeArtifact(artifactsDir, task, "prompt.md", prompt);
   const mockFile = mockResponseDir ? path.join(mockResponseDir, `${task}.md`) : "";
-  const rawMarkdown = mockFile ? fs.readFileSync(mockFile, "utf8") : await callAi(prompt, model);
-  const markdown = validateMarkdown(rawMarkdown);
-  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", markdown);
+  let markdown = "";
+  let fallbackReason = "";
+  try {
+    const rawMarkdown = mockFile ? fs.readFileSync(mockFile, "utf8") : await callAi(prompt, model);
+    markdown = validateMarkdown(rawMarkdown);
+  } catch (error) {
+    if (!canFallbackToSource(task)) throw error;
+    fallbackReason = error instanceof Error ? error.message : String(error);
+    markdown = validateMarkdown(source);
+    writeArtifact(artifactsDir, task, "ai-fallback-error.txt", fallbackReason);
+    writeStderr(`WARN: ${task} AI generation failed; falling back to source markdown: ${fallbackReason}`);
+  }
+  const responseArtifact = writeArtifact(artifactsDir, task, fallbackReason ? "source-fallback.md" : "ai-response.md", markdown);
   return {
     markdown,
     metadata: {
