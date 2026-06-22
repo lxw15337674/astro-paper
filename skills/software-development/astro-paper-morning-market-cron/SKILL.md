@@ -14,7 +14,7 @@ metadata:
 
 ## Overview
 
-This pipeline generates the daily morning market blog article for Astro Paper. It is a blog-first publishing chain rather than a chat push workflow, so the main maintenance target is the saved article in the repo — not merely whether a scheduler invocation completes.
+This pipeline generates the daily global-market blog article for Astro Paper. It is a blog-first publishing chain rather than a chat push workflow, so the main maintenance target is the saved article in the repo — not merely whether a scheduler invocation completes.
 
 This skill should preserve both:
 
@@ -37,10 +37,10 @@ Do not use this skill for:
 
 ## Pipeline Purpose
 
-The target artifact is a daily Chinese market morning brief published as an Astro Paper post.
+The target artifact is a daily Chinese global market brief published as an Astro Paper post.
 
 Typical target path:
-- `src/content/posts/zh-cn/` under the morning-market naming convention
+- `src/content/posts/zh-cn/全球市场日报-YYYY-MM-DD.md`
 
 Publishing cadence:
 - daily
@@ -83,10 +83,10 @@ When the article is wrong, classify the defect first:
 ## Article Contract
 
 ### Title rule
-- visible title should use: `晨间市场观察｜YYYY-MM-DD`
+- visible title should use: `全球市场日报｜YYYY-MM-DD`
 
 ### Structural expectations
-The article should feel like a proper morning market brief.
+The article should feel like a proper daily market brief.
 
 That means:
 - the post is daily and blog-oriented;
@@ -106,7 +106,7 @@ Known related files:
 - `scripts/run_morning_market_ai_pipeline.py`
 - `scripts/generate_morning_market_digest.py`
 
-These should be treated as part of the morning-market content generation layer even if the top-level cron entrypoint script orchestrates them indirectly.
+These should be treated as part of the current global-market-daily content generation layer even if the top-level cron entrypoint script orchestrates them indirectly.
 
 ## Editing Strategy
 
@@ -121,13 +121,13 @@ These should be treated as part of the morning-market content generation layer e
 - the final path/frontmatter/content persistence is wrong.
 
 ### Important maintenance bias
-Do not treat the morning brief as a chat alert. If the saved article reads like a monitoring log, that is a content-generation regression.
+Do not treat the daily market brief as a chat alert. If the saved article reads like a monitoring log, that is a content-generation regression.
 
 ## Verification Workflow
 
 1. Run the market generation path directly.
 2. Read the generated markdown file under `src/content/posts/zh-cn/`.
-3. Check that title, summary, and article sections match the intended morning-market format.
+3. Check that title, summary, and article sections match the intended global-market-daily format.
 4. Confirm `今日要点` is not empty.
 5. Confirm optional sections (such as Hong Kong IPO coverage) appear only when justified.
 6. Run:
@@ -166,7 +166,7 @@ Because the user prefers manual verification after cron edits, do not stop at up
 
 - [ ] Source generation runs successfully
 - [ ] Generated market article file is structurally correct
-- [ ] Title follows `晨间市场观察｜YYYY-MM-DD`
+- [ ] Title follows `全球市场日报｜YYYY-MM-DD`
 - [ ] `今日要点` is present and non-empty
 - [ ] Optional IPO appendix behaves correctly
 - [ ] Article reads like a morning brief rather than a raw log
