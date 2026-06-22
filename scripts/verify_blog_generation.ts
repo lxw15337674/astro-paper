@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
-const FORBIDDEN_PATTERNS = [
+const COMMON_FORBIDDEN_PATTERNS = [
   /Traceback \(most recent call last\)/i,
   /Script not found:/i,
   /归档失败/i,
@@ -13,8 +13,10 @@ const FORBIDDEN_PATTERNS = [
   /待补充/,
   /示例(?:标题|正文|内容|链接|数据|文章|输出)/,
   /这是一[个篇段].{0,20}示例/,
-  /建议关注|值得关注|继续关注|后续关注|最看好|赚钱点子|操作|布局|交易建议|投资建议/,
+  /赚钱点子|交易建议|投资建议/,
 ];
+
+const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
 
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
@@ -103,8 +105,13 @@ function verifyPostContract(repo: string, relPath: string, task: string): void {
   const { body } = splitFrontmatter(text);
   if (body.trim().length < 240) throw new Error(`${relPath} body is too short to be a publishable blog post`);
   if (!/^##\s+/m.test(body)) throw new Error(`${relPath} body has no section headings`);
-  for (const pattern of FORBIDDEN_PATTERNS) {
+  for (const pattern of COMMON_FORBIDDEN_PATTERNS) {
     if (pattern.test(text)) throw new Error(`${relPath} contains forbidden pattern: ${pattern.source}`);
+  }
+  if (task.endsWith("market-daily")) {
+    for (const pattern of MARKET_FORBIDDEN_PATTERNS) {
+      if (pattern.test(text)) throw new Error(`${relPath} contains forbidden market pattern: ${pattern.source}`);
+    }
   }
   verifyMarketSemantics(relPath, body, task);
 }
