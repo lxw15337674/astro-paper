@@ -51,7 +51,7 @@ test("HN source payload carries original and comment evidence", () => {
   assert.match(payload.hn_comment_excerpt, /reverse proxies/);
 });
 
-test("archive and verifier accept generated HN and market posts", () => {
+test("archive and verifier accept generated HN and split market posts", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-archive-"));
   const hnBody = `1. 🔥 Developers don't understand CORS
 - ⭐ 185 points · 88 评论
@@ -61,39 +61,79 @@ test("archive and verifier accept generated HN and market posts", () => {
 - 内容总结：文章解释了浏览器同源策略与 CORS 预检机制之间的关系，并指出很多后端开发者把跨域报错误解成服务端权限问题。作者用请求头、凭证模式和常见配置误区串起了 CORS 的真实执行路径。
 - 评论总结：评论区主要补充了反向代理、CDN 和本地开发场景下最容易踩坑的缓存与凭证问题，也有人强调把通配配置当万能解法会埋下安全隐患。
 `;
-  const marketBody = `## 美股
+  const asiaBody = `## 总结
 
-三大指数表现为：纳指上涨 1.20%，标普500 上涨 0.60%，道指上涨 0.30%。从指数层面看，整体呈现科技权重相对占优。
+本篇亚洲市场日报覆盖 A股与港股。A股三大宽基同步上涨，上证指数 +1.78%、深证成指 +2.13%、创业板指 +2.52%；港股主要指数走弱，恒生指数 -0.65%、国企指数 -0.77%、恒生科技指数 -1.10%。
 
 ## A股
 
-A股当日未产生完整常规交易数据，本节不做指数表现与市场结构判断。
+A股最近一个交易日，上证指数收报 3560.00 点，+1.78%；深证成指收报 10980.00 点，+2.13%；创业板指收报 2280.00 点，+2.52%。
+
+## A股行业板块
+
+涨幅靠前行业：半导体 +4.12%、软件开发 +3.80%、消费电子 +3.10%、证券 +2.75%、电池 +2.20%。跌幅靠前行业：煤炭 -1.10%、银行 -0.88%、公用事业 -0.55%、贵金属 -0.30%、石油行业 -0.12%。
 
 ## 港股
 
-港股最近一个交易日，恒生指数和国企指数同步整理。这个口径足以判断大盘风险偏好，但不足以替代完整行业涨跌幅。
+港股最近一个交易日，恒生指数收报 18400.00 点，-0.65%；国企指数收报 6600.00 点，-0.77%；恒生科技指数收报 3820.00 点，-1.10%。
+`;
+  const cryptoBody = `## 总结
 
-## BTC 市场动态
+数字货币总市值约 2.61万亿美元，24小时成交量约 0.12万亿美元；BTC 市值占比 +52.40%，ETH 市值占比 +17.80%。以上内容只描述已获取数据对应的市场状态与数据边界，不生成交易动作或资产配置结论。
 
-BTC 当前参考价约为 100000 美元，近 24 小时变动 +1.50%。该数据只作为风险资产情绪的辅助观察。
+## 全市场概览
 
-## 总结
+数字货币总市值约 2.61万亿美元，24小时成交量约 0.12万亿美元。BTC 市值占比 +52.40%，ETH 市值占比 +17.80%。
 
-本篇日报先汇总当天可复核市场状态：美股宽基指数提供了完整数据，A股当日未产生完整常规交易数据，港股主要指数同步整理，BTC 近 24 小时上涨。
+## 主流资产表现
+
+- Bitcoin（BTC）：65,090 美元，24小时 +1.51%，市值约 1.28万亿美元
+- Ethereum（ETH）：3,420 美元，24小时 +0.84%，市值约 0.41万亿美元
+- Solana（SOL）：142 美元，24小时 -2.10%，市值约 0.07万亿美元
+
+## 市场强弱结构
+
+分类板块涨幅靠前：Layer 1 +1.20%、DeFi +0.70%、AI +0.50%。分类板块跌幅靠前：Meme -2.80%、Gaming -1.60%、RWA -0.40%。
+
+## 数据边界
+
+本篇采用公开聚合行情接口，覆盖全市场市值、成交量、BTC/ETH 占比、主流币与部分分类板块。分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响，不生成交易动作或资产配置结论。
+`;
+  const usBody = `## 总结
+
+本篇美股市场日报覆盖完整常规收盘后的主要指数与行业 ETF 结构。美股三大指数分别为道指 +0.14%、纳指 +1.91%、标普500 +1.08%。
+
+## 美股
+
+美股最近一个完整常规收盘交易日，道指 +0.14%，纳指 +1.91%，标普500 +1.08%。
+
+## 美股行业板块
+
+表现靠前行业 ETF：科技 +1.85%、通信服务 +1.42%、可选消费 +0.92%、金融 +0.50%、工业 +0.31%。表现靠后行业 ETF：能源 -1.20%、公用事业 -0.60%、房地产 -0.44%、必需消费 -0.18%、材料 -0.10%。行业板块采用 S&P 500 行业 ETF 作为近似口径，用于观察风格结构，不等同于完整成分股贡献。
 `;
   const hn = archivePost({ task: "hn-top10", date: "2099-01-02", repo, body: hnBody, force: true });
   const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
   assert.match(hnMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
   assert.doesNotMatch(hnMarkdown, /今日 HackerNews 热门文章 Top 10|今日总览/);
   assert.match(hnMarkdown, /^## 1\. Developers don't understand CORS/m);
-  const market = archivePost({ task: "global-market-daily", date: "2099-01-02", repo, body: marketBody, force: true });
-  const marketMarkdown = fs.readFileSync(path.join(repo, market.path), "utf8");
-  assert.match(marketMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
-  const marketBodyStart = marketMarkdown.split("---\n\n").at(-1) || "";
-  assert.match(marketBodyStart, /^## 总结/m);
-  assert.match(marketMarkdown, /A股当日未产生完整常规交易数据，本节不做指数表现与市场结构判断。/);
-  assert.doesNotMatch(marketMarkdown, /建议关注|值得关注|继续关注|最看好|赚钱点子|操作|布局/);
+  const asia = archivePost({ task: "asia-market-daily", date: "2099-01-02", repo, body: asiaBody, force: true });
+  const crypto = archivePost({ task: "crypto-market-daily", date: "2099-01-02", repo, body: cryptoBody, force: true });
+  const us = archivePost({ task: "us-market-daily", date: "2099-01-02", repo, body: usBody, force: true });
+  const asiaMarkdown = fs.readFileSync(path.join(repo, asia.path), "utf8");
+  const cryptoMarkdown = fs.readFileSync(path.join(repo, crypto.path), "utf8");
+  const usMarkdown = fs.readFileSync(path.join(repo, us.path), "utf8");
+  assert.match(asiaMarkdown, /title: "亚洲市场日报｜2099-01-02"/);
+  assert.match(asiaMarkdown, /A股行业板块/);
+  assert.match(cryptoMarkdown, /title: "数字货币日报｜2099-01-02"/);
+  assert.match(cryptoMarkdown, /全市场市值|总市值/);
+  assert.match(usMarkdown, /title: "美股市场日报｜2099-01-02"/);
+  assert.match(usMarkdown, /美股行业板块/);
+  for (const markdown of [asiaMarkdown, cryptoMarkdown, usMarkdown]) {
+    assert.match(markdown, /pubDatetime: 2099-01-01T16:00:00Z/);
+    assert.match(markdown.split("---\n\n").at(-1) || "", /^## 总结/m);
+    assert.doesNotMatch(markdown, /建议关注|值得关注|继续关注|最看好|赚钱点子|操作|布局/);
+  }
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [hn, market] }));
-  assert.equal(verifyResultJson(repo, resultJson), 2);
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [hn, asia, crypto, us] }));
+  assert.equal(verifyResultJson(repo, resultJson), 4);
 });

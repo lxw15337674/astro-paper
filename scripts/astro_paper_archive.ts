@@ -171,23 +171,35 @@ function formatMarketDaily(text: string): string {
 }
 
 function taskInfo(task: string): { titlePrefix: string; tag: string; description: string; fileName: string } {
-  if (task === "hn-top10") {
-    return {
+  const tasks: Record<string, { titlePrefix: string; tag: string; description: string; fileName: string }> = {
+    "hn-top10": {
       titlePrefix: "HackerNews Top 10",
       tag: "HackerNews",
       description: "每日 Hacker News 热门文章 Top 10 中文整理，按当天归档并覆盖更新。",
       fileName: "hackernews-{date}.md",
-    };
-  }
-  if (task === "global-market-daily" || task === "morning-market") {
-    return {
-      titlePrefix: "全球市场日报",
-      tag: "全球市场日报",
-      description: "每日全球市场日报，按北京时间自然日汇总全球主要市场动态。",
-      fileName: "全球市场日报-{date}.md",
-    };
-  }
-  throw new Error(`unsupported task: ${task}`);
+    },
+    "asia-market-daily": {
+      titlePrefix: "亚洲市场日报",
+      tag: "亚洲市场日报",
+      description: "每日 A股与港股市场日报，按北京时间自然日汇总主要指数、成交与板块结构。",
+      fileName: "亚洲市场日报-{date}.md",
+    },
+    "crypto-market-daily": {
+      titlePrefix: "数字货币日报",
+      tag: "数字货币日报",
+      description: "每日数字货币市场日报，汇总全市场市值、成交量、主流资产与分类板块结构。",
+      fileName: "数字货币日报-{date}.md",
+    },
+    "us-market-daily": {
+      titlePrefix: "美股市场日报",
+      tag: "美股市场日报",
+      description: "每日美股市场日报，按完整常规收盘口径汇总主要指数与行业板块结构。",
+      fileName: "美股市场日报-{date}.md",
+    },
+  };
+  const info = tasks[task];
+  if (!info) throw new Error(`unsupported task: ${task}`);
+  return info;
 }
 
 export function archivePost({ task, date, repo, body, force }: { task: string; date: string; repo: string; body: string; force: boolean }): ArchiveResult {

@@ -36,9 +36,13 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
     if (!frontmatter.includes(field)) throw new Error(`${file} frontmatter missing ${field}`);
   }
   if (expectedTask === "hn-top10" && !frontmatter.includes("HackerNews")) throw new Error(`${file} frontmatter missing HackerNews tag/title`);
-  if (["global-market-daily", "morning-market"].includes(expectedTask) && !frontmatter.includes("全球市场日报")) {
-    throw new Error(`${file} frontmatter missing market tag/title`);
-  }
+  const marketLabels: Record<string, string> = {
+    "asia-market-daily": "亚洲市场日报",
+    "crypto-market-daily": "数字货币日报",
+    "us-market-daily": "美股市场日报",
+  };
+  const expectedMarketLabel = marketLabels[expectedTask];
+  if (expectedMarketLabel && !frontmatter.includes(expectedMarketLabel)) throw new Error(`${file} frontmatter missing ${expectedMarketLabel} tag/title`);
   return text;
 }
 

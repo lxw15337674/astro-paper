@@ -5,10 +5,17 @@ import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
 import { bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
-import { generateMarketDaily } from "./market_daily_source.ts";
+import { generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 
-const TASKS = ["hn-top10", "global-market-daily"] as const;
+const TASKS = ["hn-top10", "asia-market-daily", "crypto-market-daily", "us-market-daily"] as const;
 type Task = (typeof TASKS)[number];
+
+const TASK_META: Record<Task, { titlePrefix: string; fileName: string; tags: string[] }> = {
+  "hn-top10": { titlePrefix: "HackerNews Top 10", fileName: "hackernews-{date}.md", tags: ["定时文章", "HackerNews"] },
+  "asia-market-daily": { titlePrefix: "亚洲市场日报", fileName: "亚洲市场日报-{date}.md", tags: ["定时文章", "亚洲市场日报"] },
+  "crypto-market-daily": { titlePrefix: "数字货币日报", fileName: "数字货币日报-{date}.md", tags: ["定时文章", "数字货币日报"] },
+  "us-market-daily": { titlePrefix: "美股市场日报", fileName: "美股市场日报-{date}.md", tags: ["定时文章", "美股市场日报"] },
+};
 
 type ResultItem = ReturnType<typeof archivePost> & {
   generation?: {
@@ -24,24 +31,29 @@ function isTask(value: string): value is Task {
   return (TASKS as readonly string[]).includes(value);
 }
 
+function offsetBjtDate(days: number): string {
+  return bjtDateString(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
+}
+
 function targetPath(task: Task, repo: string, date: string): string {
-  const file = task === "hn-top10" ? `hackernews-${date}.md` : `全球市场日报-${date}.md`;
+  const file = TASK_META[task].fileName.replace("{date}", date);
   return path.join(repo, "src/content/posts/zh-cn", file);
 }
 
 function skippedExisting(task: Task, repo: string, date: string): ResultItem | null {
   const postPath = targetPath(task, repo, date);
   if (!fs.existsSync(postPath)) return null;
+  const meta = TASK_META[task];
   return {
     task,
     path: path.relative(repo, postPath),
-    title: task === "hn-top10" ? `HackerNews Top 10｜${date}` : `全球市场日报｜${date}`,
+    title: `${meta.titlePrefix}｜${date}`,
     created: false,
     skipped: true,
     updated_at_bjt: "",
     commit: "",
     push: "",
-    tags: task === "hn-top10" ? ["定时文章", "HackerNews"] : ["定时文章", "全球市场日报"],
+    tags: meta.tags,
   };
 }
 
@@ -54,7 +66,9 @@ function fixtureSource(task: Task, sourceFixtureDir: string): string {
 async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): Promise<string> {
   if (sourceFixtureDir) return fixtureSource(task, sourceFixtureDir);
   if (task === "hn-top10") return buildHnSource();
-  if (task === "global-market-daily") return generateMarketDaily(date);
+  if (task === "asia-market-daily") return generateAsiaMarketDaily(date);
+  if (task === "us-market-daily") return generateUsMarketDaily(date);
+  if (task === "crypto-market-daily") return generateCryptoMarketDaily();
   throw new Error(`unsupported task: ${task}`);
 }
 
@@ -177,7 +191,10 @@ async function main(): Promise<void> {
   const args = parseArgs();
   const taskArg = stringArg(args, "task", "all");
   const repo = path.resolve(stringArg(args, "repo", repoRoot()));
-  const date = stringArg(args, "date", bjtDateString());
+  const explicitDate = stringArg(args, "date");
+  const offset = Number(stringArg(args, "date-offset", "0"));
+  if (!Number.isInteger(offset)) throw new Error(`invalid --date-offset: ${String(args["date-offset"])}`);
+  const date = explicitDate || offsetBjtDate(offset);
   const tasks = taskArg === "all" ? [...TASKS] : [taskArg];
   if (tasks.some(task => !isTask(task))) throw new Error(`unsupported task: ${taskArg}`);
   const results = [];

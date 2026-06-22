@@ -14,9 +14,11 @@ on:
         options:
           - all
           - hn-top10
-          - global-market-daily
+          - asia-market-daily
+          - crypto-market-daily
+          - us-market-daily
       date:
-        description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today."
+        description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today or scheduled offset."
         required: false
         type: string
       force:
@@ -29,11 +31,15 @@ on:
         required: false
         type: string
   schedule:
-    # 22:00 Asia/Shanghai. GitHub schedules use UTC and may be delayed.
+    # 22:00 Asia/Shanghai: A股 + 港股 after local market close.
     - cron: "0 14 * * *"
+    # 01:00 Asia/Shanghai next day: digital assets snapshot for previous BJT date.
+    - cron: "0 17 * * *"
+    # 06:30 Asia/Shanghai next day: US market after regular close, archived to previous BJT date.
+    - cron: "30 22 * * *"
 
 concurrency:
-  group: scheduled-posts-${{ github.ref }}-${{ github.event.inputs.task || 'all' }}
+  group: scheduled-posts-${{ github.ref }}-${{ github.event.inputs.task || github.event.schedule || 'all' }}
   cancel-in-progress: false
 
 jobs:
@@ -64,22 +70,35 @@ jobs:
 
       - name: "📝 Generate posts"
         env:
-          TASK: ${{ github.event.inputs.task || 'all' }}
-          DATE: ${{ github.event.inputs.date || '' }}
-          FORCE: ${{ github.event.inputs.force || 'false' }}
+          INPUT_TASK: ${{ github.event.inputs.task || '' }}
+          INPUT_DATE: ${{ github.event.inputs.date || '' }}
+          INPUT_FORCE: ${{ github.event.inputs.force || 'false' }}
+          EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
           AI_MODEL: ${{ github.event.inputs.ai_model || secrets.AI_MODEL }}
         run: |
           set -euo pipefail
-          args=(--task "$TASK" --ai --artifacts-dir blog-generation-artifacts)
-          if [ -n "$DATE" ]; then
-            args+=(--date "$DATE")
+          task="$INPUT_TASK"
+          date_offset="0"
+          if [ -z "$task" ]; then
+            case "$EVENT_SCHEDULE" in
+              "0 14 * * *") task="asia-market-daily" ;;
+              "0 17 * * *") task="crypto-market-daily"; date_offset="-1" ;;
+              "30 22 * * *") task="us-market-daily"; date_offset="-1" ;;
+              *) task="all" ;;
+            esac
+          fi
+          args=(--task "$task" --ai --artifacts-dir blog-generation-artifacts)
+          if [ -n "$INPUT_DATE" ]; then
+            args+=(--date "$INPUT_DATE")
+          elif [ "$date_offset" != "0" ]; then
+            args+=(--date-offset "$date_offset")
           fi
           if [ -n "$AI_MODEL" ]; then
             args+=(--model "$AI_MODEL")
           fi
-          if [ "$FORCE" = "true" ]; then
+          if [ "$INPUT_FORCE" = "true" ]; then
             args+=(--force)
           fi
           node --import tsx scripts/generate_scheduled_post.ts "${args[@]}" | tee scheduled-posts-result.json
