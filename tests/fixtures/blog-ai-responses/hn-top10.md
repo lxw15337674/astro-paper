@@ -1,5 +1,3 @@
-1. 🔥 今日 HackerNews 热门文章 Top 10
-
 1. 🔥 Developers finally test their automation contracts
 - ⭐ 320 points · 64 评论
 - 主题：开发工具 / 编程语言

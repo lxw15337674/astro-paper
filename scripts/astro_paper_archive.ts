@@ -98,16 +98,6 @@ function bulletValue(bullets: string[], label: string): string {
   return bullets.find(bullet => bullet.startsWith(label))?.split("：").slice(1).join("：").trim() || "";
 }
 
-function buildHnOverview(items: { topic: string }[]): string {
-  const counts = new Map<string, number>();
-  for (const item of items) counts.set(item.topic, (counts.get(item.topic) || 0) + 1);
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  if (!ranked.length) return "今天的 HN 前十保留了可复核的原文与评论证据，适合按条目继续深读。";
-  const leaders = ranked.slice(0, 2).map(([name]) => name).join("和");
-  const tail = ranked.slice(2, 4).map(([name]) => name).join("、");
-  return tail ? `今天前十里，${leaders}最集中，另外也夹杂了${tail}，整体比单纯产品发布更偏原理、系统和制度讨论。` : `今天前十里，${leaders}最集中，整体更偏技术原理与基础设施，而不是单纯的产品新闻。`;
-}
-
 function normalizeParagraph(text: string): string {
   return sanitizeGeneratedText(text);
 }
@@ -137,7 +127,7 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
     contentSummary = normalizeParagraph(contentSummary);
     commentSummary = normalizeParagraph(commentSummary);
     if (!contentSummary) return;
-    const out = [`### ${rank}. ${title}`, ""];
+    const out = [`## ${rank}. ${title}`, ""];
     if (points) out.push(`- **热度**：${points}`);
     if (link) out.push(`- **原文**：${link}`);
     if (hnLink) out.push(`- **HN 讨论**：${hnLink}`);
@@ -147,7 +137,7 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   });
   if (!formattedItems.length) throw new Error("HN source produced no publishable items");
   return {
-    markdown: ["1. 🔥 今日 HackerNews 热门文章 Top 10", "", "## 今日总览", "", buildHnOverview(formattedItems), "", ...formattedItems.map(item => item.block)].join("\n\n"),
+    markdown: formattedItems.map(item => item.block).join("\n\n"),
     ogImage: HN_DEFAULT_OG_IMAGE,
   };
 }

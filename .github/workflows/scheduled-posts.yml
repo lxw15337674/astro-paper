@@ -29,8 +29,8 @@ on:
         required: false
         type: string
   schedule:
-    # 17:30 Asia/Shanghai. GitHub schedules use UTC and may be delayed.
-    - cron: "30 9 * * *"
+    # 22:00 Asia/Shanghai. GitHub schedules use UTC and may be delayed.
+    - cron: "0 14 * * *"
 
 concurrency:
   group: scheduled-posts-${{ github.ref }}-${{ github.event.inputs.task || 'all' }}

@@ -47,9 +47,7 @@ test("HN source payload carries original and comment evidence", () => {
 
 test("archive and verifier accept generated HN and market posts", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-archive-"));
-  const hnBody = `1. 🔥 今日 HackerNews 热门文章 Top 10
-
-1. 🔥 Developers don't understand CORS
+  const hnBody = `1. 🔥 Developers don't understand CORS
 - ⭐ 185 points · 88 评论
 - 主题：开发工具 / 编程语言
 - 原文：https://example.com/cors
@@ -78,6 +76,9 @@ BTC 当前参考价约为 100000 美元，近 24 小时变动 +1.50%。该数据
 本篇自动化日报覆盖美股、A股、港股和 BTC，并明确把数据边界写进正文。
 `;
   const hn = archivePost({ task: "hn-top10", date: "2099-01-02", repo, body: hnBody, force: true });
+  const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
+  assert.doesNotMatch(hnMarkdown, /今日 HackerNews 热门文章 Top 10|今日总览/);
+  assert.match(hnMarkdown, /^## 1\. Developers don't understand CORS/m);
   const market = archivePost({ task: "global-market-daily", date: "2099-01-02", repo, body: marketBody, force: true });
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [hn, market] }));
