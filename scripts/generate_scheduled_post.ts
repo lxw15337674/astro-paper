@@ -245,7 +245,13 @@ async function main(): Promise<void> {
       }),
     );
   }
-  writeStdout(`${JSON.stringify({ date, results }, null, 2)}\n`);
+  const output = `${JSON.stringify({ date, results }, null, 2)}\n`;
+  const resultJson = stringArg(args, "result-json");
+  if (resultJson) {
+    fs.writeFileSync(path.resolve(repo, resultJson), output, "utf8");
+  } else {
+    writeStdout(output);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

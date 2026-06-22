@@ -62,7 +62,8 @@ jobs:
             --source-fixture-dir tests/fixtures/blog-sources \
             --mock-response-dir tests/fixtures/blog-ai-responses \
             --artifacts-dir blog-generation-artifacts \
-            | tee blog-generation-result.json
+            --result-json blog-generation-result.json
+          cat blog-generation-result.json
           node --import tsx scripts/verify_blog_generation.ts --result-json blog-generation-result.json
 
       - name: "🚀 Build generated blog output"

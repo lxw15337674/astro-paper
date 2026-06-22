@@ -541,12 +541,14 @@ function buildSummary(sections: MarketSection[], scope: string): string {
 }
 
 export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<string> {
-  const fallbackRows = await quoteRowsWithFallback(
-    date,
-    [EASTMONEY_INDEX_SECS.sh, EASTMONEY_INDEX_SECS.sz, EASTMONEY_INDEX_SECS.cyb, EASTMONEY_INDEX_SECS.hsi, EASTMONEY_INDEX_SECS.hscei, EASTMONEY_INDEX_SECS.hstech],
-    REQUIRED_ASIA_QUOTES,
-  );
   const coreRows = isWeekday(date) ? await sinaQuotes(REQUIRED_ASIA_QUOTES, date) : {};
+  const fallbackRows = REQUIRED_ASIA_QUOTES.some(symbol => isMissingQuote(byCode(coreRows, symbol.code)))
+    ? await quoteRowsWithFallback(
+        date,
+        [EASTMONEY_INDEX_SECS.sh, EASTMONEY_INDEX_SECS.sz, EASTMONEY_INDEX_SECS.cyb, EASTMONEY_INDEX_SECS.hsi, EASTMONEY_INDEX_SECS.hscei, EASTMONEY_INDEX_SECS.hstech],
+        REQUIRED_ASIA_QUOTES,
+      )
+    : {};
   const rows = { ...fallbackRows, ...coreRows };
   if (isWeekday(date)) assertRequiredQuotes(rows, REQUIRED_ASIA_QUOTES, "亚洲市场日报");
   const industryRows = isWeekday(date) ? await safeBoards("m:90+t:2", 20) : [];

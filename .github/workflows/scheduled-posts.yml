@@ -101,7 +101,8 @@ jobs:
           if [ "$INPUT_FORCE" = "true" ]; then
             args+=(--force)
           fi
-          node --import tsx scripts/generate_scheduled_post.ts "${args[@]}" | tee scheduled-posts-result.json
+          node --import tsx scripts/generate_scheduled_post.ts "${args[@]}" --result-json scheduled-posts-result.json
+          cat scheduled-posts-result.json
 
       - name: "📦 Upload generation artifacts"
         if: always()
