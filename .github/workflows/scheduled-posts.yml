@@ -44,17 +44,17 @@ jobs:
 
     steps:
       - name: "☁️ Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: "📦 Install pnpm"
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: "11.3.0"
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "pnpm"
@@ -82,11 +82,11 @@ jobs:
           if [ "$FORCE" = "true" ]; then
             args+=(--force)
           fi
-          python3 scripts/generate_scheduled_post.py "${args[@]}" | tee scheduled-posts-result.json
+          node --import tsx scripts/generate_scheduled_post.ts "${args[@]}" | tee scheduled-posts-result.json
 
       - name: "📦 Upload generation artifacts"
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scheduled-posts-generation-artifacts
           path: |
@@ -95,7 +95,10 @@ jobs:
           if-no-files-found: ignore
 
       - name: "🔎 Verify generated post contract"
-        run: python3 scripts/verify_blog_generation.py --result-json scheduled-posts-result.json
+        run: node --import tsx scripts/verify_blog_generation.ts --result-json scheduled-posts-result.json
+
+      - name: "🧹 Format generated posts"
+        run: pnpm exec prettier --write "src/content/posts/zh-cn/*.md"
 
       - name: "🔎 Check whether content changed"
         id: diff

@@ -30,15 +30,15 @@ jobs:
 
     steps:
       - name: "☁️ Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: "📦 Install pnpm"
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: "11.3.0"
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "pnpm"
@@ -46,15 +46,15 @@ jobs:
       - name: "📦 Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      - name: "🐍 Install Python test dependencies"
-        run: python3 -m pip install pytest
+      - name: "🧪 Run TypeScript pipeline tests"
+        run: pnpm run test:blog
 
-      - name: "🧪 Run Python pipeline tests"
-        run: python3 -m pytest tests
+      - name: "🔎 Type-check TypeScript scripts"
+        run: pnpm run typecheck
 
       - name: "📝 Verify offline AI blog generation contract"
         run: |
-          python3 scripts/generate_scheduled_post.py \
+          node --import tsx scripts/generate_scheduled_post.ts \
             --task all \
             --date 2099-01-02 \
             --force \
@@ -63,7 +63,7 @@ jobs:
             --mock-response-dir tests/fixtures/blog-ai-responses \
             --artifacts-dir blog-generation-artifacts \
             | tee blog-generation-result.json
-          python3 scripts/verify_blog_generation.py --result-json blog-generation-result.json
+          node --import tsx scripts/verify_blog_generation.ts --result-json blog-generation-result.json
 
       - name: "🚀 Build generated blog output"
         run: pnpm run build
