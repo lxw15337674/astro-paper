@@ -24,6 +24,10 @@ on:
         required: false
         type: boolean
         default: false
+      ai_model:
+        description: "Optional AI_MODEL override. Empty = repository secret/default."
+        required: false
+        type: string
   schedule:
     # 17:30 Asia/Shanghai. GitHub schedules use UTC and may be delayed.
     - cron: "30 9 * * *"
@@ -63,16 +67,35 @@ jobs:
           TASK: ${{ github.event.inputs.task || 'all' }}
           DATE: ${{ github.event.inputs.date || '' }}
           FORCE: ${{ github.event.inputs.force || 'false' }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ github.event.inputs.ai_model || secrets.AI_MODEL }}
         run: |
           set -euo pipefail
-          args=(--task "$TASK")
+          args=(--task "$TASK" --ai --artifacts-dir blog-generation-artifacts)
           if [ -n "$DATE" ]; then
             args+=(--date "$DATE")
+          fi
+          if [ -n "$AI_MODEL" ]; then
+            args+=(--model "$AI_MODEL")
           fi
           if [ "$FORCE" = "true" ]; then
             args+=(--force)
           fi
-          python3 scripts/generate_scheduled_post.py "${args[@]}"
+          python3 scripts/generate_scheduled_post.py "${args[@]}" | tee scheduled-posts-result.json
+
+      - name: "📦 Upload generation artifacts"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-posts-generation-artifacts
+          path: |
+            scheduled-posts-result.json
+            blog-generation-artifacts/
+          if-no-files-found: ignore
+
+      - name: "🔎 Verify generated post contract"
+        run: python3 scripts/verify_blog_generation.py --result-json scheduled-posts-result.json
 
       - name: "🔎 Check whether content changed"
         id: diff
@@ -85,7 +108,6 @@ jobs:
           git status --short
 
       - name: "🚀 Build the project"
-        if: steps.diff.outputs.changed == 'true'
         run: pnpm run build
 
       - name: "🚢 Commit generated posts"
