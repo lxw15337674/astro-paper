@@ -1,0 +1,99 @@
+name: Scheduled posts
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Post task to generate"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - hn-top10
+          - global-market-daily
+      date:
+        description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today."
+        required: false
+        type: string
+      force:
+        description: "Overwrite an existing post for the same date"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # 17:30 Asia/Shanghai. GitHub schedules use UTC and may be delayed.
+    - cron: "30 9 * * *"
+
+concurrency:
+  group: scheduled-posts-${{ github.ref }}-${{ github.event.inputs.task || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    name: Generate scheduled posts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: "☁️ Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "📦 Install pnpm"
+        uses: pnpm/action-setup@v4
+        with:
+          version: "11.3.0"
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: "📦 Install dependencies"
+        run: pnpm install --frozen-lockfile
+
+      - name: "📝 Generate posts"
+        env:
+          TASK: ${{ github.event.inputs.task || 'all' }}
+          DATE: ${{ github.event.inputs.date || '' }}
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+        run: |
+          set -euo pipefail
+          args=(--task "$TASK")
+          if [ -n "$DATE" ]; then
+            args+=(--date "$DATE")
+          fi
+          if [ "$FORCE" = "true" ]; then
+            args+=(--force)
+          fi
+          python3 scripts/generate_scheduled_post.py "${args[@]}"
+
+      - name: "🔎 Check whether content changed"
+        id: diff
+        run: |
+          if [ -z "$(git status --porcelain -- src/content/posts data)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          git status --short
+
+      - name: "🚀 Build the project"
+        if: steps.diff.outputs.changed == 'true'
+        run: pnpm run build
+
+      - name: "🚢 Commit generated posts"
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/content/posts data
+          git commit -m "feat(posts): archive scheduled posts"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

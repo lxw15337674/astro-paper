@@ -464,7 +464,7 @@ def split_hn_summary_and_comment(summary: str) -> tuple[str, str]:
 
 def normalize_hn_paragraph(text: str) -> str:
     text = sanitize_generated_text(text)
-    text = re.sub(r"([。！？!?])([^\n])", r"\1\n\n\2", text)
+    text = re.sub(r"([。！？])([^\n])", r"\1\n\n\2", text)
     return text.strip()
 
 
@@ -959,6 +959,8 @@ def main() -> int:
     parser.add_argument("--extra-tag", action="append", default=[])
     parser.add_argument("--date", help="Override cycle date (YYYY-MM-DD) in Asia/Shanghai")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--write-only", action="store_true", help="Write the post file without committing or pushing")
+    parser.add_argument("--no-overwrite", action="store_true", help="Skip when the target post already exists")
     parser.add_argument("--skip-git-pull", action="store_true", help="Skip git pull before writing (useful when local formatter code is dirty)")
     args = parser.parse_args()
 
@@ -993,6 +995,19 @@ def main() -> int:
         cover_image = ""
 
     created = not post_path.exists()
+    if args.no_overwrite and post_path.exists():
+        result = {
+            "task": args.task,
+            "path": str(post_path.relative_to(repo)),
+            "title": title,
+            "created": False,
+            "skipped": True,
+            "reason": "target post already exists",
+            "tags": [TOTAL_TAG, str(task["task_tag"]), *args.extra_tag],
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
     pub_dt = dt if created else dt
     mod_dt = now
 
@@ -1021,14 +1036,18 @@ def main() -> int:
     if not args.skip_git_pull:
         git_pull(repo)
     post_path.write_text(content, encoding="utf-8")
-    commit_message = f"feat: archive {safe_slug_component(str(task['task_tag']))} {period_key}"
-    commit, push_output = git_commit_push(repo, rel_path, commit_message)
+    commit = ""
+    push_output = ""
+    if not args.write_only:
+        commit_message = f"feat: archive {safe_slug_component(str(task['task_tag']))} {period_key}"
+        commit, push_output = git_commit_push(repo, rel_path, commit_message)
 
     result = {
         "task": args.task,
         "path": rel_path,
         "title": title,
         "created": created,
+        "skipped": False,
         "updated_at_bjt": mod_dt.strftime('%Y-%m-%d %H:%M:%S %Z'),
         "commit": commit,
         "push": push_output.splitlines()[-1] if push_output else "",

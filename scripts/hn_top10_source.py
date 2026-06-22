@@ -149,8 +149,9 @@ def item_summary(title: str, text: str) -> tuple[str, str]:
             'HN 讨论通常会延伸到主流计算技术长期以拉丁文字为默认前提，以及多语言排版支持的历史欠账。',
         )
     base = compact(text)[:260] if text else ''
-    content = base or '这篇文章讨论了一个具有现实意义的技术或社会议题，核心信息需要从原文的论点、例子、机制或结论中提取，而不是只停留在抽象评价上。若要进一步理解细节，仍可回到原文查看完整论证与上下文。'
-    comment = '评论区通常会补充原文没有展开的现实约束、反例、历史背景或适用边界。阅读这些讨论的价值，不在于看大家是否表态一致，而在于看哪些前提被质疑、哪些经验被拿来验证原文说法。'
+    topic = classify(title)
+    content = base or f'这条内容围绕“{title}”展开，当前自动化归档先保留标题、原文入口和 HN 讨论入口，适合按 {topic} 方向继续阅读原文。'
+    comment = f'HN 讨论可以作为补充视角：重点看读者如何质疑“{title}”背后的前提、实现边界和现实适用场景，而不是只看分数高低。'
     if not content.endswith('。'):
         content += '。'
     return content, comment
@@ -165,8 +166,7 @@ def build_item_payload(item: dict[str, Any], rank: int) -> dict[str, Any]:
     hn_link = f'https://news.ycombinator.com/item?id={item_id}' if item_id else ''
     topic = classify(title)
     source_text = strip_html(item.get('text', ''))
-    content_summary = source_text if source_text else '文章信息需从原文提取。'
-    comment_summary = ''
+    content_summary, comment_summary = item_summary(title, source_text)
     return {
         'rank': rank,
         'id': item_id,
