@@ -405,7 +405,16 @@ def build_podcast_section(raw: str) -> tuple[str, str]:
             )
     paragraphs = dedupe_paragraphs(paragraphs)
     if len(paragraphs) < 2:
-        return "", ""
+        if looks_truncated(summary) or looks_truncated(note) or any(looks_truncated(item) for item in highlights):
+            return "", ""
+        fallback_bits = [bit for bit in [heading, show, guest] if bit]
+        if not fallback_bits or not url:
+            return "", ""
+        fallback_subject = " / ".join(fallback_bits[:3])
+        paragraphs = [
+            f"这期内容围绕 {fallback_subject} 展开。当前上游笔记较短，归档层只保留已经给出的节目、嘉宾、日期、来源和链接，不额外编造访谈细节。",
+            "后续复盘时应优先回到原始播客或上游长文笔记补充技术观点、产品判断和产业背景；本段只作为可追溯归档摘要，避免把证据不足的内容写成确定结论。",
+        ]
 
     parts = [f"## {heading or show or '未命名播客'}", "", "### 基本信息", ""]
     if show:
