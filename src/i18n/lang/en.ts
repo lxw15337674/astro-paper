@@ -49,16 +49,12 @@ export default {
     closeImagePreview: "Close image preview",
   },
   home: {
-    socialLinks: "Social Links",
     featured: "Featured",
     recentPosts: "Recent Posts",
     allPosts: "All Posts",
     heroTitle: "bhwa233 Blog",
     intro:
       "A bilingual engineering blog about development, deployment, tooling, and long-term technical notes.",
-    introCtaPrefix: "Read the blog posts or check",
-    introCtaLabel: "README",
-    introCtaSuffix: "for more info.",
   },
   footer: {
     copyright: "Copyright",
