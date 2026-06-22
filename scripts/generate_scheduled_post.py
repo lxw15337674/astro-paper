@@ -11,6 +11,10 @@ from zoneinfo import ZoneInfo
 
 BJT = ZoneInfo("Asia/Shanghai")
 TASKS = ("hn-top10", "global-market-daily")
+TARGET_FILES = {
+    "hn-top10": "hackernews-{date}.md",
+    "global-market-daily": "全球市场日报-{date}.md",
+}
 
 
 def run(cmd: list[str], *, cwd: Path, input_text: str | None = None) -> str:
@@ -24,6 +28,26 @@ def run(cmd: list[str], *, cwd: Path, input_text: str | None = None) -> str:
 
 def repo_root_from_script() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def target_post_path(task: str, repo: Path, date: str) -> Path:
+    template = TARGET_FILES.get(task)
+    if not template:
+        raise ValueError(f"unsupported task: {task}")
+    return repo / "src/content/posts/zh-cn" / template.format(date=date)
+
+
+def skipped_existing_result(task: str, repo: Path, date: str) -> dict[str, object] | None:
+    post_path = target_post_path(task, repo, date)
+    if not post_path.exists():
+        return None
+    return {
+        "task": task,
+        "path": str(post_path.relative_to(repo)),
+        "created": False,
+        "skipped": True,
+        "reason": "target post already exists",
+    }
 
 
 def source_for_task(task: str, repo: Path, date: str) -> str:
@@ -63,6 +87,11 @@ def archive_task(task: str, repo: Path, date: str, source: str, *, dry_run: bool
 
 
 def generate(task: str, repo: Path, date: str, *, dry_run: bool, force: bool) -> dict[str, object]:
+    if not force:
+        skipped = skipped_existing_result(task, repo, date)
+        if skipped:
+            return skipped
+
     source = source_for_task(task, repo, date)
     result = archive_task(task, repo, date, source, dry_run=dry_run, force=force)
     result.setdefault("task", task)
