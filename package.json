@@ -11,7 +11,7 @@
     "preview": "astro preview",
     "sync": "astro sync",
     "astro": "astro",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "astro sync && tsc --noEmit",
     "test:blog": "node --import tsx --test tests/blog_generation.test.ts",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
