@@ -35,9 +35,11 @@ export type HnPayloadItem = {
 };
 
 const TOPIC_RULES: [RegExp, string][] = [
-  [/ai|openai|llm|model|anthropic|gemini|copilot/i, "AI / 模型"],
-  [/school|education|teacher|children|policy|government|id|internet traffic/i, "政策 / 社会议题"],
-  [/javascript|typescript|rust|biome|tooling|compiler|developer|code/i, "开发工具 / 编程语言"],
+  [/ai|openai|llm|model|anthropic|gemini|copilot|opus|glm/i, "AI / 模型"],
+  [/javascript|typescript|rust|biome|tooling|compiler|developer|code|deno|codex|inline assembly|lisp/i, "开发工具 / 编程语言"],
+  [/bond|market|investor|fca|trading/i, "金融 / 市场"],
+  [/photo|camera|image|wigglegram|stereo|gif/i, "图像 / 创意技术"],
+  [/school|education|teacher|children|policy|government|id|internet traffic|fraud/i, "政策 / 社会议题"],
   [/spacex|gpu|datacenter|load-balanced|systems|atproto|boston dynamics|robot|compression|printing/i, "基础设施 / 系统"],
 ];
 
