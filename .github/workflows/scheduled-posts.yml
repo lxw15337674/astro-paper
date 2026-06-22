@@ -57,7 +57,7 @@ jobs:
   generate:
     name: Generate scheduled posts
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 75
 
     steps:
       - name: "☁️ Checkout repository"

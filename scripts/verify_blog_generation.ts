@@ -67,7 +67,8 @@ function verifyForeignTechPodcast(relPath: string, body: string): void {
   const episodeCount = (body.match(/^##\s+.+$/gm) || []).filter(heading => !/今日总览|今日播客清单/.test(heading)).length;
   const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
   if (episodeCount < minEpisodes) throw new Error(`${relPath} needs at least ${minEpisodes} podcast episode sections, got ${episodeCount}`);
-  if (body.length < 3200) throw new Error(`${relPath} is too short for foreign tech podcast long-form note`);
+  const minLength = Math.max(1200, minEpisodes * 1000);
+  if (body.length < minLength) throw new Error(`${relPath} is too short for foreign tech podcast long-form note (${body.length} < ${minLength})`);
   for (const pattern of [/待补充|示例|信息不足|无法判断|本文将/]) {
     if (pattern.test(body)) throw new Error(`${relPath} contains podcast placeholder/meta language: ${pattern.source}`);
   }

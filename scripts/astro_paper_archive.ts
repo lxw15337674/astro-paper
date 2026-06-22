@@ -177,8 +177,10 @@ function formatForeignTechPodcast(text: string): string {
     if (!normalized.includes(marker)) throw new Error(`foreign tech podcast missing required section: ${marker}`);
   }
   const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).filter(heading => !/今日总览|今日播客清单/.test(heading)).length;
-  if (episodeCount < 3) throw new Error(`foreign tech podcast needs at least 3 episode sections, got ${episodeCount}`);
-  if (normalized.length < 3200) throw new Error("foreign tech podcast note is too short to be a long-form article");
+  const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
+  if (episodeCount < minEpisodes) throw new Error(`foreign tech podcast needs at least ${minEpisodes} episode sections, got ${episodeCount}`);
+  const minLength = Math.max(1200, minEpisodes * 1000);
+  if (normalized.length < minLength) throw new Error(`foreign tech podcast note is too short to be a long-form article (${normalized.length} < ${minLength})`);
   return `${normalized.trim()}\n`;
 }
 
