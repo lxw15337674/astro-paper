@@ -5,9 +5,10 @@ import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
 import { bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
+import { buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
 import { generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 
-const TASKS = ["hn-top10", "asia-market-daily", "crypto-market-daily", "us-market-daily"] as const;
+const TASKS = ["hn-top10", "asia-market-daily", "crypto-market-daily", "us-market-daily", "foreign-tech-podcast"] as const;
 type Task = (typeof TASKS)[number];
 
 const TASK_META: Record<Task, { titlePrefix: string; fileName: string; tags: string[] }> = {
@@ -15,6 +16,7 @@ const TASK_META: Record<Task, { titlePrefix: string; fileName: string; tags: str
   "asia-market-daily": { titlePrefix: "亚洲市场日报", fileName: "亚洲市场日报-{date}.md", tags: ["定时文章", "亚洲市场日报"] },
   "crypto-market-daily": { titlePrefix: "数字货币日报", fileName: "数字货币日报-{date}.md", tags: ["定时文章", "数字货币日报"] },
   "us-market-daily": { titlePrefix: "美股市场日报", fileName: "美股市场日报-{date}.md", tags: ["定时文章", "美股市场日报"] },
+  "foreign-tech-podcast": { titlePrefix: "海外科技访谈播客笔记", fileName: "海外科技播客-{date}.md", tags: ["定时文章", "海外科技播客"] },
 };
 
 type ResultItem = ReturnType<typeof archivePost> & {
@@ -69,6 +71,7 @@ async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): P
   if (task === "asia-market-daily") return generateAsiaMarketDaily(date);
   if (task === "us-market-daily") return generateUsMarketDaily(date);
   if (task === "crypto-market-daily") return generateCryptoMarketDaily();
+  if (task === "foreign-tech-podcast") return buildForeignTechPodcastSource(date);
   throw new Error(`unsupported task: ${task}`);
 }
 

@@ -62,7 +62,22 @@ function verifyNoPositiveDeclineLabel(relPath: string, body: string): void {
   }
 }
 
+function verifyForeignTechPodcast(relPath: string, body: string): void {
+  requireTerms(relPath, body, ["《今日国外热门科技访谈播客》", "## 今日总览", "## 今日播客清单", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"]);
+  const episodeCount = (body.match(/^##\s+.+$/gm) || []).filter(heading => !/今日总览|今日播客清单/.test(heading)).length;
+  const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
+  if (episodeCount < minEpisodes) throw new Error(`${relPath} needs at least ${minEpisodes} podcast episode sections, got ${episodeCount}`);
+  if (body.length < 3200) throw new Error(`${relPath} is too short for foreign tech podcast long-form note`);
+  for (const pattern of [/待补充|示例|信息不足|无法判断|本文将/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains podcast placeholder/meta language: ${pattern.source}`);
+  }
+}
+
 function verifyMarketSemantics(relPath: string, body: string, task: string): void {
+  if (task === "foreign-tech-podcast") {
+    verifyForeignTechPodcast(relPath, body);
+    return;
+  }
   verifyNoPositiveDeclineLabel(relPath, body);
   if (task === "asia-market-daily") {
     requireTerms(relPath, body, ["上证指数", "深证成指", "创业板指", "恒生指数", "国企指数", "恒生科技指数"]);

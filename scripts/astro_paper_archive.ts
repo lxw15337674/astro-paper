@@ -170,6 +170,18 @@ function formatMarketDaily(text: string): string {
   return `${ordered}\n`;
 }
 
+function formatForeignTechPodcast(text: string): string {
+  const normalized = normalizeMarkdown(text).replace(/\n---\n\n---\n/g, "\n\n---\n");
+  const required = ["《今日国外热门科技访谈播客》", "## 今日总览", "## 今日播客清单", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
+  for (const marker of required) {
+    if (!normalized.includes(marker)) throw new Error(`foreign tech podcast missing required section: ${marker}`);
+  }
+  const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).filter(heading => !/今日总览|今日播客清单/.test(heading)).length;
+  if (episodeCount < 3) throw new Error(`foreign tech podcast needs at least 3 episode sections, got ${episodeCount}`);
+  if (normalized.length < 3200) throw new Error("foreign tech podcast note is too short to be a long-form article");
+  return `${normalized.trim()}\n`;
+}
+
 function taskInfo(task: string): { titlePrefix: string; tag: string; description: string; fileName: string } {
   const tasks: Record<string, { titlePrefix: string; tag: string; description: string; fileName: string }> = {
     "hn-top10": {
@@ -196,6 +208,12 @@ function taskInfo(task: string): { titlePrefix: string; tag: string; description
       description: "每日美股市场日报，按完整常规收盘口径汇总主要指数与行业板块结构。",
       fileName: "美股市场日报-{date}.md",
     },
+    "foreign-tech-podcast": {
+      titlePrefix: "海外科技访谈播客笔记",
+      tag: "海外科技播客",
+      description: "每日海外科技访谈播客中文长文笔记，整理技术、产品、产业与职业判断。",
+      fileName: "海外科技播客-{date}.md",
+    },
   };
   const info = tasks[task];
   if (!info) throw new Error(`unsupported task: ${task}`);
@@ -209,7 +227,7 @@ export function archivePost({ task, date, repo, body, force }: { task: string; d
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title: `${info.titlePrefix}｜${date}`, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: [TOTAL_TAG, info.tag] };
   }
-  const formatted = task === "hn-top10" ? formatHnTop10(body) : { markdown: formatMarketDaily(body), ogImage: "" };
+  const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
   const title = `${info.titlePrefix}｜${date}`;
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
