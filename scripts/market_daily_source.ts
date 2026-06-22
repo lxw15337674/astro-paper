@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { CoinGeckoClient } from "coingecko-api-v3";
 import YahooFinance from "yahoo-finance2";
-import { bjtDateString, fetchJson, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, fetchJson, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 const coinGecko = new CoinGeckoClient({ timeout: 20_000, autoRetry: false });
@@ -62,18 +62,31 @@ type SectorRow = { symbol: string; name: string; pct: number; close: number };
 type CryptoCoin = { name: string; symbol: string; price: number; pct: number; marketCap: number; volume: number };
 
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
+type YahooChartPayload = {
+  chart?: {
+    result?: {
+      meta?: {
+        regularMarketPrice?: number;
+        chartPreviousClose?: number;
+        regularMarketVolume?: number;
+        regularMarketTime?: number;
+      };
+    }[];
+  };
+};
 
-type YahooSymbol = { symbol: string; code: string; name: string };
+type YahooSymbol = { symbol: string; code: string; name: string; sina?: string; sinaMarket?: "cn" | "hk" };
 
 const YAHOO_SYMBOLS = {
   aShare: [
-    { symbol: "000001.SS", code: "000001", name: "上证指数" },
-    { symbol: "399001.SZ", code: "399001", name: "深证成指" },
-    { symbol: "399006.SZ", code: "399006", name: "创业板指" },
+    { symbol: "000001.SS", code: "000001", name: "上证指数", sina: "sh000001", sinaMarket: "cn" },
+    { symbol: "399001.SZ", code: "399001", name: "深证成指", sina: "sz399001", sinaMarket: "cn" },
+    { symbol: "399006.SZ", code: "399006", name: "创业板指", sina: "sz399006", sinaMarket: "cn" },
   ],
   hk: [
-    { symbol: "^HSI", code: "HSI", name: "恒生指数" },
-    { symbol: "^HSCE", code: "HSCEI", name: "国企指数" },
+    { symbol: "^HSI", code: "HSI", name: "恒生指数", sina: "rt_hkHSI", sinaMarket: "hk" },
+    { symbol: "^HSCE", code: "HSCEI", name: "国企指数", sina: "rt_hkHSCEI", sinaMarket: "hk" },
+    { symbol: "HSTECH.HK", code: "HSTECH", name: "恒生科技指数", sina: "rt_hkHSTECH", sinaMarket: "hk" },
   ],
   us: [
     { symbol: "^DJI", code: "DJIA", name: "道指" },
@@ -81,6 +94,8 @@ const YAHOO_SYMBOLS = {
     { symbol: "^GSPC", code: "SPX", name: "标普500" },
   ],
 } satisfies Record<string, YahooSymbol[]>;
+
+const REQUIRED_ASIA_QUOTES = [...YAHOO_SYMBOLS.aShare, ...YAHOO_SYMBOLS.hk];
 
 function pct(value: unknown): string {
   const num = Number(value);
@@ -146,22 +161,83 @@ async function eastmoneyIndices(secids: string[]): Promise<QuoteRows> {
   return rows;
 }
 
-async function yahooQuote({ symbol, code, name }: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
-  const rows = (await yahooFinance.historical(symbol, { period1: offsetDateString(date, -21), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
-  const points = rows
-    .map(row => ({ close: Number(row.close), volume: Number(row.volume || 0), localDate: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : "" }))
-    .filter(point => Number.isFinite(point.close) && point.close > 0 && point.localDate && point.localDate <= date);
-  if (points.length < 2) return null;
-  const last = points.at(-1)!;
-  const prev = points.at(-2)!;
-  const change = last.close - prev.close;
-  const pctChange = (change / prev.close) * 100;
-  return [code, { f12: code, f14: name, f2: last.close, f3: pctChange, f4: change, f6: last.volume }];
+async function yahooChartQuote({ symbol, code, name }: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
+  const period1 = Math.floor(parseDate(offsetDateString(date, -7)).getTime() / 1000);
+  const period2 = Math.floor(parseDate(offsetDateString(date, 1)).getTime() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=history`;
+  const payload = await fetchJson<YahooChartPayload>(url, { timeoutMs: 20_000 });
+  const meta = payload.chart?.result?.[0]?.meta;
+  const close = Number(meta?.regularMarketPrice);
+  const previousClose = Number(meta?.chartPreviousClose);
+  const timestamp = Number(meta?.regularMarketTime || 0);
+  const localDate = timestamp ? new Date(timestamp * 1000).toISOString().slice(0, 10) : "";
+  if (!Number.isFinite(close) || !Number.isFinite(previousClose) || close <= 0 || previousClose <= 0 || !localDate || localDate > date) return null;
+  const change = close - previousClose;
+  return [code, { f12: code, f14: name, f2: close, f3: (change / previousClose) * 100, f4: change, f6: Number(meta?.regularMarketVolume || 0) }];
+}
+
+async function yahooQuote(symbolConfig: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
+  const { code, name } = symbolConfig;
+  try {
+    const rows = (await yahooFinance.historical(symbolConfig.symbol, { period1: offsetDateString(date, -21), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
+    const points = rows
+      .map(row => ({ close: Number(row.close), volume: Number(row.volume || 0), localDate: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : "" }))
+      .filter(point => Number.isFinite(point.close) && point.close > 0 && point.localDate && point.localDate <= date);
+    if (points.length >= 2) {
+      const last = points.at(-1)!;
+      const prev = points.at(-2)!;
+      const change = last.close - prev.close;
+      const pctChange = (change / prev.close) * 100;
+      return [code, { f12: code, f14: name, f2: last.close, f3: pctChange, f4: change, f6: last.volume }];
+    }
+  } catch {
+    // Some Greater China index symbols intermittently fail yahoo-finance2 schema validation.
+  }
+  return yahooChartQuote(symbolConfig, date).catch(() => null);
 }
 
 async function yahooQuotes(symbols: YahooSymbol[], date: string): Promise<QuoteRows> {
   const entries = await Promise.all(symbols.map(symbol => yahooQuote(symbol, date).catch(() => null)));
   return Object.fromEntries(entries.filter((entry): entry is [string, QuoteRow] => Boolean(entry)));
+}
+
+function parseSinaDate(value: string): string {
+  return value.replaceAll("/", "-");
+}
+
+function parseSinaRow(symbol: YahooSymbol, raw: string, date: string): [string, QuoteRow] | null {
+  const parts = raw.split(",");
+  if (symbol.sinaMarket === "cn") {
+    const previousClose = Number(parts[2]);
+    const close = Number(parts[3]);
+    const volume = Number(parts[8] || 0);
+    const rowDate = parseSinaDate(parts[30] || "");
+    if (!Number.isFinite(close) || !Number.isFinite(previousClose) || close <= 0 || previousClose <= 0 || rowDate !== date) return null;
+    const change = close - previousClose;
+    return [symbol.code, { f12: symbol.code, f14: symbol.name, f2: close, f3: (change / previousClose) * 100, f4: change, f6: volume }];
+  }
+  const close = Number(parts[6]);
+  const change = Number(parts[7]);
+  const pctChange = Number(parts[8]);
+  const volume = Number(parts[10] || 0);
+  const rowDate = parseSinaDate(parts[17] || "");
+  if (!Number.isFinite(close) || !Number.isFinite(pctChange) || close <= 0 || rowDate !== date) return null;
+  return [symbol.code, { f12: symbol.code, f14: symbol.name, f2: close, f3: pctChange, f4: change, f6: volume }];
+}
+
+async function sinaQuotes(symbols: YahooSymbol[], date: string): Promise<QuoteRows> {
+  const sinaSymbols = symbols.filter(symbol => symbol.sina);
+  if (!sinaSymbols.length) return {};
+  const url = `https://hq.sinajs.cn/list=${sinaSymbols.map(symbol => symbol.sina).join(",")}`;
+  const text = await fetchText(url, { timeoutMs: 20_000, headers: { Referer: "https://finance.sina.com.cn/" } });
+  const entries: [string, QuoteRow][] = [];
+  for (const symbol of sinaSymbols) {
+    const match = new RegExp(`var hq_str_${symbol.sina}="([^"]*)"`).exec(text);
+    if (!match) continue;
+    const parsed = parseSinaRow(symbol, match[1], date);
+    if (parsed) entries.push(parsed);
+  }
+  return Object.fromEntries(entries);
 }
 
 async function quoteRowsForDate(date: string, secids: string[]): Promise<QuoteRows> {
@@ -175,10 +251,13 @@ async function quoteRowsForDate(date: string, secids: string[]): Promise<QuoteRo
 
 async function quoteRowsWithFallback(date: string, secids: string[], yahooSymbols: YahooSymbol[]): Promise<QuoteRows> {
   const rows = await quoteRowsForDate(date, secids);
-  const missing = yahooSymbols.filter(symbol => isMissingQuote(byCode(rows, symbol.code)));
-  if (!missing.length) return rows;
-  const fallback = await yahooQuotes(missing, date);
-  return { ...rows, ...fallback };
+  const yahooMissing = yahooSymbols.filter(symbol => isMissingQuote(byCode(rows, symbol.code)));
+  const yahooFallback = yahooMissing.length ? await yahooQuotes(yahooMissing, date) : {};
+  const withYahoo = { ...rows, ...yahooFallback };
+  const sinaMissing = yahooSymbols.filter(symbol => isMissingQuote(byCode(withYahoo, symbol.code)));
+  if (!sinaMissing.length) return withYahoo;
+  const sinaFallback = await sinaQuotes(sinaMissing, date).catch(() => ({}));
+  return { ...withYahoo, ...sinaFallback };
 }
 
 async function eastmoneyBoards(fs: string, limit = 8): Promise<BoardRow[]> {
@@ -205,6 +284,11 @@ function byCode(rows: QuoteRows, code: string): QuoteRow {
 function isMissingQuote(row: QuoteRow): boolean {
   const value = row.f2;
   return value === undefined || value === null || value === "-" || value === 0 || Number.isNaN(Number(value));
+}
+
+function assertRequiredQuotes(rows: QuoteRows, required: YahooSymbol[], context: string): void {
+  const missing = required.filter(item => isMissingQuote(byCode(rows, item.code))).map(item => item.name);
+  if (missing.length) throw new Error(`${context}核心指数数据未完整获取，停止生成：${missing.join("、")}`);
 }
 
 function closedSection(key: EquityKey, title: string, text: string): MarketSection {
@@ -457,11 +541,14 @@ function buildSummary(sections: MarketSection[], scope: string): string {
 }
 
 export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<string> {
-  const rows = await quoteRowsWithFallback(
+  const fallbackRows = await quoteRowsWithFallback(
     date,
     [EASTMONEY_INDEX_SECS.sh, EASTMONEY_INDEX_SECS.sz, EASTMONEY_INDEX_SECS.cyb, EASTMONEY_INDEX_SECS.hsi, EASTMONEY_INDEX_SECS.hscei, EASTMONEY_INDEX_SECS.hstech],
-    [...YAHOO_SYMBOLS.aShare, ...YAHOO_SYMBOLS.hk],
+    REQUIRED_ASIA_QUOTES,
   );
+  const coreRows = isWeekday(date) ? await sinaQuotes(REQUIRED_ASIA_QUOTES, date) : {};
+  const rows = { ...fallbackRows, ...coreRows };
+  if (isWeekday(date)) assertRequiredQuotes(rows, REQUIRED_ASIA_QUOTES, "亚洲市场日报");
   const industryRows = isWeekday(date) ? await safeBoards("m:90+t:2", 20) : [];
   const sections = [buildAShareSection(rows, date, industryRows), buildHkSection(rows, date)];
   return `${[buildSummary(sections, "A股与港股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
