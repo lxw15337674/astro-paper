@@ -100,11 +100,7 @@ BTC/ETH 7日涨跌幅：BTC +3.20%、ETH -1.10%。
 ## 衍生品与情绪辅助
 
 BTC/ETH 衍生品辅助指标：BTC（CoinGecko Binance Futures）资金费率 +0.0100%，未平仓合约名义价值约 200.00亿美元；ETH（CoinGecko Binance Futures）资金费率 +0.0090%，未平仓合约名义价值约 100.00亿美元。
-市场情绪辅助指标：Fear & Greed Index 为 42（Fear），更新时间 2099-01-02T00:00:00Z。
-
-## 数据边界
-
-本篇采用公开聚合行情接口，覆盖全市场市值、成交量、BTC/ETH 占比、主流币与部分分类板块；增强数据在可用时补充全市场 24小时变化率、BTC/ETH 7日涨跌幅、主流合约资金费率、未平仓合约名义价值与情绪指数。分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响；衍生品指标采用单一交易所口径，未平仓合约名义价值使用美元计价估算，不代表全市场杠杆结构；情绪指数仅作辅助记录，不生成交易动作或资产配置结论。
+市场情绪辅助指标：Fear & Greed Index 为 42（Fear），更新时间 2099-01-02T00:00:00Z。上述衍生品与情绪指标仅作辅助记录，分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响，不生成交易动作或资产配置结论。
 `;
   const usBody = `## 总结
 
@@ -141,6 +137,7 @@ BTC/ETH 衍生品辅助指标：BTC（CoinGecko Binance Futures）资金费率 +
   assert.match(cryptoMarkdown, /全市场市值|总市值/);
   assert.match(cryptoMarkdown, /衍生品与情绪辅助/);
   assert.match(cryptoMarkdown, /BTC\/ETH 7日涨跌幅/);
+  assert.doesNotMatch(cryptoMarkdown, /^##\s*数据边界(?:说明)?\s*$/m);
   assert.match(usMarkdown, /title: "美股市场日报｜2099-01-02"/);
   assert.match(usMarkdown, /美股行业板块/);
   assert.match(podcastMarkdown, /title: "海外科技访谈播客笔记｜2099-01-02"/);

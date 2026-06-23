@@ -102,6 +102,7 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
       { label: "主流资产", pattern: /主流资产/ },
     ]);
     if (/数字货币当日未获取到可用公开市场数据/.test(body)) throw new Error(`${relPath} contains missing core crypto market data`);
+    if (/^##\s*数据边界(?:说明)?\s*$/m.test(body)) throw new Error(`${relPath} contains standalone crypto data-boundary section`);
   }
   if (task === "us-market-daily" && !/美股当日未产生完整常规收盘数据|美股当日未获取到完整常规收盘数据/.test(body)) {
     requireTerms(relPath, body, ["道指", "纳指", "标普500"]);
