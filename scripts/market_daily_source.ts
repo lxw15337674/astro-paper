@@ -350,12 +350,12 @@ function cryptoSevenDayLine(coins: CryptoCoin[]): string {
 
 function derivativesLine(rows: CryptoDerivativesRow[]): string {
   if (!rows.length) return "BTC/ETH 衍生品辅助指标：未获取到可用资金费率或未平仓合约名义价值；本篇不据此判断杠杆情绪。";
-  return `BTC/ETH 衍生品辅助指标（${rows[0].source}）：${rows
+  return `BTC/ETH 衍生品辅助指标：${rows
     .map(row => {
       const parts: string[] = [];
       if (row.fundingRate !== null) parts.push(`资金费率 ${finePct(row.fundingRate)}`);
       if (row.openInterestUsd !== null) parts.push(`未平仓合约名义价值约 ${usdYi(row.openInterestUsd)}`);
-      return `${row.symbol} ${parts.join("，")}`;
+      return `${row.symbol}（${row.source}）${parts.join("，")}`;
     })
     .join("；")}。`;
 }
@@ -565,8 +565,32 @@ async function binanceDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<Cry
   }
 }
 
+async function bybitDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<CryptoDerivativesRow | null> {
+  try {
+    const payload = await fetchJson<{ result?: { list?: { fundingRate?: string; openInterestValue?: string }[] } }>(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`, {
+      timeoutMs: 12_000,
+    });
+    const ticker = payload.result?.list?.[0];
+    const fundingRate = Number(ticker?.fundingRate);
+    const openInterestUsd = Number(ticker?.openInterestValue);
+    if (!Number.isFinite(fundingRate) && !Number.isFinite(openInterestUsd)) return null;
+    return {
+      symbol: symbol.replace("USDT", ""),
+      fundingRate: Number.isFinite(fundingRate) ? fundingRate * 100 : null,
+      openInterestUsd: Number.isFinite(openInterestUsd) ? openInterestUsd : null,
+      source: "Bybit USDT perpetual",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function derivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<CryptoDerivativesRow | null> {
+  return (await binanceDerivativesRow(symbol)) || (await bybitDerivativesRow(symbol));
+}
+
 async function cryptoDerivatives(): Promise<CryptoDerivativesRow[]> {
-  const rows = await Promise.all([binanceDerivativesRow("BTCUSDT"), binanceDerivativesRow("ETHUSDT")]);
+  const rows = await Promise.all([derivativesRow("BTCUSDT"), derivativesRow("ETHUSDT")]);
   return rows.filter((row): row is CryptoDerivativesRow => Boolean(row));
 }
 
