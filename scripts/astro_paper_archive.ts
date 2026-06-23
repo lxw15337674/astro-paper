@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { bjtTimestamp, compact, frontmatter, parseArgs, readStdin, repoRoot, stringArg, TOTAL_TAG, writeStderr, writeStdout } from "./blog_common.ts";
+import { assertNoHistoricalPodcastDuplicates } from "./foreign_tech_podcast_dedupe.ts";
 
 const HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg";
 const ARCHIVE_PAYLOAD_MARKER = "===ARCHIVE_PAYLOAD===";
@@ -252,6 +253,7 @@ export function archivePost({ task, date, repo, body, force }: { task: string; d
     return { task, path: relPath, title: `${info.titlePrefix}｜${date}`, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: [TOTAL_TAG, info.tag] };
   }
   const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
+  if (task === "foreign-tech-podcast") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
   const title = `${info.titlePrefix}｜${date}`;
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);

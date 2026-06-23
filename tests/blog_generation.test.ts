@@ -9,6 +9,7 @@ import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/a
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
+import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -72,6 +73,58 @@ test("foreign tech podcast source supports curated external episodes", async () 
     if (previousAudioTranscribe === undefined) delete process.env.PODCAST_AUDIO_TRANSCRIBE;
     else process.env.PODCAST_AUDIO_TRANSCRIBE = previousAudioTranscribe;
   }
+});
+
+test("foreign tech podcast filters episodes already archived on previous dates", async () => {
+  const postsDir = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-history-"));
+  fs.writeFileSync(
+    path.join(postsDir, "海外科技播客-2026-06-22.md"),
+    `---\ntitle: old\n---\n\n## The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life\n\n### 基本信息\n\n- **节目**：The Oprah Podcast\n- **日期**：2026-05-19\n- **链接**：https://podcasts.apple.com/us/podcast/the-co-founders-of-claude-ai-tell-oprah-about/id1782960381?i=1000768533274&utm_source=copy&uo=4\n`,
+  );
+  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
+  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
+  process.env.PODCAST_DISABLE_RSS = "true";
+  process.env.PODCAST_MIN_EPISODES = "3";
+  process.env.PODCAST_MAX_EPISODES = "3";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
+  process.env.PODCAST_HISTORY_POSTS_DIR = postsDir;
+  try {
+    const source = await buildForeignTechPodcastSource("2026-06-23");
+    assert.doesNotMatch(source, /The Oprah Podcast/);
+    assert.doesNotMatch(source, /The Co-Founders of Claude AI Tell Oprah/);
+    assert.match(source, /How Anthropic Uses Claude Fable 5 With Mike Krieger/);
+    assert.equal((source.match(/^### \d+\./gm) || []).length, 3);
+  } finally {
+    if (previousDisableRss === undefined) delete process.env.PODCAST_DISABLE_RSS;
+    else process.env.PODCAST_DISABLE_RSS = previousDisableRss;
+    if (previousMinEpisodes === undefined) delete process.env.PODCAST_MIN_EPISODES;
+    else process.env.PODCAST_MIN_EPISODES = previousMinEpisodes;
+    if (previousMaxEpisodes === undefined) delete process.env.PODCAST_MAX_EPISODES;
+    else process.env.PODCAST_MAX_EPISODES = previousMaxEpisodes;
+    if (previousAudioTranscribe === undefined) delete process.env.PODCAST_AUDIO_TRANSCRIBE;
+    else process.env.PODCAST_AUDIO_TRANSCRIBE = previousAudioTranscribe;
+    if (previousHistoryPostsDir === undefined) delete process.env.PODCAST_HISTORY_POSTS_DIR;
+    else process.env.PODCAST_HISTORY_POSTS_DIR = previousHistoryPostsDir;
+  }
+});
+
+test("foreign tech podcast archive rejects episodes already archived on previous dates", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-history-archive-"));
+  const postsDir = path.join(repo, "src/content/posts/zh-cn");
+  fs.mkdirSync(postsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(postsDir, "海外科技播客-2099-01-01.md"),
+    `---\ntitle: old\n---\n\n## Building Reliable AI Developer Platforms\n\n### 基本信息\n\n- **节目**：Latent Space\n- **日期**：2099-01-02\n- **链接**：https://example.com/podcast/dev-platforms?utm_medium=social\n`,
+  );
+  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/foreign-tech-podcast.md"), "utf8");
+  assert.throws(() => archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: fixture, force: true }), /already archived/);
+});
+
+test("foreign tech podcast URL fingerprints ignore common tracking parameters", () => {
+  assert.equal(normalizePodcastUrl("https://example.com/podcast/dev-platforms?utm_medium=social&uo=4&b=2&a=1#section"), "https://example.com/podcast/dev-platforms?a=1&b=2");
 });
 
 test("HN source payload carries original and comment evidence", () => {

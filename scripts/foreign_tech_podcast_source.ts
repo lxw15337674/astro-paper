@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { bjtDateString, compact, ensureDir, fetchText, parseArgs, repoRoot, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
+import { historicalPodcastFingerprints, podcastFingerprints } from "./foreign_tech_podcast_dedupe.ts";
 
 type FeedSource = {
   show: string;
@@ -25,6 +26,7 @@ type Episode = {
   imageUrl?: string;
   duration?: string;
   transcript?: string;
+  canonicalId?: string;
   curated?: boolean;
 };
 
@@ -43,6 +45,7 @@ type CuratedEpisodeInput = {
   imageUrl?: string;
   duration?: string;
   transcript?: string;
+  canonicalId?: string;
 };
 
 type CuratedEpisodesFile = {
@@ -198,6 +201,10 @@ function curatedEpisodesFile(): string {
   return process.env.PODCAST_CURATED_EPISODES_FILE || path.join(repoRoot(), "data/foreign-tech-podcast/curated-episodes.json");
 }
 
+function podcastHistoryPostsDir(): string {
+  return process.env.PODCAST_HISTORY_POSTS_DIR || path.join(repoRoot(), "src/content/posts/zh-cn");
+}
+
 function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
   const title = stripHtml(input.title || "");
   const description = stripHtml(input.description || "");
@@ -218,6 +225,7 @@ function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
     imageUrl: input.imageUrl,
     duration: input.duration,
     transcript: input.transcript ? compact(input.transcript) : undefined,
+    canonicalId: input.canonicalId,
     curated: true,
   };
 }
@@ -259,14 +267,21 @@ async function fetchRssEpisodes(date: string): Promise<Episode[]> {
 async function fetchEpisodes(date: string): Promise<Episode[]> {
   const curated = loadCuratedEpisodes(date);
   const rss = await fetchRssEpisodes(date);
-  const seen = new Set<string>();
+  const seen = historicalPodcastFingerprints(podcastHistoryPostsDir(), date);
   const unique: Episode[] = [];
+  let skipped = 0;
   for (const episode of [...curated, ...rss]) {
-    const key = `${episode.link || episode.guid || episode.title}`.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const fingerprints = podcastFingerprints(episode);
+    const duplicate = fingerprints.find(fingerprint => seen.has(fingerprint));
+    if (duplicate) {
+      skipped += 1;
+      writeStderr(`skipping previously archived podcast: ${episode.title}`);
+      continue;
+    }
+    for (const fingerprint of fingerprints) seen.set(fingerprint, { ...episode, file: `candidate:${date}` });
     unique.push(episode);
   }
+  if (skipped) writeStderr(`skipped ${skipped} duplicate podcast episode(s) already present in archive history`);
   const curatedCount = unique.filter(episode => episode.curated).length;
   const limit = Math.max(maxEpisodes(), curatedCount);
   return unique.slice(0, limit);
@@ -398,6 +413,7 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
       `- 链接：${episode.link}`,
       episode.imageUrl ? `- 图片：${episode.imageUrl}` : "",
       episode.duration ? `- 时长：${episode.duration}` : "",
+      episode.canonicalId ? `- canonicalId：${episode.canonicalId}` : "",
       episode.audioUrl ? `- 音频：${episode.audioUrl}` : "- 音频：未提供；本条目不做 Whisper 转写",
       `- Show notes：${episode.description}`,
     ].filter(Boolean);
