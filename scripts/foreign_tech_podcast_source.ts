@@ -397,7 +397,7 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
   lines.push(
     "## 写作边界",
     "",
-    "- 这是基于播客音频转写文本或外部精选元数据的中文长文笔记，不是新闻快讯。需要有总览、有清单、有每期节目独立小节。",
+    "- 这是基于播客音频转写文本或外部精选元数据的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
     "- 若 transcript、show notes 或 curated 条目没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
     "- 每条分析必须能回到 transcript、show notes、curated 元数据或链接信息，不得假装读过未提供的内容。",
     "- 不要生成投资建议、产品购买建议或夸张标题。",
