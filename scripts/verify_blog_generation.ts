@@ -69,11 +69,30 @@ function verifyNoPositiveDeclineLabel(relPath: string, body: string): void {
   }
 }
 
+function normalizedPodcastBlocks(body: string): string[] {
+  return body
+    .split(/\n{2,}/)
+    .map(block => block.replace(/^[-*]\s+/gm, "").replace(/\s+/g, " ").trim())
+    .filter(block => block.length >= 80 && !block.startsWith("---") && !block.startsWith("《"));
+}
+
+function verifyNoRepeatedPodcastContent(relPath: string, body: string): void {
+  const headings = (body.match(/^##\s+(.+)$/gm) || []).map(heading => heading.replace(/^##\s+/, "").trim().toLowerCase());
+  const duplicateHeading = headings.find((heading, index) => headings.indexOf(heading) !== index);
+  if (duplicateHeading) throw new Error(`${relPath} contains duplicate podcast episode heading: ${duplicateHeading}`);
+  const seen = new Set<string>();
+  for (const block of normalizedPodcastBlocks(body)) {
+    if (seen.has(block)) throw new Error(`${relPath} contains repeated podcast summary content: ${block.slice(0, 80)}`);
+    seen.add(block);
+  }
+}
+
 function verifyForeignTechPodcast(relPath: string, body: string): void {
   requireTerms(relPath, body, ["《今日国外热门科技访谈播客》", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"]);
   for (const marker of ["## 今日总览", "## 今日播客清单"]) {
     if (body.includes(marker)) throw new Error(`${relPath} contains forbidden podcast section: ${marker}`);
   }
+  verifyNoRepeatedPodcastContent(relPath, body);
   const episodeCount = (body.match(/^##\s+.+$/gm) || []).length;
   const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
   if (episodeCount < minEpisodes) throw new Error(`${relPath} needs at least ${minEpisodes} podcast episode sections, got ${episodeCount}`);

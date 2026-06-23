@@ -50,13 +50,21 @@ type CuratedEpisodesFile = {
   dates?: Record<string, CuratedEpisodeInput[]>;
 };
 
-const FEEDS: FeedSource[] = [
+export const FEEDS: FeedSource[] = [
   { show: "a16z Podcast", source: "Andreessen Horowitz", url: "https://feeds.simplecast.com/JGE3yC0V" },
   { show: "Decoder", source: "The Verge", url: "https://feeds.megaphone.fm/recodedecode" },
   { show: "Practical AI", source: "Changelog Media", url: "https://changelog.com/practicalai/feed" },
   { show: "Big Technology Podcast", source: "Big Technology", url: "https://feeds.simplecast.com/4T39_jAj" },
   { show: "The Cognitive Revolution", source: "Turpentine", url: "https://feeds.megaphone.fm/LSHML4766177163" },
   { show: "Training Data", source: "Sequoia Capital", url: "https://feeds.simplecast.com/5tQpR8G8" },
+  { show: "Software Engineering Daily", source: "Software Engineering Daily", url: "https://softwareengineeringdaily.com/feed/podcast/" },
+  { show: "Software Engineering Radio", source: "IEEE Computer Society", url: "https://rss.libsyn.com/shows/21070/destinations/23379.xml" },
+  { show: "Oxide and Friends", source: "Oxide Computer Company", url: "https://feeds.transistor.fm/oxide-and-friends" },
+  { show: "The InfoQ Podcast", source: "InfoQ", url: "https://feeds.soundcloud.com/users/soundcloud:users:215740450/sounds.rss" },
+  { show: "Changelog Interviews", source: "Changelog Media", url: "https://changelog.com/podcast/feed" },
+  { show: "The Data Engineering Show", source: "Firebolt", url: "https://feeds.fame.so/the-data-engineering-show" },
+  { show: "Dwarkesh Podcast", source: "Dwarkesh Patel", url: "https://apple.dwarkesh-podcast.workers.dev/feed.rss" },
+  { show: "Gradient Dissent", source: "Weights & Biases", url: "https://feeds.captivate.fm/gradient-dissent/" },
 ];
 
 function envNumber(name: string, fallback: number): number {
@@ -114,27 +122,49 @@ function daysBetween(a: string, b: string): number {
 
 function scoreEpisode(episode: Episode): number {
   const text = `${episode.show} ${episode.title} ${episode.description}`.toLowerCase();
-  const terms = [
-    "ai",
-    "agent",
-    "agents",
-    "llm",
-    "model",
-    "infrastructure",
-    "developer",
-    "software",
-    "startup",
-    "founder",
-    "ceo",
-    "cto",
-    "interview",
-    "data center",
-    "cloud",
-    "security",
-    "product",
-    "engineering",
+  const weightedTerms: [string, number][] = [
+    ["interview", 3],
+    ["conversation", 3],
+    ["with ", 2],
+    ["engineer", 3],
+    ["engineering", 3],
+    ["developer", 2],
+    ["software", 2],
+    ["architecture", 2],
+    ["infrastructure", 2],
+    ["platform", 2],
+    ["data engineering", 3],
+    ["developer tools", 3],
+    ["open source", 2],
+    ["security", 2],
+    ["ai", 1],
+    ["agent", 2],
+    ["agents", 2],
+    ["llm", 2],
+    ["model", 1],
+    ["researcher", 2],
+    ["founder", 2],
+    ["ceo", 1],
+    ["cto", 2],
+    ["product", 1],
+    ["cloud", 1],
+    ["data center", 2],
   ];
-  return terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
+  const penalties: [string, number][] = [
+    ["daily brief", 3],
+    ["news roundup", 3],
+    ["weekly update", 2],
+    ["solo episode", 1],
+    ["trailer", 3],
+  ];
+  const positive = weightedTerms.reduce((score, [term, weight]) => score + (text.includes(term) ? weight : 0), 0);
+  const negative = penalties.reduce((score, [term, weight]) => score + (text.includes(term) ? weight : 0), 0);
+  const showBonus = ["software engineering daily", "software engineering radio", "oxide and friends", "infoq", "changelog", "data engineering show", "dwarkesh", "gradient dissent"].some(show =>
+    episode.show.toLowerCase().includes(show),
+  )
+    ? 2
+    : 0;
+  return positive + showBonus - negative;
 }
 
 function maxEpisodes(): number {

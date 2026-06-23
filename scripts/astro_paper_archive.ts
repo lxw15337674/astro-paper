@@ -170,6 +170,24 @@ function formatMarketDaily(text: string): string {
   return `${ordered}\n`;
 }
 
+function normalizedPodcastBlocks(markdown: string): string[] {
+  return markdown
+    .split(/\n{2,}/)
+    .map(block => block.replace(/^[-*]\s+/gm, "").replace(/\s+/g, " ").trim())
+    .filter(block => block.length >= 80 && !block.startsWith("---") && !block.startsWith("《"));
+}
+
+function rejectRepeatedPodcastContent(markdown: string): void {
+  const headings = (markdown.match(/^##\s+(.+)$/gm) || []).map(heading => heading.replace(/^##\s+/, "").trim().toLowerCase());
+  const duplicateHeading = headings.find((heading, index) => headings.indexOf(heading) !== index);
+  if (duplicateHeading) throw new Error(`foreign tech podcast contains duplicate episode heading: ${duplicateHeading}`);
+  const seen = new Set<string>();
+  for (const block of normalizedPodcastBlocks(markdown)) {
+    if (seen.has(block)) throw new Error(`foreign tech podcast contains repeated summary content: ${block.slice(0, 80)}`);
+    seen.add(block);
+  }
+}
+
 function formatForeignTechPodcast(text: string): string {
   const normalized = normalizeMarkdown(text).replace(/\n---\n\n---\n/g, "\n\n---\n");
   const required = ["《今日国外热门科技访谈播客》", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
@@ -179,6 +197,7 @@ function formatForeignTechPodcast(text: string): string {
   for (const marker of ["## 今日总览", "## 今日播客清单"]) {
     if (normalized.includes(marker)) throw new Error(`foreign tech podcast contains forbidden section: ${marker}`);
   }
+  rejectRepeatedPodcastContent(normalized);
   const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).length;
   const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
   if (episodeCount < minEpisodes) throw new Error(`foreign tech podcast needs at least ${minEpisodes} episode sections, got ${episodeCount}`);

@@ -62,6 +62,9 @@ Reader expectation:
 ### Source builder
 - Script: `scripts/foreign_tech_podcast_source.ts`
 - RSS feeds: hard-coded interview/deep-discussion podcast feeds with audio enclosures.
+  - Current base pool includes AI/product sources such as a16z, Decoder, Practical AI, Big Technology, The Cognitive Revolution, and Training Data.
+  - Engineering/interview expansion includes Software Engineering Daily, Software Engineering Radio, Oxide and Friends, The InfoQ Podcast, Changelog Interviews, The Data Engineering Show, Dwarkesh Podcast, and Gradient Dissent.
+  - Do not mix in generic news brief / daily AI roundup / marketing podcasts unless the user explicitly changes the content direction.
 - Curated external entries: `data/foreign-tech-podcast/curated-episodes.json`
 - Transcription: local Whisper for entries with audio URLs.
 - Curated entries without audio are allowed only when they include useful metadata/show notes; they must be marked as non-transcribed evidence.
@@ -110,7 +113,9 @@ The generated article should usually:
 ### Structure expectations
 Exact headings may vary by article, but the generated post should still have a recognizably structured note-like form rather than a loose text dump.
 
-The archive layer should preserve that structure, not flatten it.
+The article must not include `## 今日总览` or `## 今日播客清单`; it should start with `《今日国外热门科技访谈播客》` and then go directly into episode sections.
+
+The archive layer should preserve that structure, not flatten it. It should reject duplicate episode headings and repeated long summary blocks so the article does not contain copied podcast summaries.
 
 ## Repo Files and Responsibilities
 
@@ -129,7 +134,7 @@ This skill should document the repo-owned GitHub Actions chain.
 - source builder / curated JSON -> select episodes and assemble evidence;
 - AI prompt -> turn evidence into long-form Chinese notes;
 - Astro archive layer -> save it as a valid post in the content tree;
-- verifier/build -> reject shallow, malformed, or placeholder output.
+- verifier/build -> reject shallow, malformed, duplicated, or placeholder output.
 
 ## Editing Strategy
 
@@ -142,6 +147,7 @@ This skill should document the repo-owned GitHub Actions chain.
 ### Change the prompt when
 - the article is too short or too chat-like;
 - the structure is too weak before archival;
+- the note repeats the same summary across `一句话总结`, `Highlights`, and `长文笔记`;
 - the note fails to capture meaningful takeaways.
 
 ### Change the archive layer when

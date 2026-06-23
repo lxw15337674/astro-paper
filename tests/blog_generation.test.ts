@@ -7,7 +7,7 @@ import test from "node:test";
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
-import { buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
+import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 
@@ -28,6 +28,18 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
+});
+
+test("foreign tech podcast source includes technical interview feeds", () => {
+  const feeds = new Map(FEEDS.map(feed => [feed.show, feed.url]));
+  assert.equal(feeds.get("Software Engineering Daily"), "https://softwareengineeringdaily.com/feed/podcast/");
+  assert.equal(feeds.get("Software Engineering Radio"), "https://rss.libsyn.com/shows/21070/destinations/23379.xml");
+  assert.equal(feeds.get("Oxide and Friends"), "https://feeds.transistor.fm/oxide-and-friends");
+  assert.equal(feeds.get("The InfoQ Podcast"), "https://feeds.soundcloud.com/users/soundcloud:users:215740450/sounds.rss");
+  assert.equal(feeds.get("Changelog Interviews"), "https://changelog.com/podcast/feed");
+  assert.equal(feeds.get("The Data Engineering Show"), "https://feeds.fame.so/the-data-engineering-show");
+  assert.equal(feeds.get("Dwarkesh Podcast"), "https://apple.dwarkesh-podcast.workers.dev/feed.rss");
+  assert.equal(feeds.get("Gradient Dissent"), "https://feeds.captivate.fm/gradient-dissent/");
 });
 
 test("foreign tech podcast source supports curated external episodes", async () => {
@@ -181,6 +193,17 @@ BTC/ETH 衍生品辅助指标：BTC（CoinGecko Binance Futures）资金费率 +
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [hn, asia, crypto, us, podcast] }));
   assert.equal(verifyResultJson(repo, resultJson), 5);
+});
+
+test("foreign tech podcast rejects repeated summaries", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-repeat-"));
+  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/foreign-tech-podcast.md"), "utf8");
+  const repeatedParagraph = "这期节目最值得记录的地方，是它把 AI 编程工具从个人效率叙事里拽了出来。过去讨论 coding assistant，经常停留在“写得快不快”“补全准不准”；但一旦 agent 能持续提交变更，真正麻烦的问题就变成：这些变更如何进入代码库，谁来审核，出了问题如何回滚，以及平台怎样判断一批机器生成代码是否超过组织承载能力。";
+  assert.throws(() => archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: `${fixture}\n\n${repeatedParagraph}\n`, force: true }), /repeated summary content/);
+  assert.throws(
+    () => archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: fixture.replace("## Data Centers, Energy, and the AI Infrastructure Stack", "## Building Reliable AI Developer Platforms"), force: true }),
+    /duplicate episode heading/,
+  );
 });
 
 test("market verifier rejects semantic drift in generated posts", () => {
