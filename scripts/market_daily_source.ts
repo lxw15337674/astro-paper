@@ -63,6 +63,7 @@ type CryptoCoin = { name: string; symbol: string; price: number; pct: number; pc
 type CryptoGlobal = { marketCap: number; volume: number; btcDominance: number; ethDominance: number; marketCapChange24h: number | null };
 type CryptoDerivativesRow = { symbol: string; fundingRate: number | null; openInterestUsd: number | null; source: string };
 type FearGreedIndex = { value: number; label: string; updatedAt: string };
+type CryptoDerivativeSymbol = "BTCUSDT" | "ETHUSDT";
 
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
 type YahooChartPayload = {
@@ -545,7 +546,33 @@ async function cryptoFearGreedIndex(): Promise<FearGreedIndex | null> {
   }
 }
 
-async function binanceDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<CryptoDerivativesRow | null> {
+async function coinGeckoDerivativesRows(): Promise<CryptoDerivativesRow[]> {
+  try {
+    const payload = await fetchJson<{ tickers?: { symbol?: string; funding_rate?: number; open_interest_usd?: number }[] }>(
+      "https://api.coingecko.com/api/v3/derivatives/exchanges/binance_futures?include_tickers=unexpired",
+      { timeoutMs: 20_000 },
+    );
+    const tickers = payload.tickers || [];
+    return (["BTCUSDT", "ETHUSDT"] as const)
+      .map(symbol => {
+        const ticker = tickers.find(row => row.symbol === symbol);
+        const fundingRate = Number(ticker?.funding_rate);
+        const openInterestUsd = Number(ticker?.open_interest_usd);
+        if (!Number.isFinite(fundingRate) && !Number.isFinite(openInterestUsd)) return null;
+        return {
+          symbol: symbol.replace("USDT", ""),
+          fundingRate: Number.isFinite(fundingRate) ? fundingRate : null,
+          openInterestUsd: Number.isFinite(openInterestUsd) ? openInterestUsd : null,
+          source: "CoinGecko Binance Futures",
+        };
+      })
+      .filter((row): row is CryptoDerivativesRow => Boolean(row));
+  } catch {
+    return [];
+  }
+}
+
+async function binanceDerivativesRow(symbol: CryptoDerivativeSymbol): Promise<CryptoDerivativesRow | null> {
   try {
     const [premium, openInterestRows] = await Promise.all([
       fetchJson<{ lastFundingRate?: string }>(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`, { timeoutMs: 12_000 }),
@@ -565,7 +592,7 @@ async function binanceDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<Cry
   }
 }
 
-async function bybitDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<CryptoDerivativesRow | null> {
+async function bybitDerivativesRow(symbol: CryptoDerivativeSymbol): Promise<CryptoDerivativesRow | null> {
   try {
     const payload = await fetchJson<{ result?: { list?: { fundingRate?: string; openInterestValue?: string }[] } }>(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`, {
       timeoutMs: 12_000,
@@ -585,13 +612,19 @@ async function bybitDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<Crypt
   }
 }
 
-async function derivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<CryptoDerivativesRow | null> {
+async function derivativesRow(symbol: CryptoDerivativeSymbol): Promise<CryptoDerivativesRow | null> {
   return (await binanceDerivativesRow(symbol)) || (await bybitDerivativesRow(symbol));
 }
 
 async function cryptoDerivatives(): Promise<CryptoDerivativesRow[]> {
-  const rows = await Promise.all([derivativesRow("BTCUSDT"), derivativesRow("ETHUSDT")]);
-  return rows.filter((row): row is CryptoDerivativesRow => Boolean(row));
+  const coinGeckoRows = await coinGeckoDerivativesRows();
+  const fallbackRows = await Promise.all(([
+    "BTCUSDT",
+    "ETHUSDT",
+  ] as const)
+    .filter(symbol => !coinGeckoRows.some(row => row.symbol === symbol.replace("USDT", "")))
+    .map(symbol => derivativesRow(symbol)));
+  return [...coinGeckoRows, ...fallbackRows.filter((row): row is CryptoDerivativesRow => Boolean(row))];
 }
 
 async function cryptoCategories(): Promise<BoardRow[]> {
