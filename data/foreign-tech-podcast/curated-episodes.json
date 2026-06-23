@@ -1,0 +1,46 @@
+{
+  "episodes": [
+    {
+      "archiveDate": "2026-06-23",
+      "title": "Inside the Mind of Anthropic CEO Dario Amodei | The Circuit | Extended Interview",
+      "show": "The Circuit / Bloomberg Originals",
+      "source": "Bloomberg Originals（YouTube）",
+      "guest": "Dario Amodei",
+      "date": "2026-06-17",
+      "link": "https://www.youtube.com/watch?v=x2VHFgyawPE",
+      "imageUrl": "https://i.ytimg.com/vi/x2VHFgyawPE/hqdefault.jpg",
+      "description": "Bloomberg Originals 的 The Circuit 长访谈，围绕 Anthropic CEO Dario Amodei 对 AI 产品化、企业落地、算力约束、国家安全、模型风险与公司治理的讨论。该条目作为外部精选来源收录；如未提供 transcript，只能依据标题、来源、链接和本说明写作。"
+    },
+    {
+      "archiveDate": "2026-06-23",
+      "title": "How Anthropic Uses Claude Fable 5 With Mike Krieger",
+      "show": "AI & I",
+      "source": "Apple Podcasts",
+      "guest": "Mike Krieger",
+      "date": "2026-06-17",
+      "link": "https://podcasts.apple.com/us/podcast/ai-i/id1719789201",
+      "description": "AI & I 对 Mike Krieger 的访谈，主题围绕 Anthropic 内部如何使用 Claude、强模型对产品团队工作流、软件构建、验证机制、架构与组织节奏的影响。该条目来自 Apple Podcasts 外部精选；如未提供 transcript，只能依据元数据与本说明写作。"
+    },
+    {
+      "archiveDate": "2026-06-23",
+      "title": "Building the Infrastructure for ASI | Ganesh Krishnan | Ep. 219",
+      "show": "Localization Fireside Chat",
+      "source": "YouTube",
+      "guest": "Ganesh Krishnan",
+      "date": "2026-06-23",
+      "link": "https://www.youtube.com/watch?v=H8M47RYi024",
+      "imageUrl": "https://i.ytimg.com/vi/H8M47RYi024/hqdefault.jpg",
+      "description": "Localization Fireside Chat 第 219 期，主题是 ASI 基础设施，涉及算力供给、系统编排、资本开支、资源调度、数据中心与把大规模 AI 能力稳定运行起来的工程现实。该条目作为 YouTube 外部精选来源收录。"
+    },
+    {
+      "archiveDate": "2026-06-23",
+      "title": "Most of the Web Will Never Get APIs for AI Agents | Dhruv Batra",
+      "show": "Chain of Thought | AI Agents, Infrastructure & Engineering",
+      "source": "Apple Podcasts",
+      "guest": "Dhruv Batra",
+      "date": "2026-06-19",
+      "link": "https://podcasts.apple.com/us/podcast/chain-of-thought-ai-agents-infrastructure-engineering/id1776879655",
+      "description": "Chain of Thought 关于 AI agents、基础设施与工程的访谈，讨论多数网页和传统系统不会为 AI agent 提供专用 API，agent 需要在现有网页、人类界面和旧系统中完成观察、规划、执行与失败回退。该条目来自 Apple Podcasts 外部精选。"
+    }
+  ]
+}

@@ -24,11 +24,16 @@ Do **not** treat this file as the single source of truth for each pipeline's det
 
 ### 2. Foreign Tech Podcast
 - Skill: `skills/software-development/astro-paper-foreign-tech-podcast-cron/SKILL.md`
-- Key downstream entrypoint:
-  - `scripts/run_archive_from_stdin.py --task foreign-tech-podcast`
-- Cron jobs:
-  - upstream: `c771b111d8e8` — `daily-global-tech-podcast-markdown`
-  - downstream: `9f9bc5f373fc` — `foreign-tech-podcast-astro-archive`
+- Primary entrypoint:
+  - `.github/workflows/scheduled-posts.yml` with `task=foreign-tech-podcast`
+- Key scripts/data:
+  - `scripts/foreign_tech_podcast_source.ts`
+  - `data/foreign-tech-podcast/curated-episodes.json`
+  - `prompts/blog/foreign-tech-podcast.md`
+  - `scripts/astro_paper_archive.ts`
+  - `scripts/verify_blog_generation.ts`
+- Schedule:
+  - `30 1 * * *` UTC / 09:30 Asia/Shanghai
 
 ### 3. Morning Market
 - Skill: `skills/software-development/astro-paper-morning-market-cron/SKILL.md`
@@ -71,7 +76,7 @@ Use this procedure when the goal is to stop all blog-oriented scheduled publishi
 
 ### Intentionally excluded from the pause set
 - `95d01fa1f5c7` — weather brief; not a blog pipeline
-- `c771b111d8e8` / `9f9bc5f373fc` — foreign-tech-podcast chain; keep running unless the user explicitly wants podcast publishing paused too
+- GitHub Actions `Scheduled posts` / `foreign-tech-podcast` — podcast publishing chain; keep running unless the user explicitly wants podcast publishing paused too
 - `404c8660ee38` — weekly recommendation upstream digest; pause only if the user wants the source brief itself stopped, not just the Astro publishing leg
 
 ### Operational rule

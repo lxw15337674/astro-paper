@@ -106,16 +106,23 @@ Architecture note:
 Purpose:
 - publish a daily Chinese long-form tech podcast note into Astro.
 
-Jobs:
-- upstream: `c771b111d8e8` — `daily-global-tech-podcast-markdown`
-- downstream: `9f9bc5f373fc` — `foreign-tech-podcast-astro-archive`
+Primary pipeline:
+- GitHub Actions workflow: `.github/workflows/scheduled-posts.yml`
+- scheduled task: `foreign-tech-podcast` at `30 1 * * *` UTC (09:30 Asia/Shanghai)
+- manual dispatch input: `task=foreign-tech-podcast`
 
 Implementation split:
-- upstream job produces the article markdown body;
-- downstream archive consumes the body via `scripts/run_archive_from_stdin.py --task foreign-tech-podcast` and persists it into Astro.
+- source collection: `scripts/foreign_tech_podcast_source.ts`
+- curated external entries: `data/foreign-tech-podcast/curated-episodes.json`
+- prompt contract: `prompts/blog/foreign-tech-podcast.md`
+- archive write: `scripts/astro_paper_archive.ts`
+- contract verification: `scripts/verify_blog_generation.ts`
 
 Architecture note:
-- this chain is blog-oriented but stylistically distinct: upstream owns the long-form note quality, while downstream owns archival correctness.
+- GitHub Actions is the source-of-truth publishing path for this repo.
+- The source builder first reads repository-curated YouTube / Apple Podcasts / external selected entries, then fills from RSS feeds and local Whisper transcripts when audio enclosures are available.
+- Curated entries without audio are allowed, but must carry useful metadata/show notes and are explicitly marked as non-transcribed evidence so the AI cannot pretend to have heard the full episode.
+- Older Hermes two-step notes (`daily-global-tech-podcast-markdown` → `foreign-tech-podcast-astro-archive`) are historical context, not the current repo-owned main path.
 
 ### 3. Morning Market
 Purpose:
@@ -239,7 +246,7 @@ This means the default pause set currently includes:
 
 By default it excludes:
 - `95d01fa1f5c7` — weather brief
-- `c771b111d8e8` / `9f9bc5f373fc` — foreign-tech podcast chain unless the user explicitly wants that blog class paused too
+- GitHub Actions `Scheduled posts` / `foreign-tech-podcast` — podcast publishing chain unless the user explicitly wants that blog class paused too
 - `404c8660ee38` — weekly recommendation upstream source unless the user wants the source-digest leg stopped in addition to the Astro publishing leg
 
 ## Verification workflow

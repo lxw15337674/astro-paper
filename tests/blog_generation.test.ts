@@ -7,6 +7,7 @@ import test from "node:test";
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
+import { buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 
@@ -27,6 +28,32 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
+});
+
+test("foreign tech podcast source supports curated external episodes", async () => {
+  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
+  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  process.env.PODCAST_DISABLE_RSS = "true";
+  process.env.PODCAST_MIN_EPISODES = "4";
+  process.env.PODCAST_MAX_EPISODES = "4";
+  try {
+    const source = await buildForeignTechPodcastSource("2026-06-23");
+    assert.match(source, /Bloomberg Originals/);
+    assert.match(source, /Apple Podcasts/);
+    assert.match(source, /YouTube/);
+    assert.match(source, /Dario Amodei/);
+    assert.match(source, /未提供 transcript/);
+    assert.match(source, /不得假装听过完整音频/);
+    assert.doesNotMatch(source, /a16z\.simplecast\.com/);
+  } finally {
+    if (previousDisableRss === undefined) delete process.env.PODCAST_DISABLE_RSS;
+    else process.env.PODCAST_DISABLE_RSS = previousDisableRss;
+    if (previousMinEpisodes === undefined) delete process.env.PODCAST_MIN_EPISODES;
+    else process.env.PODCAST_MIN_EPISODES = previousMinEpisodes;
+    if (previousMaxEpisodes === undefined) delete process.env.PODCAST_MAX_EPISODES;
+    else process.env.PODCAST_MAX_EPISODES = previousMaxEpisodes;
+  }
 });
 
 test("HN source payload carries original and comment evidence", () => {

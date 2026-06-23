@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { bjtDateString, compact, ensureDir, fetchText, parseArgs, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, compact, ensureDir, fetchText, parseArgs, repoRoot, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
 
 type FeedSource = {
   show: string;
@@ -21,7 +21,31 @@ type Episode = {
   pubDate: string;
   date: string;
   description: string;
+  guest?: string;
+  imageUrl?: string;
   transcript?: string;
+  curated?: boolean;
+};
+
+type CuratedEpisodeInput = {
+  archiveDate?: string;
+  show?: string;
+  source?: string;
+  title?: string;
+  link?: string;
+  audioUrl?: string;
+  guid?: string;
+  pubDate?: string;
+  date?: string;
+  description?: string;
+  guest?: string;
+  imageUrl?: string;
+  transcript?: string;
+};
+
+type CuratedEpisodesFile = {
+  episodes?: CuratedEpisodeInput[];
+  dates?: Record<string, CuratedEpisodeInput[]>;
 };
 
 const FEEDS: FeedSource[] = [
@@ -126,8 +150,53 @@ function maxWindowDays(): number {
 function transcriptChars(): number {
   return envNumber("PODCAST_TRANSCRIPT_CHARS", 10_000);
 }
+function rssDisabled(): boolean {
+  return ["1", "true", "yes"].includes((process.env.PODCAST_DISABLE_RSS || "").toLowerCase());
+}
 
-async function fetchEpisodes(date: string): Promise<Episode[]> {
+function curatedEpisodesFile(): string {
+  return process.env.PODCAST_CURATED_EPISODES_FILE || path.join(repoRoot(), "data/foreign-tech-podcast/curated-episodes.json");
+}
+
+function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
+  const title = stripHtml(input.title || "");
+  const description = stripHtml(input.description || "");
+  const link = input.link || "";
+  const date = input.date || (input.pubDate ? new Date(input.pubDate).toISOString().slice(0, 10) : "");
+  if (!title || !description || !link || !date) return null;
+  return {
+    show: input.show || input.source || "外部精选",
+    source: input.source || input.show || "外部精选",
+    title,
+    link,
+    audioUrl: input.audioUrl || "",
+    guid: input.guid || link || title,
+    pubDate: input.pubDate || date,
+    date,
+    description,
+    guest: input.guest,
+    imageUrl: input.imageUrl,
+    transcript: input.transcript ? compact(input.transcript) : undefined,
+    curated: true,
+  };
+}
+
+function loadCuratedEpisodes(date: string): Episode[] {
+  const file = curatedEpisodesFile();
+  if (!fs.existsSync(file)) return [];
+  const payload = JSON.parse(fs.readFileSync(file, "utf8")) as CuratedEpisodesFile;
+  const dated = payload.dates?.[date] || [];
+  const global = (payload.episodes || []).filter(episode => {
+    if (episode.archiveDate) return episode.archiveDate === date;
+    if (!episode.date) return false;
+    const delta = daysBetween(date, episode.date);
+    return delta >= 0 && delta <= maxWindowDays();
+  });
+  return [...dated, ...global].map(normalizeCuratedEpisode).filter((episode): episode is Episode => Boolean(episode));
+}
+
+async function fetchRssEpisodes(date: string): Promise<Episode[]> {
+  if (rssDisabled()) return [];
   const settled = await Promise.allSettled(
     FEEDS.map(async feed => {
       const xml = await fetchText(feed.url, { timeoutMs: 25_000, maxChars: 2_500_000 });
@@ -135,24 +204,31 @@ async function fetchEpisodes(date: string): Promise<Episode[]> {
     }),
   );
   const episodes = settled.flatMap(result => (result.status === "fulfilled" ? result.value : []));
-  const seen = new Set<string>();
-  const unique = episodes.filter(episode => {
-    const key = `${episode.show}|${episode.guid || episode.link || episode.title}`.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const inWindow = unique.filter(episode => {
+  const inWindow = episodes.filter(episode => {
     const delta = daysBetween(date, episode.date);
     return delta >= 0 && delta <= maxWindowDays();
   });
-  return inWindow
-    .toSorted((a, b) => {
-      const scoreDelta = scoreEpisode(b) - scoreEpisode(a);
-      if (scoreDelta) return scoreDelta;
-      return b.date.localeCompare(a.date);
-    })
-    .slice(0, maxEpisodes());
+  return inWindow.toSorted((a, b) => {
+    const scoreDelta = scoreEpisode(b) - scoreEpisode(a);
+    if (scoreDelta) return scoreDelta;
+    return b.date.localeCompare(a.date);
+  });
+}
+
+async function fetchEpisodes(date: string): Promise<Episode[]> {
+  const curated = loadCuratedEpisodes(date);
+  const rss = await fetchRssEpisodes(date);
+  const seen = new Set<string>();
+  const unique: Episode[] = [];
+  for (const episode of [...curated, ...rss]) {
+    const key = `${episode.link || episode.guid || episode.title}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(episode);
+  }
+  const curatedCount = unique.filter(episode => episode.curated).length;
+  const limit = Math.max(maxEpisodes(), curatedCount);
+  return unique.slice(0, limit);
 }
 
 async function downloadAudio(url: string, file: string): Promise<void> {
@@ -225,6 +301,15 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
   try {
     const enriched: Episode[] = [];
     for (const [index, episode] of episodes.entries()) {
+      if (!episode.audioUrl) {
+        if (!episode.transcript && episode.description.length < 80) throw new Error(`${episode.title}: curated episode needs a useful description when no audio URL is provided`);
+        enriched.push(episode);
+        continue;
+      }
+      if (episode.transcript) {
+        enriched.push(episode);
+        continue;
+      }
       writeStderr(`transcribing podcast ${index + 1}/${episodes.length}: ${episode.title}`);
       const rawAudio = path.join(tmp, `${index}.mp3`);
       const outDir = path.join(tmp, `transcript-${index}`);
@@ -245,38 +330,42 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
 export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
   const episodes = await enrichWithTranscripts(await fetchEpisodes(date));
   if (episodes.length < minEpisodes()) throw new Error(`foreign tech podcast source found only ${episodes.length} usable episodes; need ${minEpisodes()}`);
-  if (episodes.some(episode => !episode.transcript)) throw new Error("foreign tech podcast transcript generation is required but missing");
   const lines = [
     "## 来源说明",
     "",
-    "以下证据来自海外科技访谈/深度讨论类播客 RSS 元数据与本地 Whisper 音频转写文本。AI 只允许依据标题、节目、发布日期、链接、show notes 与 transcript 写作；不得编造嘉宾、未出现的观点或未提供的事实。",
+    "以下证据来自海外科技访谈/深度讨论类播客 RSS 元数据、仓库内 curated 外部精选条目与可用的本地 Whisper 音频转写文本。AI 只允许依据标题、节目、嘉宾、发布日期、链接、图片、show notes 与 transcript 写作；不得编造嘉宾、未出现的观点或未提供的事实。",
     "",
     "## 候选播客清单",
     "",
   ];
   for (const [index, episode] of episodes.entries()) {
+    const metadata = [
+      `- 节目：${episode.show}`,
+      `- 来源：${episode.source}`,
+      episode.guest ? `- 嘉宾：${episode.guest}` : "- 嘉宾：未标明",
+      `- 发布日期：${episode.date}`,
+      `- 链接：${episode.link}`,
+      episode.imageUrl ? `- 图片：${episode.imageUrl}` : "",
+      episode.audioUrl ? `- 音频：${episode.audioUrl}` : "- 音频：未提供；本条目不做 Whisper 转写",
+      `- Show notes：${episode.description}`,
+    ].filter(Boolean);
     lines.push(
       `### ${index + 1}. ${episode.title}`,
       "",
-      `- 节目：${episode.show}`,
-      `- 来源：${episode.source}`,
-      `- 发布日期：${episode.date}`,
-      `- 链接：${episode.link}`,
-      `- 音频：${episode.audioUrl}`,
-      `- Show notes：${episode.description}`,
+      ...metadata,
       "",
       "#### Transcript excerpt",
       "",
-      String(episode.transcript).slice(0, transcriptChars()),
+      episode.transcript ? String(episode.transcript).slice(0, transcriptChars()) : "未提供 transcript；本条目只能依据元数据、图片和 show notes 写作，不得假装听过完整音频。",
       "",
     );
   }
   lines.push(
     "## 写作边界",
     "",
-    "- 这是基于播客音频转写文本的中文长文笔记，不是新闻快讯。需要有总览、有清单、有每期节目独立小节。",
-    "- 若 transcript 或 show notes 没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
-    "- 每条分析必须能回到 transcript、show notes 或元数据，不得假装读过未提供的内容。",
+    "- 这是基于播客音频转写文本或外部精选元数据的中文长文笔记，不是新闻快讯。需要有总览、有清单、有每期节目独立小节。",
+    "- 若 transcript、show notes 或 curated 条目没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
+    "- 每条分析必须能回到 transcript、show notes、curated 元数据或链接信息，不得假装读过未提供的内容。",
     "- 不要生成投资建议、产品购买建议或夸张标题。",
   );
   return `${lines.join("\n").trim()}\n`;

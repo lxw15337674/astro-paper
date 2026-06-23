@@ -52,34 +52,41 @@ Reader expectation:
 
 ## Current Pipeline
 
-### Upstream job
-- Job ID: `c771b111d8e8`
-- Name: `daily-global-tech-podcast-markdown`
-- Deliver: `local`
-- Role: produce the upstream markdown body for the podcast article
+### Primary job
+- Workflow: `.github/workflows/scheduled-posts.yml`
+- Task: `foreign-tech-podcast`
+- Schedule: `30 1 * * *` UTC / 09:30 Asia/Shanghai
+- Manual dispatch: `gh workflow run scheduled-posts.yml --repo lxw15337674/astro-paper -f task=foreign-tech-podcast ...`
+- Role: collect source evidence, call AI, archive the Markdown post, verify, build, and commit via GitHub Actions.
 
-### Downstream job
-- Job ID: `9f9bc5f373fc`
-- Name: `foreign-tech-podcast-astro-archive`
-- Script: `run_archive_from_stdin.py --task foreign-tech-podcast`
-- Deliver: `local`
-- Role: archive the upstream markdown body into the Astro content tree
+### Source builder
+- Script: `scripts/foreign_tech_podcast_source.ts`
+- RSS feeds: hard-coded interview/deep-discussion podcast feeds with audio enclosures.
+- Curated external entries: `data/foreign-tech-podcast/curated-episodes.json`
+- Transcription: local Whisper for entries with audio URLs.
+- Curated entries without audio are allowed only when they include useful metadata/show notes; they must be marked as non-transcribed evidence.
 
 ## Data Sources and Upstream Dependencies
 
 ### Primary content source
-The current source-of-truth input is the upstream job `daily-global-tech-podcast-markdown`. That job is responsible for producing the markdown body that downstream archive tooling consumes.
+The source-of-truth input now lives in the repository-owned GitHub Actions pipeline:
+- RSS metadata and local Whisper transcripts from `scripts/foreign_tech_podcast_source.ts`;
+- repository-curated YouTube / Apple Podcasts / external selected entries from `data/foreign-tech-podcast/curated-episodes.json`.
+
+Historical Hermes cron jobs (`daily-global-tech-podcast-markdown` and `foreign-tech-podcast-astro-archive`) are no longer the main repo-owned path. Treat references to them as historical context unless the user explicitly asks to restore the external upstream chain.
 
 ### Ownership split
-- **content selection and note drafting** belong upstream;
-- **Astro persistence** belongs downstream;
-- the archive layer should not become the main place where note depth is invented if the upstream markdown is already too thin.
+- **content selection** belongs to `foreign_tech_podcast_source.ts` plus curated episode data;
+- **note drafting** belongs to the AI call using `prompts/blog/foreign-tech-podcast.md`;
+- **Astro persistence** belongs to `scripts/astro_paper_archive.ts`;
+- **quality gate** belongs to `scripts/verify_blog_generation.ts` and the site build.
 
 ### Debugging principle
 When the final article is weak, first determine which problem class it belongs to:
-- wrong episode/topic selection -> upstream issue;
-- correct topic but shallow note style -> upstream markdown quality issue;
-- correct markdown but broken saved article -> archive issue.
+- wrong episode/topic selection -> source builder or curated data issue;
+- correct topic but shallow note style -> prompt / AI response quality issue;
+- correct markdown but broken saved article -> archive issue;
+- generated article does not match a historical manually archived post -> check whether that post came from curated external entries rather than RSS-only automation.
 
 ## Content Contract
 
@@ -107,23 +114,35 @@ The archive layer should preserve that structure, not flatten it.
 
 ## Repo Files and Responsibilities
 
-This skill should document the known chain even when the implementation is simple.
+This skill should document the repo-owned GitHub Actions chain.
 
-### Known downstream entrypoint
-- `scripts/run_archive_from_stdin.py --task foreign-tech-podcast`
+### Known entrypoints
+- `.github/workflows/scheduled-posts.yml`
+- `scripts/generate_scheduled_post.ts --task foreign-tech-podcast`
+- `scripts/foreign_tech_podcast_source.ts`
+- `data/foreign-tech-podcast/curated-episodes.json`
+- `prompts/blog/foreign-tech-podcast.md`
+- `scripts/astro_paper_archive.ts`
+- `scripts/verify_blog_generation.ts`
 
 ### Responsibility split
-- upstream job -> produce the real article markdown body;
-- downstream archive runner -> extract the clean body when needed and hand it to the archive layer;
-- Astro archive layer -> save it as a valid post in the content tree.
+- source builder / curated JSON -> select episodes and assemble evidence;
+- AI prompt -> turn evidence into long-form Chinese notes;
+- Astro archive layer -> save it as a valid post in the content tree;
+- verifier/build -> reject shallow, malformed, or placeholder output.
 
 ## Editing Strategy
 
-### Change the upstream markdown job when
+### Change the source builder or curated data when
+- the selected content is wrong;
+- YouTube / Apple Podcasts / external selected sources need to be included;
+- RSS feeds are too narrow or stale;
+- transcript-less curated entries need better metadata/show notes.
+
+### Change the prompt when
 - the article is too short or too chat-like;
 - the structure is too weak before archival;
-- the note fails to capture meaningful takeaways;
-- the selected content is wrong.
+- the note fails to capture meaningful takeaways.
 
 ### Change the archive layer when
 - the incoming markdown is good, but the saved Astro article is malformed;
@@ -131,43 +150,42 @@ This skill should document the known chain even when the implementation is simpl
 - final file structure or frontmatter is incorrect.
 
 ### Important bias
-Because the user explicitly prefers long-form note style, do not “fix” a shallow upstream article by only prettifying the downstream save step. The substance should exist in the upstream markdown.
+Because the user explicitly prefers long-form note style, do not “fix” a shallow article by only prettifying the downstream save step. The substance should exist in the source evidence and prompt output.
 
 ## Verification Workflow
 
-1. Run the upstream job or source generation path.
-2. Inspect the latest upstream markdown artifact.
-3. Confirm the markdown is actually long-form note style rather than a short digest.
-4. Feed that markdown through the downstream archive step.
-5. Read the generated post file under `src/content/posts/zh-cn/`.
-6. Run:
+1. Run source generation, preferably with a bounded smoke config when avoiding long Whisper work:
    ```bash
-   pnpm run build
+   PODCAST_DISABLE_RSS=true PODCAST_MIN_EPISODES=1 node --import tsx scripts/foreign_tech_podcast_source.ts --date 2026-06-23
    ```
+2. Inspect the source artifact and confirm curated / RSS evidence is clearly labeled.
+3. Run `pnpm run test:blog`.
+4. Run `pnpm run typecheck`.
+5. Run `pnpm run build`.
+6. For end-to-end publishing changes, dispatch the GitHub workflow and inspect `scheduled-posts-generation-artifacts` plus the generated post.
 
-## Manual Cron Verification
+## Manual Workflow Verification
 
-When the pipeline changes, verify both layers.
+When the pipeline changes, verify the GitHub Actions path.
 
-### Upstream
-- run job `c771b111d8e8` (`daily-global-tech-podcast-markdown`);
-- inspect the latest artifact under `~/.hermes/cron/output/c771b111d8e8/`;
-- confirm the article body already has long-form note structure.
+### Source smoke test
+- Use `PODCAST_DISABLE_RSS=true` with a date that has curated entries to avoid expensive Whisper work while checking external-source support.
+- Confirm source output contains YouTube / Apple / curated entries and states when transcript is missing.
 
-### Downstream
-- run job `9f9bc5f373fc` (`foreign-tech-podcast-astro-archive`);
-- inspect the latest artifact under `~/.hermes/cron/output/9f9bc5f373fc/`;
-- confirm the final Astro post was written correctly.
+### End-to-end workflow
+- Trigger `Scheduled posts` with `task=foreign-tech-podcast` and a small `podcast_max_episodes` for smoke tests when needed.
+- Inspect `scheduled-posts-generation-artifacts`.
+- Confirm the final Astro post was written correctly and passes build.
 
-Because cron updates should be manually verified, do not stop after editing configuration.
+Because scheduled publishing changes should be manually verified, do not stop after editing configuration.
 
 ## Common Pitfalls
 
 1. **Letting the article collapse into short chat-style bullets**
    - this violates the user's explicit long-note preference.
 
-2. **Expecting the archive job to invent depth that the upstream markdown lacks**
-   - if the note is shallow upstream, fix the source.
+2. **Expecting the archive job to invent depth that the source/prompt lacks**
+   - if the note is shallow, fix curated metadata, RSS selection, transcript evidence, or the prompt.
 
 3. **Verifying only the cron artifact and not the saved post**
    - success means the Astro article is correct and buildable.
@@ -177,9 +195,11 @@ Because cron updates should be manually verified, do not stop after editing conf
 
 ## Verification Checklist
 
-- [ ] Upstream markdown is long-form note style
-- [ ] Upstream artifact already contains meaningful structured content
-- [ ] Downstream archive consumes the correct body
+- [ ] Source artifact labels RSS, curated, transcript, and transcript-less evidence clearly
+- [ ] AI response is long-form note style
+- [ ] Archive writes the correct body
 - [ ] Generated post file structure still reads like a podcast note
+- [ ] `pnpm run test:blog` passes
+- [ ] `pnpm run typecheck` passes
 - [ ] `pnpm run build` passes
-- [ ] Manual upstream/downstream cron verification succeeds after changes
+- [ ] GitHub Actions smoke/end-to-end verification succeeds after workflow changes
