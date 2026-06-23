@@ -54,6 +54,11 @@ function requireTerms(relPath: string, body: string, terms: string[]): void {
   if (missing.length) throw new Error(`${relPath} missing required terms: ${missing.join(", ")}`);
 }
 
+function requireTermPatterns(relPath: string, body: string, terms: { label: string; pattern: RegExp }[]): void {
+  const missing = terms.filter(term => !term.pattern.test(body)).map(term => term.label);
+  if (missing.length) throw new Error(`${relPath} missing required terms: ${missing.join(", ")}`);
+}
+
 function verifyNoPositiveDeclineLabel(relPath: string, body: string): void {
   const blocks = body.matchAll(/跌幅[^：\n。]*：([^。\n]+)/g);
   for (const match of blocks) {
@@ -89,7 +94,13 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     }
   }
   if (task === "crypto-market-daily") {
-    requireTerms(relPath, body, ["总市值", "24小时成交量", "BTC", "ETH", "主流资产"]);
+    requireTermPatterns(relPath, body, [
+      { label: "总市值", pattern: /总市值/ },
+      { label: "24小时成交量", pattern: /24\s*小时成交量/ },
+      { label: "BTC", pattern: /BTC/ },
+      { label: "ETH", pattern: /ETH/ },
+      { label: "主流资产", pattern: /主流资产/ },
+    ]);
     if (/数字货币当日未获取到可用公开市场数据/.test(body)) throw new Error(`${relPath} contains missing core crypto market data`);
   }
   if (task === "us-market-daily" && !/美股当日未产生完整常规收盘数据|美股当日未获取到完整常规收盘数据/.test(body)) {
