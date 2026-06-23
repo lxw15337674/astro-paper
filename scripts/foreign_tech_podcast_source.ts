@@ -23,6 +23,7 @@ type Episode = {
   description: string;
   guest?: string;
   imageUrl?: string;
+  duration?: string;
   transcript?: string;
   curated?: boolean;
 };
@@ -40,6 +41,7 @@ type CuratedEpisodeInput = {
   description?: string;
   guest?: string;
   imageUrl?: string;
+  duration?: string;
   transcript?: string;
 };
 
@@ -176,6 +178,7 @@ function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
     description,
     guest: input.guest,
     imageUrl: input.imageUrl,
+    duration: input.duration,
     transcript: input.transcript ? compact(input.transcript) : undefined,
     curated: true,
   };
@@ -346,6 +349,7 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
       `- 发布日期：${episode.date}`,
       `- 链接：${episode.link}`,
       episode.imageUrl ? `- 图片：${episode.imageUrl}` : "",
+      episode.duration ? `- 时长：${episode.duration}` : "",
       episode.audioUrl ? `- 音频：${episode.audioUrl}` : "- 音频：未提供；本条目不做 Whisper 转写",
       `- Show notes：${episode.description}`,
     ].filter(Boolean);

@@ -43,6 +43,8 @@ test("foreign tech podcast source supports curated external episodes", async () 
     assert.match(source, /Apple Podcasts/);
     assert.match(source, /YouTube/);
     assert.match(source, /Dario Amodei/);
+    assert.match(source, /时长：52:07/);
+    assert.match(source, /iTunes lookup episode metadata/);
     assert.match(source, /未提供 transcript/);
     assert.match(source, /不得假装听过完整音频/);
     assert.doesNotMatch(source, /a16z\.simplecast\.com/);

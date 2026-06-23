@@ -9,7 +9,7 @@
       "date": "2026-06-17",
       "link": "https://www.youtube.com/watch?v=x2VHFgyawPE",
       "imageUrl": "https://i.ytimg.com/vi/x2VHFgyawPE/hqdefault.jpg",
-      "description": "Bloomberg Originals 的 The Circuit 长访谈，围绕 Anthropic CEO Dario Amodei 对 AI 产品化、企业落地、算力约束、国家安全、模型风险与公司治理的讨论。该条目作为外部精选来源收录；如未提供 transcript，只能依据标题、来源、链接和本说明写作。"
+      "description": "Bloomberg Originals 的 The Circuit Extended Interview，经 YouTube / noembed oEmbed 确认标题、频道与链接。主题围绕 Anthropic CEO Dario Amodei；当前环境未能取得 YouTube description、captionTracks 或 timedtext 字幕，因此本条只能依据标题、频道、嘉宾、链接、缩略图与这条人工精选说明写作，不得假装听过完整音频。"
     },
     {
       "archiveDate": "2026-06-23",
@@ -17,9 +17,11 @@
       "show": "AI & I",
       "source": "Apple Podcasts",
       "guest": "Mike Krieger",
-      "date": "2026-06-17",
-      "link": "https://podcasts.apple.com/us/podcast/ai-i/id1719789201",
-      "description": "AI & I 对 Mike Krieger 的访谈，主题围绕 Anthropic 内部如何使用 Claude、强模型对产品团队工作流、软件构建、验证机制、架构与组织节奏的影响。该条目来自 Apple Podcasts 外部精选；如未提供 transcript，只能依据元数据与本说明写作。"
+      "date": "2026-06-10",
+      "link": "https://podcasts.apple.com/us/podcast/how-anthropic-uses-claude-fable-5-with-mike-krieger/id1719789201?i=1000772067637&uo=4",
+      "description": "Apple Podcasts / iTunes lookup episode metadata: Mike Krieger, Instagram cofounder and head of Anthropic Labs, discusses building with Fable 5 months before public release and how the model made his existing productivity, strategy and time-management workflows feel outdated. The episode covers how Fable reshaped Krieger's workflow, when to use Sonnet versus Fable, what a weekend-built media tracker reveals about agent-native architecture, collapsing software build cost, whether software engineering is over, how Anthropic engineering teams work, verification mechanics, what people should build with the model, and dynamic workflows. Timestamps from metadata: 0:03 Introduction; 1:48 how Fable reshaped Mike's workflow; 4:48 Sonnet versus Fable; 10:06 media tracker and agent-native architecture; 15:00 cost to build collapsed; 19:03 software engineering; 21:48 Anthropic engineering teams; 38:39 verification mechanics; 44:39 what to build; 47:24 dynamic workflows. Links mentioned include Mike Krieger on X, Anthropic Labs, Claude Code and Every. No transcript is stored in this curated entry.",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/93/90/75/93907541-d90a-ba05-f7d7-f9a2f68bf714/mza_11707959231788418835.jpg/600x600bb.jpg",
+      "duration": "52:07"
     },
     {
       "archiveDate": "2026-06-23",
@@ -30,7 +32,7 @@
       "date": "2026-06-23",
       "link": "https://www.youtube.com/watch?v=H8M47RYi024",
       "imageUrl": "https://i.ytimg.com/vi/H8M47RYi024/hqdefault.jpg",
-      "description": "Localization Fireside Chat 第 219 期，主题是 ASI 基础设施，涉及算力供给、系统编排、资本开支、资源调度、数据中心与把大规模 AI 能力稳定运行起来的工程现实。该条目作为 YouTube 外部精选来源收录。"
+      "description": "Localization Fireside Chat 第 219 期，经 YouTube / noembed oEmbed 确认标题、频道、链接和缩略图。主题是 Ganesh Krishnan 关于 ASI 基础设施的讨论；当前环境未能取得 YouTube description、captionTracks 或 timedtext 字幕，因此本条只能依据标题、频道、嘉宾、链接、缩略图与这条人工精选说明写作。可写作范围限于算力供给、系统编排、资本开支、资源调度、数据中心和大规模 AI 能力稳定运行这些由标题和精选说明明确给出的方向，不得假装听过完整音频。"
     },
     {
       "archiveDate": "2026-06-23",
@@ -38,9 +40,11 @@
       "show": "Chain of Thought | AI Agents, Infrastructure & Engineering",
       "source": "Apple Podcasts",
       "guest": "Dhruv Batra",
-      "date": "2026-06-19",
-      "link": "https://podcasts.apple.com/us/podcast/chain-of-thought-ai-agents-infrastructure-engineering/id1776879655",
-      "description": "Chain of Thought 关于 AI agents、基础设施与工程的访谈，讨论多数网页和传统系统不会为 AI agent 提供专用 API，agent 需要在现有网页、人类界面和旧系统中完成观察、规划、执行与失败回退。该条目来自 Apple Podcasts 外部精选。"
+      "date": "2026-06-18",
+      "link": "https://podcasts.apple.com/us/podcast/most-of-the-web-will-never-get-apis-for-ai-agents-dhruv-batra/id1776879655?i=1000773249852&uo=4",
+      "description": "Apple Podcasts / iTunes lookup episode metadata: Dhruv Batra is co-founder and chief scientist of Yutori, building specialized browser and computer-use agents. He previously led embodied AI at Meta's FAIR lab, trained robots in simulation, and shipped the image question-answering model on Ray-Ban Meta glasses. The core claim is that most of the web will never expose APIs for agents: school district sites, small business pages, government offices and long-tail e-commerce are built for humans, so agents must operate through the existing human web. The episode frames this as 'pixels in, clicks out' and discusses Yutori's Navigator perceiving pixels, writing JavaScript to shorten task trajectories, running 2-3x faster and 4-5x cheaper than Opus 4.7 and GPT-5.5 on browser tasks, learning from live websites, using URL query parameters as privileged verifiers, Chinese open-weight models, smart glasses / robotics perception-action loops, smaller on-device models, and why the company is called Yutori. Chapters from metadata: 00:00 Pixels in, clicks out; 01:37 why most web will never get APIs; 08:47 aggregation, specialization and human friction; 11:39 digital niches and specialized models; 16:41 web heavy tail and browser agents; 20:40 Yutori Navigator and Scouts; 24:08 N1.5 writing JavaScript; 27:45 training on live websites; 33:29 open source, FAIR and Chinese frontier; 37:22 agent frameworks: OpenClaw, Hermes, heartbeats; 40:57 non-technical users adopting agents; 44:25 smart glasses, robotics and embodied AI; 50:57 compute demand and smaller on-device models; 53:12 why Yutori. No transcript is stored in this curated entry.",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/40/90/53/40905397-e020-c3fd-9c9d-83eef646c445/mza_17971919821798662698.jpg/600x600bb.jpg",
+      "duration": "54:44"
     }
   ]
 }
