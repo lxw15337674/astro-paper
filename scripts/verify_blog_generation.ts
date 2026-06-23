@@ -17,6 +17,11 @@ const COMMON_FORBIDDEN_PATTERNS = [
 ];
 
 const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
+const DAILY_DIGEST_TASKS = new Set(["tech-daily", "ai-daily", "tech-business-daily"]);
+
+function isDailyDigestTask(task: string): boolean {
+  return DAILY_DIGEST_TASKS.has(task);
+}
 
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
@@ -167,12 +172,11 @@ function verifyAiWeekly(relPath: string, body: string): void {
   }
 }
 
-function verifyDailyCommon(relPath: string, body: string, label: string, minChars: number): void {
+function verifyDailyCommon(relPath: string, body: string, label: string): void {
   const itemCount = (body.match(/^###\s+/gm) || []).length;
-  if (itemCount < 3) throw new Error(`${relPath} ${label} needs at least 3 items, got ${itemCount}`);
-  if (body.trim().length < minChars) throw new Error(`${relPath} ${label} is too short (${body.trim().length} < ${minChars})`);
+  if (itemCount < 1) throw new Error(`${relPath} ${label} needs at least one item, got ${itemCount}`);
   const links = body.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 3) throw new Error(`${relPath} ${label} needs at least three source links, got ${links.length}`);
+  if (links.length < 1) throw new Error(`${relPath} ${label} needs at least one source link, got ${links.length}`);
   verifyNoDuplicateWeeklyLinksAndHeadings(relPath, body);
   for (const pattern of [/原始链接未提供|链接见候选源/, /TODO/, /待补充/, /无法判断/, /本文将/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
     if (pattern.test(body)) throw new Error(`${relPath} contains daily forbidden pattern: ${pattern.source}`);
@@ -180,7 +184,7 @@ function verifyDailyCommon(relPath: string, body: string, label: string, minChar
 }
 
 function verifyTechDaily(relPath: string, body: string): void {
-  verifyDailyCommon(relPath, body, "tech daily", 700);
+  verifyDailyCommon(relPath, body, "tech daily");
   requireTermPatterns(relPath, body, [
     { label: "engineering judgement", pattern: /影响|取舍|风险|迁移|适合|代价|工程|实践|架构|版本|安全/ },
   ]);
@@ -190,7 +194,7 @@ function verifyTechDaily(relPath: string, body: string): void {
 }
 
 function verifyAiDaily(relPath: string, body: string): void {
-  verifyDailyCommon(relPath, body, "AI daily", 700);
+  verifyDailyCommon(relPath, body, "AI daily");
   requireTermPatterns(relPath, body, [
     { label: "AI judgement", pattern: /能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产|工程/ },
   ]);
@@ -200,7 +204,7 @@ function verifyAiDaily(relPath: string, body: string): void {
 }
 
 function verifyTechBusinessDaily(relPath: string, body: string): void {
-  verifyDailyCommon(relPath, body, "tech business daily", 700);
+  verifyDailyCommon(relPath, body, "tech business daily");
   requireTermPatterns(relPath, body, [
     { label: "business judgement", pattern: /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察|供应链/ },
   ]);
@@ -267,7 +271,8 @@ function verifyPostContract(repo: string, relPath: string, task: string): void {
   if (!fs.existsSync(postPath)) throw new Error(`generated post does not exist: ${relPath}`);
   const text = verifyFrontmatter(postPath, task);
   const { body } = splitFrontmatter(text);
-  if (body.trim().length < 240) throw new Error(`${relPath} body is too short to be a publishable blog post`);
+  const minBodyLength = isDailyDigestTask(task) ? 120 : 240;
+  if (body.trim().length < minBodyLength) throw new Error(`${relPath} body is too short to be a publishable blog post`);
   if (!/^##\s+/m.test(body)) throw new Error(`${relPath} body has no section headings`);
   for (const pattern of COMMON_FORBIDDEN_PATTERNS) {
     if (pattern.test(text)) throw new Error(`${relPath} contains forbidden pattern: ${pattern.source}`);

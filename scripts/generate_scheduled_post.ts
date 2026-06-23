@@ -367,7 +367,7 @@ function assertMarkdownUsesOnlySourceLinks(markdown: string, source: string, tas
   if (!SOURCE_LINK_WHITELIST_TASKS.has(task)) return;
   const allowed = sourceLinks(source);
   const links = markdownHeadingLinks(markdown);
-  const minLinks = isDailyDigestTask(task) ? 3 : 8;
+  const minLinks = isDailyDigestTask(task) ? 1 : 8;
   if (links.length < minLinks) throw new Error(`${task} generated too few linked item headings: ${links.length}`);
   if (links.length > allowed.size) throw new Error(`${task} generated more linked item headings than selected sources: ${links.length} > ${allowed.size}`);
   const duplicate = links.find((link, index) => links.indexOf(link) !== index);
@@ -467,7 +467,7 @@ async function generateTask({
   if (useAi && isDailyDigestTask(task) && !mockResponseDir) {
     source = await classifiedDailySourceForTask({ task, source, date, repo, model, promptDir, artifactsDir });
     const itemCount = countNumberedBlocks(source);
-    if (itemCount < 3) return skippedLowQuality(task, date, `${task} has only ${itemCount} high-quality daily items`);
+    if (itemCount < 1) return skippedLowQuality(task, date, `${task} has no high-quality daily items`);
   }
   let body = source;
   let generation: ResultItem["generation"];

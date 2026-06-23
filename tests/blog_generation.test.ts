@@ -325,10 +325,50 @@ test("tech business weekly rejects low-signal news content", () => {
 });
 
 
-test("daily digest verifier skips low-quality skipped rows", () => {
+test("daily digest verifier accepts one high-quality item", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-daily-one-item-"));
+  const resultJson = path.join(repo, "result.json");
+  const techDaily = archivePost({
+    task: "tech-daily",
+    date: "2099-01-06",
+    repo,
+    body: `## 今日工程快讯
+
+### [PostgreSQL release improves planner behavior](https://example.com/postgresql-planner)
+
+PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`,
+    force: true,
+  });
+  const aiDaily = archivePost({
+    task: "ai-daily",
+    date: "2099-01-06",
+    repo,
+    body: `## 今日模型与产品
+
+### [OpenAI adds enterprise routing controls](https://example.com/openai-routing)
+
+OpenAI 增加企业模型路由控制，AI 工程影响在于模型选择、成本、审计和权限边界进入统一治理平面。适合多团队共用模型平台的企业；风险是策略配置错误会影响质量和合规，需要配套评测、回滚和日志审计。`,
+    force: true,
+  });
+  const businessDaily = archivePost({
+    task: "tech-business-daily",
+    date: "2099-01-06",
+    repo,
+    body: `## 今日大事件
+
+### [EU opens platform policy probe](https://example.com/eu-platform-probe)
+
+欧盟启动平台政策调查，商业影响集中在应用分发、支付规则和平台抽佣边界。受影响的是平台公司、开发者和订阅业务；风险在于监管周期长、地区规则可能分裂，后续需要观察处罚范围、整改要求和企业合规成本。`,
+    force: true,
+  });
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [techDaily, aiDaily, businessDaily] }));
+  assert.equal(verifyResultJson(repo, resultJson), 3);
+});
+
+test("daily digest verifier skips zero-item rows", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-daily-skipped-"));
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "tech-daily", path: "", skipped: true, skip_reason: "only 1 item" }] }));
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "tech-daily", path: "", skipped: true, skip_reason: "no high-quality daily items" }] }));
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 

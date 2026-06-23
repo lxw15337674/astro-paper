@@ -242,7 +242,7 @@ export async function buildDailyDigestSource(date: string, { lookbackHours = 24,
     limit,
   );
 
-  if (filtered.length < 8) throw new Error(`daily digest source has too few publishable items: ${filtered.length}`);
+  if (filtered.length < 1) throw new Error("daily digest source has no publishable items");
 
   const lines = [
     `# 全局日报候选池｜${date}`,

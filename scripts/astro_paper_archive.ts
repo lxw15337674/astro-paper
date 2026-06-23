@@ -271,7 +271,7 @@ function formatTechDaily(text: string): string {
   rejectPureTutorialWeekly(normalized);
   rejectDuplicateLinksAndHeadings(normalized, "tech daily");
   const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 3) throw new Error(`tech daily needs source links, got ${links.length}`);
+  if (links.length < 1) throw new Error(`tech daily needs source links, got ${links.length}`);
   if (!/影响|取舍|风险|迁移|适合|代价|工程|实践|架构|版本|安全/.test(normalized)) throw new Error("tech daily lacks engineering judgement language");
   return `${normalized.trim()}\n`;
 }
@@ -281,7 +281,7 @@ function formatAiDaily(text: string): string {
   rejectAiWeeklyNoise(normalized);
   rejectDuplicateLinksAndHeadings(normalized, "AI daily");
   const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 3) throw new Error(`AI daily needs source links, got ${links.length}`);
+  if (links.length < 1) throw new Error(`AI daily needs source links, got ${links.length}`);
   if (!/能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产|工程/.test(normalized)) throw new Error("AI daily lacks AI judgement language");
   return `${normalized.trim()}\n`;
 }
@@ -289,7 +289,7 @@ function formatAiDaily(text: string): string {
 function formatTechBusinessDaily(text: string): string {
   const normalized = normalizeMarkdown(text);
   const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 3) throw new Error(`tech business daily needs source links, got ${links.length}`);
+  if (links.length < 1) throw new Error(`tech business daily needs source links, got ${links.length}`);
   rejectDuplicateLinksAndHeadings(normalized, "tech business daily");
   if (!/影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察|供应链/.test(normalized)) throw new Error("tech business daily lacks business judgement language");
   for (const pattern of [/原始链接未提供|链接见候选源/, /娱乐八卦/, /购物推荐/, /工具榜单/, /融资快讯/, /投资建议/, /买卖建议/, /股价预测/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
