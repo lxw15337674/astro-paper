@@ -186,6 +186,14 @@ function rssDisabled(): boolean {
   return ["1", "true", "yes"].includes((process.env.PODCAST_DISABLE_RSS || "").toLowerCase());
 }
 
+function audioTranscribeEnabled(): boolean {
+  return !["0", "false", "no"].includes((process.env.PODCAST_AUDIO_TRANSCRIBE || "true").toLowerCase());
+}
+
+function audioTranscriptFallbackEnabled(): boolean {
+  return !["0", "false", "no"].includes((process.env.PODCAST_AUDIO_TRANSCRIPT_FALLBACK || "true").toLowerCase());
+}
+
 function curatedEpisodesFile(): string {
   return process.env.PODCAST_CURATED_EPISODES_FILE || path.join(repoRoot(), "data/foreign-tech-podcast/curated-episodes.json");
 }
@@ -343,6 +351,10 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
         enriched.push(episode);
         continue;
       }
+      if (episode.curated && !audioTranscribeEnabled()) {
+        enriched.push(episode);
+        continue;
+      }
       writeStderr(`transcribing podcast ${index + 1}/${episodes.length}: ${episode.title}`);
       const rawAudio = path.join(tmp, `${index}.mp3`);
       const outDir = path.join(tmp, `transcript-${index}`);
@@ -351,7 +363,13 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
         const transcript = runLocalWhisper(rawAudio, outDir);
         enriched.push({ ...episode, transcript });
       } catch (error) {
-        throw new Error(`${episode.title}: ${error instanceof Error ? error.message : String(error)}`);
+        const message = error instanceof Error ? error.message : String(error);
+        if (episode.curated && !episode.transcript && episode.description.length >= 80 && audioTranscriptFallbackEnabled()) {
+          writeStderr(`WARN: ${episode.title}: podcast audio transcription unavailable; falling back to curated metadata: ${message}`);
+          enriched.push(episode);
+          continue;
+        }
+        throw new Error(`${episode.title}: ${message}`);
       }
     }
     return enriched;

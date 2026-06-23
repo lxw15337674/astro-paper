@@ -2,14 +2,16 @@
   "episodes": [
     {
       "archiveDate": "2026-06-23",
-      "title": "Inside the Mind of Anthropic CEO Dario Amodei | The Circuit | Extended Interview",
-      "show": "The Circuit / Bloomberg Originals",
-      "source": "Bloomberg Originals（YouTube）",
-      "guest": "Dario Amodei",
-      "date": "2026-06-17",
-      "link": "https://www.youtube.com/watch?v=x2VHFgyawPE",
-      "imageUrl": "https://i.ytimg.com/vi/x2VHFgyawPE/hqdefault.jpg",
-      "description": "Bloomberg Originals 的 The Circuit Extended Interview，经 YouTube / noembed oEmbed 确认标题、频道与链接。主题围绕 Anthropic CEO Dario Amodei；当前环境未能取得 YouTube description、captionTracks 或 timedtext 字幕，因此本条只能依据标题、频道、嘉宾、链接、缩略图与这条人工精选说明写作，不得假装听过完整音频。"
+      "title": "The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life",
+      "show": "The Oprah Podcast",
+      "source": "Apple Podcasts / Megaphone RSS",
+      "guest": "Dario Amodei、Daniela Amodei",
+      "date": "2026-05-19",
+      "link": "https://podcasts.apple.com/us/podcast/the-co-founders-of-claude-ai-tell-oprah-about/id1782960381?i=1000768533274&uo=4",
+      "audioUrl": "https://pdrl.fm/28ac7a/clrtpod.com/m/www.podtrac.com/pts/redirect.mp3/pscrb.fm/rss/p/traffic.megaphone.fm/HARP4908268781.mp3",
+      "imageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/29/4c/6a/294c6af9-99d2-0bdf-3462-31fe4969349d/mza_12961162025245665300.jpeg/600x600bb.jpg",
+      "duration": "1:10:23",
+      "description": "Apple Podcasts / Megaphone episode metadata: Anthropic co-founders Dario Amodei and Daniela Amodei sit down with Oprah for an in-depth discussion on artificial intelligence and its impact on daily life. The episode covers Anthropic as a major AI company behind Claude, ethical responsibility and moral questions in advanced AI, their model Mythos, government regulation, everyday risks and benefits, jobs, children, emotional relationships with AI, Claude and underage users, why Claude does not incentivize users, Anthropic's public benefit corporation structure, and the company's refusal of the Pentagon's request to remove guardrails from Claude. Timestamps from Apple metadata: 00:00 welcome Daniela and Dario Amodei; 01:47 Dario on human extinction; 04:40 what is the AI race; 08:00 Anthropic's safety concerns; 09:26 why they are a public benefit corporation; 11:20 how the siblings formed Anthropic; 13:00 can AI be created responsibly; 14:12 benefits and harms; 18:52 people falling in love with AI; 20:30 Claude and underage users; 22:18 how Claude does not incentivize users; 28:33 refusal to remove guardrails; 35:10 hard decisions; 38:35 regulation; 40:45 whether people should view AI negatively; 43:00 the AI problem to solve; 48:20 men use AI more than women; 49:30 what is Mythos; 53:20 what keeps them up at night; 54:15 what keeps ego in check; 58:20 will they get this right; 59:15 are others doing this responsibly; 01:03:25 meaning of a well-lived life. Audio URL is available from Apple/RSS and should be transcribed with Whisper when the runner has Whisper installed."
     },
     {
       "archiveDate": "2026-06-23",

@@ -46,19 +46,21 @@ test("foreign tech podcast source supports curated external episodes", async () 
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
   process.env.PODCAST_DISABLE_RSS = "true";
   process.env.PODCAST_MIN_EPISODES = "4";
   process.env.PODCAST_MAX_EPISODES = "4";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
   try {
     const source = await buildForeignTechPodcastSource("2026-06-23");
-    assert.match(source, /Bloomberg Originals/);
+    assert.match(source, /The Oprah Podcast/);
     assert.match(source, /Apple Podcasts/);
-    assert.match(source, /YouTube/);
-    assert.match(source, /Dario Amodei/);
-    assert.match(source, /时长：52:07/);
-    assert.match(source, /iTunes lookup episode metadata/);
+    assert.match(source, /Megaphone/);
+    assert.match(source, /Dario Amodei、Daniela Amodei/);
+    assert.match(source, /时长：1:10:23/);
+    assert.match(source, /音频：https:\/\/pdrl\.fm/);
+    assert.match(source, /Claude and underage users/);
     assert.match(source, /未提供 transcript/);
-    assert.match(source, /不得假装听过完整音频/);
     assert.doesNotMatch(source, /a16z\.simplecast\.com/);
   } finally {
     if (previousDisableRss === undefined) delete process.env.PODCAST_DISABLE_RSS;
@@ -67,6 +69,8 @@ test("foreign tech podcast source supports curated external episodes", async () 
     else process.env.PODCAST_MIN_EPISODES = previousMinEpisodes;
     if (previousMaxEpisodes === undefined) delete process.env.PODCAST_MAX_EPISODES;
     else process.env.PODCAST_MAX_EPISODES = previousMaxEpisodes;
+    if (previousAudioTranscribe === undefined) delete process.env.PODCAST_AUDIO_TRANSCRIBE;
+    else process.env.PODCAST_AUDIO_TRANSCRIBE = previousAudioTranscribe;
   }
 });
 
