@@ -170,7 +170,8 @@ BTC/ETH 衍生品辅助指标：BTC（CoinGecko Binance Futures）资金费率 +
   assert.match(usMarkdown, /title: "美股市场日报｜2099-01-02"/);
   assert.match(usMarkdown, /美股行业板块/);
   assert.match(podcastMarkdown, /title: "海外科技访谈播客笔记｜2099-01-02"/);
-  assert.match(podcastMarkdown, /今日播客清单/);
+  assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
+  assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);
   assert.match(podcastMarkdown, /### 长文笔记/);
   for (const markdown of [asiaMarkdown, cryptoMarkdown, usMarkdown]) {
     assert.match(markdown, /pubDatetime: 2099-01-01T16:00:00Z/);

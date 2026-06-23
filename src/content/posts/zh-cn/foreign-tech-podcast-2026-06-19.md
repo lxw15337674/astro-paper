@@ -14,19 +14,6 @@ timezone: Asia/Shanghai
 
 《今日国外热门科技访谈播客》
 
-## 今日总览
-
-今天的 4 期内容主要围绕两条主线展开：AI 正从单点工具走向组织级基础设施，同时讨论边界也在从软件扩展到数据中心、工业系统和更重的资本配置问题；如果时间有限，优先看 Kanjun Qiu 和 Kyle Daigle 这两期。
-
-## 今日播客清单
-
-- **What it takes to trust AI** — 讨论 AI 为何仍不值得被稳定托付，以及可信代理和用户所有权的底层条件。
-- **Can GitHub Be for Everyone?** — 讨论 GitHub 如何看待 AI 时代开发者扩张、协作基础设施升级与模型选择权。
-- **SpaceX Might Be the Greatest Company of All Time** — 讨论数据中心、电力、GPU 与资本市场如何重新定价 AI 基础设施。
-- **P-1 AI’s Path to Hardware Engineering AGI** — 讨论 AI 如何进入物理工程世界，以及工程代理与多模型编排的现实路径。
-
----
-
 ## What it takes to trust AI | Kanjun Qiu
 
 ### 中文主题

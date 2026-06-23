@@ -70,8 +70,11 @@ function verifyNoPositiveDeclineLabel(relPath: string, body: string): void {
 }
 
 function verifyForeignTechPodcast(relPath: string, body: string): void {
-  requireTerms(relPath, body, ["《今日国外热门科技访谈播客》", "## 今日总览", "## 今日播客清单", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"]);
-  const episodeCount = (body.match(/^##\s+.+$/gm) || []).filter(heading => !/今日总览|今日播客清单/.test(heading)).length;
+  requireTerms(relPath, body, ["《今日国外热门科技访谈播客》", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"]);
+  for (const marker of ["## 今日总览", "## 今日播客清单"]) {
+    if (body.includes(marker)) throw new Error(`${relPath} contains forbidden podcast section: ${marker}`);
+  }
+  const episodeCount = (body.match(/^##\s+.+$/gm) || []).length;
   const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
   if (episodeCount < minEpisodes) throw new Error(`${relPath} needs at least ${minEpisodes} podcast episode sections, got ${episodeCount}`);
   const minLength = Math.max(1200, minEpisodes * 1000);

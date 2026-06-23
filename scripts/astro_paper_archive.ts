@@ -172,11 +172,14 @@ function formatMarketDaily(text: string): string {
 
 function formatForeignTechPodcast(text: string): string {
   const normalized = normalizeMarkdown(text).replace(/\n---\n\n---\n/g, "\n\n---\n");
-  const required = ["《今日国外热门科技访谈播客》", "## 今日总览", "## 今日播客清单", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
+  const required = ["《今日国外热门科技访谈播客》", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
   for (const marker of required) {
     if (!normalized.includes(marker)) throw new Error(`foreign tech podcast missing required section: ${marker}`);
   }
-  const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).filter(heading => !/今日总览|今日播客清单/.test(heading)).length;
+  for (const marker of ["## 今日总览", "## 今日播客清单"]) {
+    if (normalized.includes(marker)) throw new Error(`foreign tech podcast contains forbidden section: ${marker}`);
+  }
+  const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).length;
   const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
   if (episodeCount < minEpisodes) throw new Error(`foreign tech podcast needs at least ${minEpisodes} episode sections, got ${episodeCount}`);
   const minLength = Math.max(1200, minEpisodes * 1000);
