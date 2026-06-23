@@ -59,7 +59,10 @@ type MarketSection = {
 
 type BoardRow = { name: string; pct: number; amount?: number };
 type SectorRow = { symbol: string; name: string; pct: number; close: number };
-type CryptoCoin = { name: string; symbol: string; price: number; pct: number; marketCap: number; volume: number };
+type CryptoCoin = { name: string; symbol: string; price: number; pct: number; pct7d: number | null; marketCap: number; volume: number };
+type CryptoGlobal = { marketCap: number; volume: number; btcDominance: number; ethDominance: number; marketCapChange24h: number | null };
+type CryptoDerivativesRow = { symbol: string; fundingRate: number | null; openInterestUsd: number | null; source: string };
+type FearGreedIndex = { value: number; label: string; updatedAt: string };
 
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
 type YahooChartPayload = {
@@ -104,6 +107,12 @@ function pct(value: unknown): string {
   return `${num > 0 ? "+" : ""}${num.toFixed(2)}%`;
 }
 
+function finePct(value: unknown, digits = 4): string {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return `${num > 0 ? "+" : ""}${num.toFixed(digits)}%`;
+}
+
 function ratioPct(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
@@ -132,6 +141,12 @@ function usdWanYi(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
   return `${(num / 1_000_000_000_000).toFixed(2)}万亿美元`;
+}
+
+function usdYi(value: unknown): string {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return `${(num / 100_000_000).toFixed(2)}亿美元`;
 }
 
 function parseDate(date: string): Date {
@@ -323,6 +338,33 @@ function cryptoLine(label: string, rows: CryptoCoin[]): string {
   return `${label}：${rows.map(row => `${row.symbol.toUpperCase()} ${pct(row.pct)}`).join("、")}。`;
 }
 
+function cryptoSevenDayLine(coins: CryptoCoin[]): string {
+  const rows: CryptoCoin[] = [];
+  for (const symbol of ["btc", "eth"]) {
+    const coin = coins.find(row => row.symbol.toLowerCase() === symbol);
+    if (coin && coin.pct7d !== null && Number.isFinite(coin.pct7d)) rows.push(coin);
+  }
+  if (!rows.length) return "BTC/ETH 7日涨跌幅：未获取到可用 7 日价格变化数据。";
+  return `BTC/ETH 7日涨跌幅：${rows.map(row => `${row.symbol.toUpperCase()} ${pct(row.pct7d || 0)}`).join("、")}。`;
+}
+
+function derivativesLine(rows: CryptoDerivativesRow[]): string {
+  if (!rows.length) return "BTC/ETH 衍生品辅助指标：未获取到可用资金费率或未平仓合约名义价值；本篇不据此判断杠杆情绪。";
+  return `BTC/ETH 衍生品辅助指标（${rows[0].source}）：${rows
+    .map(row => {
+      const parts: string[] = [];
+      if (row.fundingRate !== null) parts.push(`资金费率 ${finePct(row.fundingRate)}`);
+      if (row.openInterestUsd !== null) parts.push(`未平仓合约名义价值约 ${usdYi(row.openInterestUsd)}`);
+      return `${row.symbol} ${parts.join("，")}`;
+    })
+    .join("；")}。`;
+}
+
+function fearGreedLine(index: FearGreedIndex | null): string {
+  if (!index) return "市场情绪辅助指标：未获取到 Fear & Greed Index，本篇不补情绪判断。";
+  return `市场情绪辅助指标：Fear & Greed Index 为 ${index.value}（${index.label}），更新时间 ${index.updatedAt}。`;
+}
+
 function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T[]; bottom: T[] } {
   const sorted = rows.toSorted((a, b) => b.pct - a.pct);
   return { top: sorted.slice(0, limit), bottom: sorted.slice(-limit).reverse() };
@@ -441,29 +483,33 @@ async function usSectorEtfs(date: string): Promise<SectorRow[]> {
   return rows.filter((row): row is SectorRow => Boolean(row));
 }
 
-async function cryptoGlobal(): Promise<{ marketCap: number; volume: number; btcDominance: number; ethDominance: number }> {
+async function cryptoGlobal(): Promise<CryptoGlobal> {
   const payload = (await coinGecko.global()) as {
     data?: {
       total_market_cap?: { usd?: number };
       total_volume?: { usd?: number };
       market_cap_percentage?: { btc?: number; eth?: number };
+      market_cap_change_percentage_24h_usd?: number;
     };
   };
+  const marketCapChange24h = Number(payload.data?.market_cap_change_percentage_24h_usd);
   return {
     marketCap: Number(payload.data?.total_market_cap?.usd || 0),
     volume: Number(payload.data?.total_volume?.usd || 0),
     btcDominance: Number(payload.data?.market_cap_percentage?.btc || 0),
     ethDominance: Number(payload.data?.market_cap_percentage?.eth || 0),
+    marketCapChange24h: Number.isFinite(marketCapChange24h) ? marketCapChange24h : null,
   };
 }
 
 async function cryptoCoins(): Promise<CryptoCoin[]> {
-  const rows = (await coinGecko.coinMarket({ vs_currency: "usd", order: "market_cap_desc", per_page: 30, page: 1, sparkline: false, price_change_percentage: "24h" })) as
+  const rows = (await coinGecko.coinMarket({ vs_currency: "usd", order: "market_cap_desc", per_page: 30, page: 1, sparkline: false, price_change_percentage: "24h,7d" })) as
     {
       name?: string;
       symbol?: string;
       current_price?: number;
       price_change_percentage_24h?: number;
+      price_change_percentage_7d_in_currency?: number;
       market_cap?: number;
       total_volume?: number;
     }[];
@@ -473,10 +519,55 @@ async function cryptoCoins(): Promise<CryptoCoin[]> {
       symbol: row.symbol || "",
       price: Number(row.current_price || 0),
       pct: Number(row.price_change_percentage_24h || 0),
+      pct7d: Number.isFinite(Number(row.price_change_percentage_7d_in_currency)) ? Number(row.price_change_percentage_7d_in_currency) : null,
       marketCap: Number(row.market_cap || 0),
       volume: Number(row.total_volume || 0),
     }))
     .filter(row => row.name && row.symbol && Number.isFinite(row.pct) && row.marketCap > 0);
+}
+
+async function cryptoFearGreedIndex(): Promise<FearGreedIndex | null> {
+  try {
+    const payload = await fetchJson<{ data?: { value?: string; value_classification?: string; timestamp?: string }[] }>("https://api.alternative.me/fng/?limit=1&format=json", {
+      timeoutMs: 12_000,
+    });
+    const latest = payload.data?.[0];
+    const value = Number(latest?.value);
+    if (!Number.isFinite(value)) return null;
+    const timestamp = Number(latest?.timestamp || 0);
+    return {
+      value,
+      label: latest?.value_classification || "未标注",
+      updatedAt: timestamp > 0 ? new Date(timestamp * 1000).toISOString().replace(/\.\d{3}Z$/, "Z") : "未提供",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function binanceDerivativesRow(symbol: "BTCUSDT" | "ETHUSDT"): Promise<CryptoDerivativesRow | null> {
+  try {
+    const [premium, openInterestRows] = await Promise.all([
+      fetchJson<{ lastFundingRate?: string }>(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`, { timeoutMs: 12_000 }),
+      fetchJson<{ sumOpenInterestValue?: string }[]>(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${symbol}&period=5m&limit=1`, { timeoutMs: 12_000 }),
+    ]);
+    const fundingRate = Number(premium.lastFundingRate);
+    const openInterestUsd = Number(openInterestRows.at(-1)?.sumOpenInterestValue);
+    if (!Number.isFinite(fundingRate) && !Number.isFinite(openInterestUsd)) return null;
+    return {
+      symbol: symbol.replace("USDT", ""),
+      fundingRate: Number.isFinite(fundingRate) ? fundingRate * 100 : null,
+      openInterestUsd: Number.isFinite(openInterestUsd) ? openInterestUsd : null,
+      source: "Binance USDⓈ-M futures",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function cryptoDerivatives(): Promise<CryptoDerivativesRow[]> {
+  const rows = await Promise.all([binanceDerivativesRow("BTCUSDT"), binanceDerivativesRow("ETHUSDT")]);
+  return rows.filter((row): row is CryptoDerivativesRow => Boolean(row));
 }
 
 async function cryptoCategories(): Promise<BoardRow[]> {
@@ -493,7 +584,7 @@ async function cryptoCategories(): Promise<BoardRow[]> {
 
 async function buildCryptoSection(): Promise<MarketSection> {
   try {
-    const [global, coins, categories] = await Promise.all([cryptoGlobal(), cryptoCoins(), cryptoCategories()]);
+    const [global, coins, categories, derivatives, fearGreed] = await Promise.all([cryptoGlobal(), cryptoCoins(), cryptoCategories(), cryptoDerivatives(), cryptoFearGreedIndex()]);
     const topCoins = coins.slice(0, 10);
     const missingCore: string[] = [];
     if (!(global.marketCap > 0)) missingCore.push("全市场总市值");
@@ -512,11 +603,13 @@ async function buildCryptoSection(): Promise<MarketSection> {
       markdown: [
         "## 全市场概览",
         "",
-        `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}。BTC 市值占比 ${ratioPct(global.btcDominance)}，ETH 市值占比 ${ratioPct(global.ethDominance)}。`,
+        `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}。${global.marketCapChange24h === null ? "全市场总市值 24小时变化率未获取到可用数据。" : `全市场总市值 24小时变化率 ${pct(global.marketCapChange24h)}。`}BTC 市值占比 ${ratioPct(global.btcDominance)}，ETH 市值占比 ${ratioPct(global.ethDominance)}。`,
         "",
         "## 主流资产表现",
         "",
         topCoins.map(row => `- ${row.name}（${row.symbol.toUpperCase()}）：${usd(row.price, row.price >= 100 ? 0 : 2)}，24小时 ${pct(row.pct)}，市值约 ${usdWanYi(row.marketCap)}`).join("\n"),
+        "",
+        cryptoSevenDayLine(coins),
         "",
         "## 市场强弱结构",
         "",
@@ -525,9 +618,14 @@ async function buildCryptoSection(): Promise<MarketSection> {
         boardLine("分类板块涨幅靠前", categoryTop),
         boardLine(laggingLabel("分类板块跌幅靠前", categoryBottom), categoryBottom),
         "",
+        "## 衍生品与情绪辅助",
+        "",
+        derivativesLine(derivatives),
+        fearGreedLine(fearGreed),
+        "",
         "## 数据边界",
         "",
-        "本篇采用公开聚合行情接口，覆盖全市场市值、成交量、BTC/ETH 占比、主流币与部分分类板块。分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响，不生成交易动作或资产配置结论。",
+        "本篇采用公开聚合行情接口，覆盖全市场市值、成交量、BTC/ETH 占比、主流币与部分分类板块；增强数据在可用时补充全市场 24小时变化率、BTC/ETH 7日涨跌幅、主流合约资金费率、未平仓合约名义价值与情绪指数。分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响；衍生品指标采用单一交易所口径，未平仓合约名义价值使用美元计价估算，不代表全市场杠杆结构；情绪指数仅作辅助记录，不生成交易动作或资产配置结论。",
       ].join("\n"),
     };
   } catch (error) {
