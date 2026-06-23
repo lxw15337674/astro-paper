@@ -149,7 +149,7 @@ test("HN source payload carries original and comment evidence", () => {
   assert.match(payload.hn_comment_excerpt, /reverse proxies/);
 });
 
-test("archive and verifier accept generated HN, split market posts, and podcast notes", () => {
+test("archive and verifier accept generated HN, market posts, podcast notes, weekly and daily digests", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-archive-"));
   const hnBody = `1. 🔥 Developers don't understand CORS
 - ⭐ 185 points · 88 评论
@@ -225,10 +225,28 @@ BTC/ETH 衍生品辅助指标：BTC（CoinGecko Binance Futures）资金费率 +
 `;
   const us = archivePost({ task: "us-market-daily", date: "2099-01-02", repo, body: usBody, force: true });
   const podcast = archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: podcastBody, force: true });
+  const techWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-weekly.md"), "utf8");
+  const techWeekly = archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body: techWeeklyBody, force: true });
+  const aiWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/ai-weekly.md"), "utf8");
+  const aiWeekly = archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body: aiWeeklyBody, force: true });
+  const techBusinessWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-business-weekly.md"), "utf8");
+  const techBusinessWeekly = archivePost({ task: "tech-business-weekly", date: "2099-01-05", repo, body: techBusinessWeeklyBody, force: true });
+  const techDailyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-daily.md"), "utf8");
+  const techDaily = archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: techDailyBody, force: true });
+  const aiDailyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/ai-daily.md"), "utf8");
+  const aiDaily = archivePost({ task: "ai-daily", date: "2099-01-06", repo, body: aiDailyBody, force: true });
+  const techBusinessDailyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-business-daily.md"), "utf8");
+  const techBusinessDaily = archivePost({ task: "tech-business-daily", date: "2099-01-06", repo, body: techBusinessDailyBody, force: true });
   const asiaMarkdown = fs.readFileSync(path.join(repo, asia.path), "utf8");
   const cryptoMarkdown = fs.readFileSync(path.join(repo, crypto.path), "utf8");
   const usMarkdown = fs.readFileSync(path.join(repo, us.path), "utf8");
   const podcastMarkdown = fs.readFileSync(path.join(repo, podcast.path), "utf8");
+  const techWeeklyMarkdown = fs.readFileSync(path.join(repo, techWeekly.path), "utf8");
+  const aiWeeklyMarkdown = fs.readFileSync(path.join(repo, aiWeekly.path), "utf8");
+  const techBusinessWeeklyMarkdown = fs.readFileSync(path.join(repo, techBusinessWeekly.path), "utf8");
+  const techDailyMarkdown = fs.readFileSync(path.join(repo, techDaily.path), "utf8");
+  const aiDailyMarkdown = fs.readFileSync(path.join(repo, aiDaily.path), "utf8");
+  const techBusinessDailyMarkdown = fs.readFileSync(path.join(repo, techBusinessDaily.path), "utf8");
   assert.match(asiaMarkdown, /title: "亚洲市场日报｜2099-01-02"/);
   assert.match(asiaMarkdown, /A股行业板块/);
   assert.match(cryptoMarkdown, /title: "数字货币日报｜2099-01-02"/);
@@ -242,15 +260,78 @@ BTC/ETH 衍生品辅助指标：BTC（CoinGecko Binance Futures）资金费率 +
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);
   assert.match(podcastMarkdown, /### 长文笔记/);
+  assert.match(techWeeklyMarkdown, /title: "技术趋势与工程观察｜2099-01-03"/);
+  assert.match(techWeeklyMarkdown, /技术周刊/);
+  assert.match(techWeeklyMarkdown, /^## 工程观察/m);
+  assert.match(techWeeklyMarkdown, /工程价值|工程含义|工程实践|迁移风险|采用成本|变更管理/);
+  assert.doesNotMatch(techWeeklyMarkdown, /一文[读看搞]懂|从零|入门教程|基础教程|面试题/);
+  assert.match(aiWeeklyMarkdown, /title: "AI 周刊｜2099-01-04"/);
+  assert.match(aiWeeklyMarkdown, /AI周刊/);
+  assert.match(aiWeeklyMarkdown, /^## Agent 与工程化/m);
+  assert.match(aiWeeklyMarkdown, /能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产/);
+  assert.doesNotMatch(aiWeeklyMarkdown.split("---\n\n").at(-1) || "", /融资|工具榜单|提示词技巧|论文导读|赋能|颠覆|革命性|不容错过|值得关注/);
+  assert.match(techBusinessWeeklyMarkdown, /title: "科技商业观察周刊｜2099-01-05"/);
+  assert.match(techBusinessWeeklyMarkdown, /科技商业观察/);
+  assert.match(techBusinessWeeklyMarkdown, /^## 政策、监管与安全/m);
+  assert.match(techBusinessWeeklyMarkdown, /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察/);
+  assert.doesNotMatch(techBusinessWeeklyMarkdown.split("---\n\n").at(-1) || "", /娱乐八卦|购物推荐|工具榜单|融资快讯|投资建议|买卖建议|股价预测|赋能|颠覆|革命性|不容错过|值得关注/);
+  assert.match(techDailyMarkdown, /title: "技术工程日报｜2099-01-06"/);
+  assert.match(techDailyMarkdown, /技术工程日报/);
+  assert.match(techDailyMarkdown, /工程影响|工程风险|架构|版本|安全|迁移/);
+  assert.match(aiDailyMarkdown, /title: "AI 工程日报｜2099-01-06"/);
+  assert.match(aiDailyMarkdown, /AI工程日报/);
+  assert.match(aiDailyMarkdown, /Agent|模型|成本|风险|评测|治理|工程/);
+  assert.match(techBusinessDailyMarkdown, /title: "科技商业观察日报｜2099-01-06"/);
+  assert.match(techBusinessDailyMarkdown, /科技商业观察日报/);
+  assert.match(techBusinessDailyMarkdown, /监管|政策|商业|企业|供应链|不确定|风险/);
   for (const markdown of [asiaMarkdown, cryptoMarkdown, usMarkdown]) {
     assert.match(markdown, /pubDatetime: 2099-01-01T16:00:00Z/);
     assert.match(markdown.split("---\n\n").at(-1) || "", /^## 总结/m);
     assert.doesNotMatch(markdown, /建议关注|值得关注|继续关注|最看好|赚钱点子|操作|布局/);
   }
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [hn, asia, crypto, us, podcast] }));
-  assert.equal(verifyResultJson(repo, resultJson), 5);
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, asia, crypto, us, podcast, techWeekly, aiWeekly, techBusinessWeekly, techDaily, aiDaily, techBusinessDaily] }));
+  assert.equal(verifyResultJson(repo, resultJson), 11);
 });
+
+test("tech weekly rejects pure tutorial language", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-tech-weekly-bad-"));
+  const body = `## 本周快讯
+
+### [一文搞懂 Redis 基础教程](https://example.com/redis)
+
+这是一篇没有工程事件的 API 详解，只是在讲基础知识。https://example.com/redis https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e`;
+  assert.throws(() => archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body, force: true }), /pure tutorial language|at least three expected sections/);
+});
+
+test("AI weekly rejects low-signal AI content", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-ai-weekly-bad-"));
+  const body = `## 本周模型与产品
+
+### [10 个 AI 工具推荐](https://example.com/ai-tools)
+
+这是一篇工具榜单和提示词技巧文章，没有模型能力边界、工程成本、治理风险或生产采用条件。https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e https://example.com/f`;
+  assert.throws(() => archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body, force: true }), /low-signal language|at least three expected sections/);
+});
+
+test("tech business weekly rejects low-signal news content", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-tech-business-weekly-bad-"));
+  const body = `## 本周大事件
+
+### [本周科技购物推荐与融资快讯](https://example.com/deals)
+
+这是一篇购物推荐、工具榜单和融资快讯合集，还包含投资建议和股价预测，没有政策、监管、安全、平台、公司或商业影响判断。https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e https://example.com/f https://example.com/g https://example.com/h`;
+  assert.throws(() => archivePost({ task: "tech-business-weekly", date: "2099-01-05", repo, body, force: true }), /low-signal language|at least three expected sections/);
+});
+
+
+test("daily digest verifier skips low-quality skipped rows", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-daily-skipped-"));
+  const resultJson = path.join(repo, "result.json");
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "tech-daily", path: "", skipped: true, skip_reason: "only 1 item" }] }));
+  assert.equal(verifyResultJson(repo, resultJson), 0);
+});
+
 
 test("foreign tech podcast rejects repeated summaries", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-repeat-"));

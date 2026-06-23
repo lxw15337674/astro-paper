@@ -39,6 +39,12 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
     if (!frontmatter.includes(field)) throw new Error(`${file} frontmatter missing ${field}`);
   }
   if (expectedTask === "hn-top10" && !frontmatter.includes("HackerNews")) throw new Error(`${file} frontmatter missing HackerNews tag/title`);
+  if (expectedTask === "tech-weekly" && !frontmatter.includes("技术周刊")) throw new Error(`${file} frontmatter missing 技术周刊 tag/title`);
+  if (expectedTask === "ai-weekly" && !frontmatter.includes("AI周刊")) throw new Error(`${file} frontmatter missing AI周刊 tag/title`);
+  if (expectedTask === "tech-business-weekly" && !frontmatter.includes("科技商业观察")) throw new Error(`${file} frontmatter missing 科技商业观察 tag/title`);
+  if (expectedTask === "tech-daily" && !frontmatter.includes("技术工程日报")) throw new Error(`${file} frontmatter missing 技术工程日报 tag/title`);
+  if (expectedTask === "ai-daily" && !frontmatter.includes("AI工程日报")) throw new Error(`${file} frontmatter missing AI工程日报 tag/title`);
+  if (expectedTask === "tech-business-daily" && !frontmatter.includes("科技商业观察日报")) throw new Error(`${file} frontmatter missing 科技商业观察日报 tag/title`);
   const marketLabels: Record<string, string> = {
     "asia-market-daily": "亚洲市场日报",
     "crypto-market-daily": "数字货币日报",
@@ -103,9 +109,133 @@ function verifyForeignTechPodcast(relPath: string, body: string): void {
   }
 }
 
+function verifyTechWeekly(relPath: string, body: string): void {
+  const sectionCount = (body.match(/^##\s+/gm) || []).length;
+  if (sectionCount < 3) throw new Error(`${relPath} tech weekly needs at least three sections`);
+  requireTermPatterns(relPath, body, [
+    { label: "source links", pattern: /https?:\/\// },
+    { label: "engineering judgement", pattern: /影响|取舍|风险|迁移|适合|可以忽略|代价|工程|实践/ },
+  ]);
+  const links = body.match(/https?:\/\/\S+/g) || [];
+  if (links.length < 6) throw new Error(`${relPath} tech weekly needs at least six source links, got ${links.length}`);
+  for (const pattern of [/一文[读看搞]懂/, /从零(?:开始)?/, /入门教程/, /基础教程/, /面试题/, /API\s*详解/i, /使用教程/, /赋能|不容错过|革命性/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains tech-weekly forbidden pattern: ${pattern.source}`);
+  }
+}
+
+function verifyNoDuplicateWeeklyLinksAndHeadings(relPath: string, body: string): void {
+  const links = body.match(/https?:\/\/\S+/g) || [];
+  const normalizedLinks = links.map(link => link.replace(/[)）.,，。]+$/, "").toLowerCase());
+  if (new Set(normalizedLinks).size !== normalizedLinks.length) throw new Error(`${relPath} contains duplicate links`);
+  const headings = (body.match(/^###\s+(.+)$/gm) || []).map(heading => heading.replace(/^###\s+/, "").replace(/\]\(.+\)/, "]").trim().toLowerCase());
+  if (new Set(headings).size !== headings.length) throw new Error(`${relPath} contains duplicate headings`);
+}
+
+function verifyTechBusinessWeekly(relPath: string, body: string): void {
+  const sectionCount = (body.match(/^##\s+/gm) || []).length;
+  if (sectionCount < 3) throw new Error(`${relPath} tech business weekly needs at least three sections`);
+  requireTermPatterns(relPath, body, [
+    { label: "source links", pattern: /https?:\/\// },
+    { label: "business judgement", pattern: /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察/ },
+  ]);
+  const itemCount = (body.match(/^###\s+/gm) || []).length;
+  if (itemCount < 10) throw new Error(`${relPath} tech business weekly needs at least 10 items, got ${itemCount}`);
+  if (body.trim().length < 3800) throw new Error(`${relPath} tech business weekly is too short (${body.trim().length} < 3800)`);
+  const links = body.match(/https?:\/\/\S+/g) || [];
+  if (links.length < 8) throw new Error(`${relPath} tech business weekly needs at least eight source links, got ${links.length}`);
+  verifyNoDuplicateWeeklyLinksAndHeadings(relPath, body);
+  for (const pattern of [/原始链接未提供|链接见候选源/, /娱乐八卦/, /购物推荐/, /工具榜单/, /融资快讯/, /投资建议/, /买卖建议/, /股价预测/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains tech-business-weekly forbidden pattern: ${pattern.source}`);
+  }
+}
+
+function verifyAiWeekly(relPath: string, body: string): void {
+  const sectionCount = (body.match(/^##\s+/gm) || []).length;
+  if (sectionCount < 3) throw new Error(`${relPath} AI weekly needs at least three sections`);
+  requireTermPatterns(relPath, body, [
+    { label: "source links", pattern: /https?:\/\// },
+    { label: "AI judgement", pattern: /能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产/ },
+  ]);
+  const itemCount = (body.match(/^###\s+/gm) || []).length;
+  if (itemCount < 12) throw new Error(`${relPath} AI weekly needs at least 12 items, got ${itemCount}`);
+  if (body.trim().length < 4500) throw new Error(`${relPath} AI weekly is too short (${body.trim().length} < 4500)`);
+  const links = body.match(/https?:\/\/\S+/g) || [];
+  if (links.length < 10) throw new Error(`${relPath} AI weekly needs at least ten source links, got ${links.length}`);
+  verifyNoDuplicateWeeklyLinksAndHeadings(relPath, body);
+  for (const pattern of [/融资/, /工具榜单/, /prompt\s*技巧/i, /提示词技巧/, /一文[读看搞]懂/, /从零(?:开始)?/, /入门教程/, /论文导读/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains AI-weekly forbidden pattern: ${pattern.source}`);
+  }
+}
+
+function verifyDailyCommon(relPath: string, body: string, label: string, minChars: number): void {
+  const itemCount = (body.match(/^###\s+/gm) || []).length;
+  if (itemCount < 3) throw new Error(`${relPath} ${label} needs at least 3 items, got ${itemCount}`);
+  if (body.trim().length < minChars) throw new Error(`${relPath} ${label} is too short (${body.trim().length} < ${minChars})`);
+  const links = body.match(/https?:\/\/\S+/g) || [];
+  if (links.length < 3) throw new Error(`${relPath} ${label} needs at least three source links, got ${links.length}`);
+  verifyNoDuplicateWeeklyLinksAndHeadings(relPath, body);
+  for (const pattern of [/原始链接未提供|链接见候选源/, /TODO/, /待补充/, /无法判断/, /本文将/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains daily forbidden pattern: ${pattern.source}`);
+  }
+}
+
+function verifyTechDaily(relPath: string, body: string): void {
+  verifyDailyCommon(relPath, body, "tech daily", 700);
+  requireTermPatterns(relPath, body, [
+    { label: "engineering judgement", pattern: /影响|取舍|风险|迁移|适合|代价|工程|实践|架构|版本|安全/ },
+  ]);
+  for (const pattern of [/一文[读看搞]懂/, /从零(?:开始)?/, /入门教程/, /基础教程/, /面试题/, /API\s*详解/i, /使用教程/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains tech-daily forbidden pattern: ${pattern.source}`);
+  }
+}
+
+function verifyAiDaily(relPath: string, body: string): void {
+  verifyDailyCommon(relPath, body, "AI daily", 700);
+  requireTermPatterns(relPath, body, [
+    { label: "AI judgement", pattern: /能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产|工程/ },
+  ]);
+  for (const pattern of [/融资/, /工具榜单/, /prompt\s*技巧/i, /提示词技巧/, /论文导读/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains AI-daily forbidden pattern: ${pattern.source}`);
+  }
+}
+
+function verifyTechBusinessDaily(relPath: string, body: string): void {
+  verifyDailyCommon(relPath, body, "tech business daily", 700);
+  requireTermPatterns(relPath, body, [
+    { label: "business judgement", pattern: /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察|供应链/ },
+  ]);
+  for (const pattern of [/娱乐八卦/, /购物推荐/, /工具榜单/, /融资快讯/, /投资建议/, /买卖建议/, /股价预测/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains tech-business-daily forbidden pattern: ${pattern.source}`);
+  }
+}
+
 function verifyMarketSemantics(relPath: string, body: string, task: string): void {
   if (task === "foreign-tech-podcast") {
     verifyForeignTechPodcast(relPath, body);
+    return;
+  }
+  if (task === "tech-weekly") {
+    verifyTechWeekly(relPath, body);
+    return;
+  }
+  if (task === "ai-weekly") {
+    verifyAiWeekly(relPath, body);
+    return;
+  }
+  if (task === "tech-business-weekly") {
+    verifyTechBusinessWeekly(relPath, body);
+    return;
+  }
+  if (task === "tech-daily") {
+    verifyTechDaily(relPath, body);
+    return;
+  }
+  if (task === "ai-daily") {
+    verifyAiDaily(relPath, body);
+    return;
+  }
+  if (task === "tech-business-daily") {
+    verifyTechBusinessDaily(relPath, body);
     return;
   }
   verifyNoPositiveDeclineLabel(relPath, body);
@@ -156,7 +286,8 @@ export function verifyResultJson(repo: string, resultJson: string): number {
   let verified = 0;
   for (const item of payload.results) {
     if (!item || typeof item !== "object") throw new Error(`invalid result item: ${String(item)}`);
-    const row = item as { task?: string; path?: string };
+    const row = item as { task?: string; path?: string; skipped?: boolean };
+    if (row.skipped && !row.path) continue;
     verifyPostContract(repo, row.path || "", row.task || "");
     verified += 1;
   }
