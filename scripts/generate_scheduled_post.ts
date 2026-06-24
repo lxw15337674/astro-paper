@@ -25,7 +25,7 @@ function isDailyDigestTask(task: Task): boolean {
 const TASK_META: Record<Task, { titlePrefix: string; fileName: string; tags: string[] }> = {
   "hn-top10": { titlePrefix: "HackerNews Top 10", fileName: "hackernews-{date}.md", tags: ["定时文章", "HackerNews"] },
   "asia-market-daily": { titlePrefix: "亚洲市场日报", fileName: "亚洲市场日报-{date}.md", tags: ["定时文章", "亚洲市场日报"] },
-  "crypto-market-daily": { titlePrefix: "数字货币日报", fileName: "数字货币日报-{date}.md", tags: ["定时文章", "数字货币日报"] },
+  "crypto-market-daily": { titlePrefix: "比特币日报", fileName: "比特币日报-{date}.md", tags: ["定时文章", "比特币日报"] },
   "us-market-daily": { titlePrefix: "美股市场日报", fileName: "美股市场日报-{date}.md", tags: ["定时文章", "美股市场日报"] },
   "foreign-tech-podcast": { titlePrefix: "海外科技访谈播客笔记", fileName: "海外科技播客-{date}.md", tags: ["定时文章", "海外科技播客"] },
   "tech-weekly": { titlePrefix: "技术趋势与工程观察", fileName: "技术周刊-{date}.md", tags: ["定时文章", "技术周刊"] },

@@ -52,7 +52,7 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
   if (expectedTask === "tech-business-daily" && !frontmatter.includes("科技商业观察日报")) throw new Error(`${file} frontmatter missing 科技商业观察日报 tag/title`);
   const marketLabels: Record<string, string> = {
     "asia-market-daily": "亚洲市场日报",
-    "crypto-market-daily": "数字货币日报",
+    "crypto-market-daily": "比特币日报",
     "us-market-daily": "美股市场日报",
   };
   const expectedMarketLabel = marketLabels[expectedTask];
@@ -250,15 +250,11 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     }
   }
   if (task === "crypto-market-daily") {
-    requireTermPatterns(relPath, body, [
-      { label: "总市值", pattern: /总市值/ },
-      { label: "24小时成交量", pattern: /24\s*小时成交量/ },
-      { label: "BTC", pattern: /BTC/ },
-      { label: "ETH", pattern: /ETH/ },
-      { label: "主流资产", pattern: /主流资产/ },
-    ]);
-    if (/数字货币当日未获取到可用公开市场数据/.test(body)) throw new Error(`${relPath} contains missing core crypto market data`);
-    if (/^##\s*数据边界(?:说明)?\s*$/m.test(body)) throw new Error(`${relPath} contains standalone crypto data-boundary section`);
+    requireTerms(relPath, body, ["BTC", "现货", "永续", "期权", "Put/Call", "ATM IV", "数据边界"]);
+    for (const pattern of [/ETH|Solana|SOL|BNB|山寨币|主流资产|分类板块|全市场概览/]) {
+      if (pattern.test(body)) throw new Error(`${relPath} contains forbidden legacy crypto-market term: ${pattern.source}`);
+    }
+    if (/数字货币当日未获取到可用公开市场数据|全市场总市值|BTC\/ETH 占比/.test(body)) throw new Error(`${relPath} contains legacy crypto market data language`);
   }
   if (task === "us-market-daily" && !/美股当日未产生完整常规收盘数据|美股当日未获取到完整常规收盘数据/.test(body)) {
     requireTerms(relPath, body, ["道指", "纳指", "标普500"]);

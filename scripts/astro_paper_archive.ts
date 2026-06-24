@@ -317,10 +317,10 @@ function taskInfo(task: string): { titlePrefix: string; tag: string; description
       fileName: "亚洲市场日报-{date}.md",
     },
     "crypto-market-daily": {
-      titlePrefix: "数字货币日报",
-      tag: "数字货币日报",
-      description: "每日数字货币市场日报，汇总全市场市值、成交量、主流资产与分类板块结构。",
-      fileName: "数字货币日报-{date}.md",
+      titlePrefix: "比特币日报",
+      tag: "比特币日报",
+      description: "每日比特币市场日报，汇总 BTC 现货、永续、期权保护结构、情绪与风险边界。",
+      fileName: "比特币日报-{date}.md",
     },
     "us-market-daily": {
       titlePrefix: "美股市场日报",

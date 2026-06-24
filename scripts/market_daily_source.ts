@@ -1,10 +1,8 @@
 #!/usr/bin/env tsx
-import { CoinGeckoClient } from "coingecko-api-v3";
 import YahooFinance from "yahoo-finance2";
 import { bjtDateString, fetchJson, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
-const coinGecko = new CoinGeckoClient({ timeout: 20_000, autoRetry: false });
 
 const EASTMONEY_FIELDS = "f12,f14,f2,f3,f4,f5,f6,f17,f18";
 const EASTMONEY_INDEX_SECS = {
@@ -59,12 +57,6 @@ type MarketSection = {
 
 type BoardRow = { name: string; pct: number; amount?: number };
 type SectorRow = { symbol: string; name: string; pct: number; close: number };
-type CryptoCoin = { name: string; symbol: string; price: number; pct: number; pct7d: number | null; marketCap: number; volume: number };
-type CryptoGlobal = { marketCap: number; volume: number; btcDominance: number; ethDominance: number; marketCapChange24h: number | null };
-type CryptoDerivativesRow = { symbol: string; fundingRate: number | null; openInterestUsd: number | null; source: string };
-type FearGreedIndex = { value: number; label: string; updatedAt: string };
-type CryptoDerivativeSymbol = "BTCUSDT" | "ETHUSDT";
-
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
 type YahooChartPayload = {
   chart?: {
@@ -108,18 +100,6 @@ function pct(value: unknown): string {
   return `${num > 0 ? "+" : ""}${num.toFixed(2)}%`;
 }
 
-function finePct(value: unknown, digits = 4): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "";
-  return `${num > 0 ? "+" : ""}${num.toFixed(digits)}%`;
-}
-
-function ratioPct(value: unknown): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "";
-  return `${num.toFixed(2)}%`;
-}
-
 function number(value: unknown, digits = 2): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
@@ -142,12 +122,6 @@ function usdWanYi(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
   return `${(num / 1_000_000_000_000).toFixed(2)}万亿美元`;
-}
-
-function usdYi(value: unknown): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "";
-  return `${(num / 100_000_000).toFixed(2)}亿美元`;
 }
 
 function parseDate(date: string): Date {
@@ -334,38 +308,6 @@ function sectorLine(label: string, rows: SectorRow[]): string {
   return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
 }
 
-function cryptoLine(label: string, rows: CryptoCoin[]): string {
-  if (!rows.length) return `${label}：未获取到稳定主流币数据。`;
-  return `${label}：${rows.map(row => `${row.symbol.toUpperCase()} ${pct(row.pct)}`).join("、")}。`;
-}
-
-function cryptoSevenDayLine(coins: CryptoCoin[]): string {
-  const rows: CryptoCoin[] = [];
-  for (const symbol of ["btc", "eth"]) {
-    const coin = coins.find(row => row.symbol.toLowerCase() === symbol);
-    if (coin && coin.pct7d !== null && Number.isFinite(coin.pct7d)) rows.push(coin);
-  }
-  if (!rows.length) return "BTC/ETH 7日涨跌幅：未获取到可用 7 日价格变化数据。";
-  return `BTC/ETH 7日涨跌幅：${rows.map(row => `${row.symbol.toUpperCase()} ${pct(row.pct7d || 0)}`).join("、")}。`;
-}
-
-function derivativesLine(rows: CryptoDerivativesRow[]): string {
-  if (!rows.length) return "BTC/ETH 衍生品辅助指标：未获取到可用资金费率或未平仓合约名义价值；本篇不据此判断杠杆情绪。";
-  return `BTC/ETH 衍生品辅助指标：${rows
-    .map(row => {
-      const parts: string[] = [];
-      if (row.fundingRate !== null) parts.push(`资金费率 ${finePct(row.fundingRate)}`);
-      if (row.openInterestUsd !== null) parts.push(`未平仓合约名义价值约 ${usdYi(row.openInterestUsd)}`);
-      return `${row.symbol}（${row.source}）${parts.join("，")}`;
-    })
-    .join("；")}。`;
-}
-
-function fearGreedLine(index: FearGreedIndex | null): string {
-  if (!index) return "市场情绪辅助指标：未获取到 Fear & Greed Index，本篇不补情绪判断。";
-  return `市场情绪辅助指标：Fear & Greed Index 为 ${index.value}（${index.label}），更新时间 ${index.updatedAt}。`;
-}
-
 function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T[]; bottom: T[] } {
   const sorted = rows.toSorted((a, b) => b.pct - a.pct);
   return { top: sorted.slice(0, limit), bottom: sorted.slice(-limit).reverse() };
@@ -484,207 +426,277 @@ async function usSectorEtfs(date: string): Promise<SectorRow[]> {
   return rows.filter((row): row is SectorRow => Boolean(row));
 }
 
-async function cryptoGlobal(): Promise<CryptoGlobal> {
-  const payload = (await coinGecko.global()) as {
-    data?: {
-      total_market_cap?: { usd?: number };
-      total_volume?: { usd?: number };
-      market_cap_percentage?: { btc?: number; eth?: number };
-      market_cap_change_percentage_24h_usd?: number;
-    };
-  };
-  const marketCapChange24h = Number(payload.data?.market_cap_change_percentage_24h_usd);
-  return {
-    marketCap: Number(payload.data?.total_market_cap?.usd || 0),
-    volume: Number(payload.data?.total_volume?.usd || 0),
-    btcDominance: Number(payload.data?.market_cap_percentage?.btc || 0),
-    ethDominance: Number(payload.data?.market_cap_percentage?.eth || 0),
-    marketCapChange24h: Number.isFinite(marketCapChange24h) ? marketCapChange24h : null,
-  };
-}
+type BtcSpot = { price: number; pct24h: number; pct7d: number; volume: number; marketCap: number; updatedAt: string };
+type DeribitBookSummaryPayload<T> = { result?: T[] };
+type DeribitPerpRow = {
+  instrument_name?: string;
+  open_interest?: number;
+  volume_usd?: number;
+  current_funding?: number;
+  funding_8h?: number;
+  price_change?: number;
+  mark_price?: number;
+};
+type DeribitOptionRow = {
+  instrument_name?: string;
+  open_interest?: number;
+  volume?: number;
+  mark_iv?: number;
+  underlying_price?: number;
+  estimated_delivery_price?: number;
+};
+type ParsedBtcOption = {
+  instrument: string;
+  expiry: string;
+  expiryMs: number;
+  strike: number;
+  type: "C" | "P";
+  openInterest: number;
+  volume: number;
+  markIv: number;
+  underlyingPrice: number;
+};
+type OptionExpirySummary = { expiry: string; totalOi: number; putCallOiRatio: number; putOi: number; callOi: number };
+type BtcOptionSummary = {
+  putCallOiRatio: number;
+  putCallVolumeRatio: number;
+  topExpiries: OptionExpirySummary[];
+  maxPutOi: ParsedBtcOption | null;
+  maxCallOi: ParsedBtcOption | null;
+  nearExpiry: string;
+  nearAtmIv: number;
+  nearOtmPutIv: number;
+  nearOtmCallIv: number;
+  nearOtmIvSkew: number;
+  atmTermStructure: { expiry: string; atmIv: number }[];
+};
+type FearGreed = { value: number; classification: string; timestamp: string };
 
-async function cryptoCoins(): Promise<CryptoCoin[]> {
-  const rows = (await coinGecko.coinMarket({ vs_currency: "usd", order: "market_cap_desc", per_page: 30, page: 1, sparkline: false, price_change_percentage: "24h,7d" })) as
+const DERIBIT_MONTHS: Record<string, number> = {
+  JAN: 0,
+  FEB: 1,
+  MAR: 2,
+  APR: 3,
+  MAY: 4,
+  JUN: 5,
+  JUL: 6,
+  AUG: 7,
+  SEP: 8,
+  OCT: 9,
+  NOV: 10,
+  DEC: 11,
+};
+
+async function btcSpot(): Promise<BtcSpot> {
+  const rows = (await fetchJson<
     {
-      name?: string;
-      symbol?: string;
       current_price?: number;
-      price_change_percentage_24h?: number;
+      price_change_percentage_24h_in_currency?: number;
       price_change_percentage_7d_in_currency?: number;
-      market_cap?: number;
       total_volume?: number;
-    }[];
-  return rows
-    .map(row => ({
-      name: row.name || row.symbol || "",
-      symbol: row.symbol || "",
-      price: Number(row.current_price || 0),
-      pct: Number(row.price_change_percentage_24h || 0),
-      pct7d: Number.isFinite(Number(row.price_change_percentage_7d_in_currency)) ? Number(row.price_change_percentage_7d_in_currency) : null,
-      marketCap: Number(row.market_cap || 0),
-      volume: Number(row.total_volume || 0),
-    }))
-    .filter(row => row.name && row.symbol && Number.isFinite(row.pct) && row.marketCap > 0);
+      market_cap?: number;
+      last_updated?: string;
+    }[]
+  >("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin&price_change_percentage=24h,7d&per_page=1&page=1&sparkline=false", { timeoutMs: 20_000 })) as {
+    current_price?: number;
+    price_change_percentage_24h_in_currency?: number;
+    price_change_percentage_7d_in_currency?: number;
+    total_volume?: number;
+    market_cap?: number;
+    last_updated?: string;
+  }[];
+  const row = rows[0] || {};
+  const spot = {
+    price: Number(row.current_price || 0),
+    pct24h: Number(row.price_change_percentage_24h_in_currency || 0),
+    pct7d: Number(row.price_change_percentage_7d_in_currency || 0),
+    volume: Number(row.total_volume || 0),
+    marketCap: Number(row.market_cap || 0),
+    updatedAt: row.last_updated || "",
+  };
+  if (!(spot.price > 0) || !Number.isFinite(spot.pct24h) || !Number.isFinite(spot.pct7d)) throw new Error("BTC 现货价格或涨跌幅");
+  return spot;
 }
 
-async function cryptoFearGreedIndex(): Promise<FearGreedIndex | null> {
+async function btcPerpetual(): Promise<DeribitPerpRow> {
+  const payload = await fetchJson<DeribitBookSummaryPayload<DeribitPerpRow>>("https://www.deribit.com/api/v2/public/get_book_summary_by_instrument?instrument_name=BTC-PERPETUAL", { timeoutMs: 20_000 });
+  const row = payload.result?.[0] || {};
+  if (!(Number(row.mark_price || 0) > 0)) throw new Error("Deribit BTC-PERPETUAL mark price");
+  return row;
+}
+
+function parseDeribitBtcOption(row: DeribitOptionRow): ParsedBtcOption | null {
+  const instrument = row.instrument_name || "";
+  const match = /^BTC-(\d{1,2})([A-Z]{3})(\d{2})-(\d+(?:\.\d+)?)-([CP])$/.exec(instrument);
+  if (!match) return null;
+  const month = DERIBIT_MONTHS[match[2]];
+  if (month === undefined) return null;
+  const day = Number(match[1]);
+  const year = 2000 + Number(match[3]);
+  const expiryMs = Date.UTC(year, month, day);
+  const option = {
+    instrument,
+    expiry: `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    expiryMs,
+    strike: Number(match[4]),
+    type: match[5] as "C" | "P",
+    openInterest: Number(row.open_interest || 0),
+    volume: Number(row.volume || 0),
+    markIv: Number(row.mark_iv || 0),
+    underlyingPrice: Number(row.underlying_price || row.estimated_delivery_price || 0),
+  };
+  if (!Number.isFinite(option.strike) || !(option.strike > 0) || !Number.isFinite(option.expiryMs)) return null;
+  return option;
+}
+
+function safeRatio(numerator: number, denominator: number): number {
+  return Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0 ? numerator / denominator : 0;
+}
+
+function avg(values: number[]): number {
+  const finite = values.filter(value => Number.isFinite(value) && value > 0);
+  if (!finite.length) return 0;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function atmIv(rows: ParsedBtcOption[], underlying: number): number {
+  if (!(underlying > 0)) return 0;
+  return avg(
+    rows
+      .filter(row => row.markIv > 0)
+      .toSorted((a, b) => Math.abs(a.strike - underlying) - Math.abs(b.strike - underlying))
+      .slice(0, 6)
+      .map(row => row.markIv),
+  );
+}
+
+function closestOption(rows: ParsedBtcOption[], targetStrike: number, type: "C" | "P"): ParsedBtcOption | null {
+  return (
+    rows
+      .filter(row => row.type === type && row.markIv > 0)
+      .toSorted((a, b) => Math.abs(a.strike - targetStrike) - Math.abs(b.strike - targetStrike))[0] || null
+  );
+}
+
+function summarizeBtcOptions(rows: ParsedBtcOption[], underlying: number): BtcOptionSummary {
+  const valid = rows.filter(row => row.openInterest > 0 || row.volume > 0 || row.markIv > 0);
+  if (valid.length < 20) throw new Error("Deribit BTC option book rows");
+  const puts = valid.filter(row => row.type === "P");
+  const calls = valid.filter(row => row.type === "C");
+  const putOi = puts.reduce((sum, row) => sum + row.openInterest, 0);
+  const callOi = calls.reduce((sum, row) => sum + row.openInterest, 0);
+  const putVolume = puts.reduce((sum, row) => sum + row.volume, 0);
+  const callVolume = calls.reduce((sum, row) => sum + row.volume, 0);
+  const byExpiry = new Map<string, ParsedBtcOption[]>();
+  for (const row of valid) byExpiry.set(row.expiry, [...(byExpiry.get(row.expiry) || []), row]);
+  const expiries = [...byExpiry.entries()].toSorted((a, b) => a[1][0].expiryMs - b[1][0].expiryMs);
+  const topExpiries = expiries
+    .map(([expiry, expiryRows]) => {
+      const expiryPutOi = expiryRows.filter(row => row.type === "P").reduce((sum, row) => sum + row.openInterest, 0);
+      const expiryCallOi = expiryRows.filter(row => row.type === "C").reduce((sum, row) => sum + row.openInterest, 0);
+      return { expiry, putOi: expiryPutOi, callOi: expiryCallOi, totalOi: expiryPutOi + expiryCallOi, putCallOiRatio: safeRatio(expiryPutOi, expiryCallOi) };
+    })
+    .toSorted((a, b) => b.totalOi - a.totalOi)
+    .slice(0, 5);
+  const near = expiries.find(([, expiryRows]) => expiryRows.some(row => row.expiryMs >= Date.now() - 24 * 60 * 60 * 1000)) || expiries[0];
+  const nearRows = near?.[1] || valid;
+  const nearUnderlying = underlying || avg(nearRows.map(row => row.underlyingPrice));
+  const otmPut = closestOption(nearRows.filter(row => row.strike <= nearUnderlying), nearUnderlying * 0.95, "P");
+  const otmCall = closestOption(nearRows.filter(row => row.strike >= nearUnderlying), nearUnderlying * 1.05, "C");
+  const atmTermStructure = expiries.slice(0, 6).map(([expiry, expiryRows]) => ({ expiry, atmIv: atmIv(expiryRows, underlying || avg(expiryRows.map(row => row.underlyingPrice))) })).filter(item => item.atmIv > 0);
+  return {
+    putCallOiRatio: safeRatio(putOi, callOi),
+    putCallVolumeRatio: safeRatio(putVolume, callVolume),
+    topExpiries,
+    maxPutOi: puts.toSorted((a, b) => b.openInterest - a.openInterest)[0] || null,
+    maxCallOi: calls.toSorted((a, b) => b.openInterest - a.openInterest)[0] || null,
+    nearExpiry: near?.[0] || "",
+    nearAtmIv: atmIv(nearRows, nearUnderlying),
+    nearOtmPutIv: otmPut?.markIv || 0,
+    nearOtmCallIv: otmCall?.markIv || 0,
+    nearOtmIvSkew: (otmPut?.markIv || 0) - (otmCall?.markIv || 0),
+    atmTermStructure,
+  };
+}
+
+async function btcOptions(underlying: number): Promise<BtcOptionSummary> {
+  const payload = await fetchJson<DeribitBookSummaryPayload<DeribitOptionRow>>("https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=option", { timeoutMs: 20_000 });
+  const rows = (payload.result || []).map(parseDeribitBtcOption).filter((row): row is ParsedBtcOption => Boolean(row));
+  return summarizeBtcOptions(rows, underlying);
+}
+
+async function fearGreed(): Promise<FearGreed | null> {
   try {
-    const payload = await fetchJson<{ data?: { value?: string; value_classification?: string; timestamp?: string }[] }>("https://api.alternative.me/fng/?limit=1&format=json", {
-      timeoutMs: 12_000,
-    });
-    const latest = payload.data?.[0];
-    const value = Number(latest?.value);
-    if (!Number.isFinite(value)) return null;
-    const timestamp = Number(latest?.timestamp || 0);
-    return {
-      value,
-      label: latest?.value_classification || "未标注",
-      updatedAt: timestamp > 0 ? new Date(timestamp * 1000).toISOString().replace(/\.\d{3}Z$/, "Z") : "未提供",
-    };
+    const payload = await fetchJson<{ data?: { value?: string; value_classification?: string; timestamp?: string }[] }>("https://api.alternative.me/fng/?limit=1&format=json", { timeoutMs: 20_000 });
+    const row = payload.data?.[0];
+    const value = Number(row?.value || 0);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return { value, classification: row?.value_classification || "", timestamp: row?.timestamp || "" };
   } catch {
     return null;
   }
 }
 
-async function coinGeckoDerivativesRows(): Promise<CryptoDerivativesRow[]> {
-  try {
-    const payload = await fetchJson<{ tickers?: { symbol?: string; funding_rate?: number; open_interest_usd?: number }[] }>(
-      "https://api.coingecko.com/api/v3/derivatives/exchanges/binance_futures?include_tickers=unexpired",
-      { timeoutMs: 20_000 },
-    );
-    const tickers = payload.tickers || [];
-    return (["BTCUSDT", "ETHUSDT"] as const)
-      .map(symbol => {
-        const ticker = tickers.find(row => row.symbol === symbol);
-        const fundingRate = Number(ticker?.funding_rate);
-        const openInterestUsd = Number(ticker?.open_interest_usd);
-        if (!Number.isFinite(fundingRate) && !Number.isFinite(openInterestUsd)) return null;
-        return {
-          symbol: symbol.replace("USDT", ""),
-          fundingRate: Number.isFinite(fundingRate) ? fundingRate : null,
-          openInterestUsd: Number.isFinite(openInterestUsd) ? openInterestUsd : null,
-          source: "CoinGecko Binance Futures",
-        };
-      })
-      .filter((row): row is CryptoDerivativesRow => Boolean(row));
-  } catch {
-    return [];
-  }
+function formatRatio(value: number): string {
+  return Number.isFinite(value) && value > 0 ? value.toFixed(2) : "未获取";
 }
 
-async function binanceDerivativesRow(symbol: CryptoDerivativeSymbol): Promise<CryptoDerivativesRow | null> {
-  try {
-    const [premium, openInterestRows] = await Promise.all([
-      fetchJson<{ lastFundingRate?: string }>(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`, { timeoutMs: 12_000 }),
-      fetchJson<{ sumOpenInterestValue?: string }[]>(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${symbol}&period=5m&limit=1`, { timeoutMs: 12_000 }),
-    ]);
-    const fundingRate = Number(premium.lastFundingRate);
-    const openInterestUsd = Number(openInterestRows.at(-1)?.sumOpenInterestValue);
-    if (!Number.isFinite(fundingRate) && !Number.isFinite(openInterestUsd)) return null;
-    return {
-      symbol: symbol.replace("USDT", ""),
-      fundingRate: Number.isFinite(fundingRate) ? fundingRate * 100 : null,
-      openInterestUsd: Number.isFinite(openInterestUsd) ? openInterestUsd : null,
-      source: "Binance USDⓈ-M futures",
-    };
-  } catch {
-    return null;
-  }
+function formatIv(value: number): string {
+  return Number.isFinite(value) && value > 0 ? `${value.toFixed(2)}%` : "未获取";
 }
 
-async function bybitDerivativesRow(symbol: CryptoDerivativeSymbol): Promise<CryptoDerivativesRow | null> {
-  try {
-    const payload = await fetchJson<{ result?: { list?: { fundingRate?: string; openInterestValue?: string }[] } }>(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`, {
-      timeoutMs: 12_000,
-    });
-    const ticker = payload.result?.list?.[0];
-    const fundingRate = Number(ticker?.fundingRate);
-    const openInterestUsd = Number(ticker?.openInterestValue);
-    if (!Number.isFinite(fundingRate) && !Number.isFinite(openInterestUsd)) return null;
-    return {
-      symbol: symbol.replace("USDT", ""),
-      fundingRate: Number.isFinite(fundingRate) ? fundingRate * 100 : null,
-      openInterestUsd: Number.isFinite(openInterestUsd) ? openInterestUsd : null,
-      source: "Bybit USDT perpetual",
-    };
-  } catch {
-    return null;
-  }
+function formatIvDiff(value: number): string {
+  return Number.isFinite(value) ? `${value.toFixed(2)}%` : "未获取";
 }
 
-async function derivativesRow(symbol: CryptoDerivativeSymbol): Promise<CryptoDerivativesRow | null> {
-  return (await binanceDerivativesRow(symbol)) || (await bybitDerivativesRow(symbol));
-}
-
-async function cryptoDerivatives(): Promise<CryptoDerivativesRow[]> {
-  const coinGeckoRows = await coinGeckoDerivativesRows();
-  const fallbackRows = await Promise.all(([
-    "BTCUSDT",
-    "ETHUSDT",
-  ] as const)
-    .filter(symbol => !coinGeckoRows.some(row => row.symbol === symbol.replace("USDT", "")))
-    .map(symbol => derivativesRow(symbol)));
-  return [...coinGeckoRows, ...fallbackRows.filter((row): row is CryptoDerivativesRow => Boolean(row))];
-}
-
-async function cryptoCategories(): Promise<BoardRow[]> {
-  try {
-    const rows = (await coinGecko.coinCategoriesListWithMarketData()) as { name?: string; market_cap_change_24h?: number; market_cap?: number }[];
-    return rows
-      .map(row => ({ name: row.name || "", pct: Number(row.market_cap_change_24h), amount: Number(row.market_cap || 0) }))
-      .filter(row => row.name && Number.isFinite(row.pct) && Number(row.amount || 0) > 1_000_000_000)
-      .slice(0, 80);
-  } catch {
-    return [];
-  }
+function optionOiLabel(option: ParsedBtcOption | null): string {
+  if (!option) return "未获取";
+  return `${option.expiry} ${usd(option.strike, 0)} ${option.type}，OI ${number(option.openInterest, 1)}`;
 }
 
 async function buildCryptoSection(): Promise<MarketSection> {
   try {
-    const [global, coins, categories, derivatives, fearGreed] = await Promise.all([cryptoGlobal(), cryptoCoins(), cryptoCategories(), cryptoDerivatives(), cryptoFearGreedIndex()]);
-    const topCoins = coins.slice(0, 10);
-    const missingCore: string[] = [];
-    if (!(global.marketCap > 0)) missingCore.push("全市场总市值");
-    if (!(global.volume > 0)) missingCore.push("24小时成交量");
-    if (!(global.btcDominance > 0)) missingCore.push("BTC 占比");
-    if (!(global.ethDominance > 0)) missingCore.push("ETH 占比");
-    if (topCoins.length < 10) missingCore.push("主流资产列表");
-    if (missingCore.length) throw new Error(missingCore.join("、"));
-    const { top: coinTop, bottom: coinBottom } = topAndBottom(coins.filter(row => row.marketCap >= 1_000_000_000));
-    const { top: categoryTop, bottom: categoryBottom } = topAndBottom(categories);
+    const spot = await btcSpot();
+    const [perp, options, sentiment] = await Promise.all([btcPerpetual(), btcOptions(spot.price), fearGreed()]);
+    const funding8h = Number(perp.funding_8h || 0) * 100;
+    const perpOi = Number(perp.open_interest || 0);
+    const perpVolumeUsd = Number(perp.volume_usd || 0);
+    const sentimentText = sentiment ? `Fear & Greed：${sentiment.value}（${sentiment.classification || "未分类"}）` : "Fear & Greed：未获取";
     return {
       key: "crypto",
-      title: "数字货币市场",
+      title: "比特币市场",
       open: true,
-      summary: `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}，BTC 占比 ${ratioPct(global.btcDominance)}，ETH 占比 ${ratioPct(global.ethDominance)}`,
+      summary: `BTC 约 ${usd(spot.price, 0)}，24小时 ${pct(spot.pct24h)}，7日 ${pct(spot.pct7d)}；Deribit 永续资金费率 ${pct(funding8h)}，期权全期限 Put/Call OI ${formatRatio(options.putCallOiRatio)}；${sentimentText}`,
       markdown: [
-        "## 全市场概览",
+        "## BTC 现货状态",
         "",
-        `数字货币总市值约 ${usdWanYi(global.marketCap)}，24小时成交量约 ${usdWanYi(global.volume)}。${global.marketCapChange24h === null ? "全市场总市值 24小时变化率未获取到可用数据。" : `全市场总市值 24小时变化率 ${pct(global.marketCapChange24h)}。`}BTC 市值占比 ${ratioPct(global.btcDominance)}，ETH 市值占比 ${ratioPct(global.ethDominance)}。`,
+        `BTC 现货约 ${usd(spot.price, 0)}，24小时 ${pct(spot.pct24h)}，7日 ${pct(spot.pct7d)}。24小时成交额约 ${usdWanYi(spot.volume)}，市值约 ${usdWanYi(spot.marketCap)}。`,
+        spot.updatedAt ? `CoinGecko 更新时间：${spot.updatedAt}。` : "",
         "",
-        "## 主流资产表现",
+        "## 永续与杠杆结构",
         "",
-        topCoins.map(row => `- ${row.name}（${row.symbol.toUpperCase()}）：${usd(row.price, row.price >= 100 ? 0 : 2)}，24小时 ${pct(row.pct)}，市值约 ${usdWanYi(row.marketCap)}`).join("\n"),
+        `Deribit BTC-PERPETUAL mark price 约 ${usd(Number(perp.mark_price || spot.price), 0)}，8小时资金费率 ${pct(funding8h)}，当前 funding ${pct(Number(perp.current_funding || 0) * 100)}。`,
+        `永续 OI 约 ${usd(perpOi, 0)}，24小时成交额约 ${usd(perpVolumeUsd, 0)}，价格变化 ${pct(Number(perp.price_change || 0))}。`,
         "",
-        cryptoSevenDayLine(coins),
+        "## 期权市场看空信号",
         "",
-        "## 市场强弱结构",
+        `Deribit BTC option book 全期限 Put/Call OI ratio：${formatRatio(options.putCallOiRatio)}；Put/Call volume ratio：${formatRatio(options.putCallVolumeRatio)}。`,
+        `主要到期日 OI/P-C 分布：${options.topExpiries.map(item => `${item.expiry} OI ${number(item.totalOi, 1)}，P/C ${formatRatio(item.putCallOiRatio)}`).join("；")}。`,
+        `最大 Put OI 行权价：${optionOiLabel(options.maxPutOi)}。最大 Call OI 行权价：${optionOiLabel(options.maxCallOi)}。`,
+        `近端 ${options.nearExpiry || "未获取"} ATM IV：${formatIv(options.nearAtmIv)}；约 5% OTM Put IV：${formatIv(options.nearOtmPutIv)}，约 5% OTM Call IV：${formatIv(options.nearOtmCallIv)}，Put-Call IV 差：${formatIvDiff(options.nearOtmIvSkew)}。`,
+        `ATM IV 期限结构：${options.atmTermStructure.map(item => `${item.expiry} ${formatIv(item.atmIv)}`).join("；")}。`,
         "",
-        cryptoLine("市值不低于 10 亿美元资产中涨幅靠前", coinTop),
-        cryptoLine(laggingLabel("市值不低于 10 亿美元资产中跌幅靠前", coinBottom), coinBottom),
-        boardLine("分类板块涨幅靠前", categoryTop),
-        boardLine(laggingLabel("分类板块跌幅靠前", categoryBottom), categoryBottom),
+        "## 情绪与风险边界",
         "",
-        "## 衍生品与情绪辅助",
-        "",
-        derivativesLine(derivatives),
-        fearGreedLine(fearGreed),
-        "写作边界提示（用于约束生成，不要作为独立章节输出）：本篇采用公开聚合行情接口，覆盖全市场市值、成交量、BTC/ETH 占比、主流币与部分分类板块；增强数据在可用时补充全市场 24小时变化率、BTC/ETH 7日涨跌幅、主流合约资金费率、未平仓合约名义价值与情绪指数。分类板块和涨跌排行会受到接口覆盖范围、流动性过滤和稳定币权重影响；衍生品指标采用单一交易所口径，未平仓合约名义价值使用美元计价估算，不代表全市场杠杆结构；情绪指数仅作辅助记录，不生成交易动作或资产配置结论。",
-      ].join("\n"),
+        `${sentimentText}。现货涨跌、永续资金费率、期权 OI/volume 与 IV 偏斜只能描述当前公开市场结构，不能单独推出单边崩盘或反转结论。`,
+        "数据边界：本篇只覆盖 BTC；现货使用 CoinGecko 聚合报价，永续与期权使用 Deribit public book summary，情绪使用 Alternative.me Fear & Greed。Deribit OI、volume 与 IV 是交易所公开口径，不等同于全市场持仓、链上资金流或交易动作。",
+      ]
+        .filter(Boolean)
+        .join("\n"),
     };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`数字货币日报核心数据未完整获取，停止生成：${reason}`);
+    throw new Error(`比特币日报核心数据未完整获取，停止生成：${reason}`);
   }
 }
 
@@ -726,7 +738,7 @@ export async function generateUsMarketDaily(date = bjtDateString()): Promise<str
 
 export async function generateCryptoMarketDaily(): Promise<string> {
   const sections = [await buildCryptoSection()];
-  return `${[buildSummary(sections, "数字货币市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
+  return `${[buildSummary(sections, "BTC 市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
