@@ -10,6 +10,7 @@ import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
+import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -30,6 +31,30 @@ test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
 });
+
+test("daily digest source dedupes post-quantum executive order coverage", () => {
+  const ars = {
+    title: "White House drastically shortens deadline for dropping quantum-vulnerable crypto",
+    url: "https://example.com/ars-post-quantum",
+    source: "Ars Technica",
+    category: "business" as const,
+    publishedAt: "2099-01-06T00:00:00Z",
+    summary: "Executive order bumps up deadline to move off quantum-vulnerable cryptography.",
+  };
+  const cloudflare = {
+    title: "The post-quantum EO is an important milestone. Now it’s time to get to work",
+    url: "https://example.com/cloudflare-post-quantum",
+    source: "Cloudflare Blog",
+    category: "infra" as const,
+    publishedAt: "2099-01-06T00:10:00Z",
+    summary: "Cloudflare responds to the post-quantum executive order and migration deadline.",
+  };
+
+  assert.equal(eventFamilyKey(ars), "post-quantum-executive-order");
+  assert.equal(eventFamilyKey(cloudflare), "post-quantum-executive-order");
+  assert.equal(dedupeItems([ars, cloudflare]).length, 1);
+});
+
 
 test("foreign tech podcast source includes technical interview feeds", () => {
   const feeds = new Map(FEEDS.map(feed => [feed.show, feed.url]));
