@@ -68,54 +68,139 @@ test("foreign tech podcast source includes technical interview feeds", () => {
   assert.equal(feeds.get("Gradient Dissent"), "https://feeds.captivate.fm/gradient-dissent/");
 });
 
-test("foreign tech podcast source supports curated external episodes", async () => {
+function writeCuratedPodcastFile(file: string, episodes: unknown[]): void {
+  fs.writeFileSync(file, JSON.stringify({ episodes }, null, 2));
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
+test("foreign tech podcast source supports curated episodes with transcripts", async () => {
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-${Date.now()}-${Math.random()}.json`);
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  writeCuratedPodcastFile(curatedFile, [
+    {
+      archiveDate: "2026-06-23",
+      title: "Building Reliable AI Developer Platforms",
+      show: "Latent Space",
+      source: "Curated Transcript",
+      guest: "Platform Lead",
+      date: "2026-06-23",
+      link: "https://example.com/podcast/dev-platforms",
+      description: "Curated episode with stored transcript evidence.",
+      transcript: "The guest explains how AI coding agents change developer platforms. Teams need eval suites, review gates, rollback paths, permission boundaries, observability, and release safety because generated pull requests can arrive continuously. The discussion compares ad hoc demos with production workflows and argues that infrastructure teams must redesign queues, ownership, and verification before agents can safely land code.",
+    },
+  ]);
   process.env.PODCAST_DISABLE_RSS = "true";
-  process.env.PODCAST_MIN_EPISODES = "4";
-  process.env.PODCAST_MAX_EPISODES = "4";
+  process.env.PODCAST_MIN_EPISODES = "1";
+  process.env.PODCAST_MAX_EPISODES = "1";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
+  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   try {
     const source = await buildForeignTechPodcastSource("2026-06-23");
-    assert.match(source, /The Oprah Podcast/);
-    assert.match(source, /Apple Podcasts/);
-    assert.match(source, /Megaphone/);
-    assert.match(source, /Dario Amodei、Daniela Amodei/);
-    assert.match(source, /时长：1:10:23/);
-    assert.match(source, /音频：https:\/\/pdrl\.fm/);
-    assert.match(source, /Claude and underage users/);
-    assert.match(source, /未提供 transcript/);
-    assert.doesNotMatch(source, /a16z\.simplecast\.com/);
+    assert.match(source, /Building Reliable AI Developer Platforms/);
+    assert.match(source, /Platform Lead/);
+    assert.match(source, /AI coding agents change developer platforms/);
+    assert.doesNotMatch(source, /未提供 transcript/);
   } finally {
-    if (previousDisableRss === undefined) delete process.env.PODCAST_DISABLE_RSS;
-    else process.env.PODCAST_DISABLE_RSS = previousDisableRss;
-    if (previousMinEpisodes === undefined) delete process.env.PODCAST_MIN_EPISODES;
-    else process.env.PODCAST_MIN_EPISODES = previousMinEpisodes;
-    if (previousMaxEpisodes === undefined) delete process.env.PODCAST_MAX_EPISODES;
-    else process.env.PODCAST_MAX_EPISODES = previousMaxEpisodes;
-    if (previousAudioTranscribe === undefined) delete process.env.PODCAST_AUDIO_TRANSCRIBE;
-    else process.env.PODCAST_AUDIO_TRANSCRIBE = previousAudioTranscribe;
+    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
+    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    fs.rmSync(curatedFile, { force: true });
+  }
+});
+
+test("foreign tech podcast source rejects curated metadata-only episodes", async () => {
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-metadata-${Date.now()}-${Math.random()}.json`);
+  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
+  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  writeCuratedPodcastFile(curatedFile, [
+    {
+      archiveDate: "2026-06-23",
+      title: "Building the Infrastructure for ASI | Ganesh Krishnan | Ep. 219",
+      show: "Localization Fireside Chat",
+      source: "YouTube",
+      guest: "Ganesh Krishnan",
+      date: "2026-06-23",
+      link: "https://www.youtube.com/watch?v=H8M47RYi024",
+      description: "Only title, guest, link, thumbnail, and a short curated boundary note are available. No transcript or original show notes are stored.",
+    },
+  ]);
+  process.env.PODCAST_DISABLE_RSS = "true";
+  process.env.PODCAST_MIN_EPISODES = "1";
+  process.env.PODCAST_MAX_EPISODES = "1";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
+  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  try {
+    await assert.rejects(() => buildForeignTechPodcastSource("2026-06-23"), /found only 0 usable episodes/);
+  } finally {
+    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
+    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    fs.rmSync(curatedFile, { force: true });
   }
 });
 
 test("foreign tech podcast filters episodes already archived on previous dates", async () => {
   const postsDir = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-history-"));
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-history-${Date.now()}-${Math.random()}.json`);
   fs.writeFileSync(
     path.join(postsDir, "海外科技播客-2026-06-22.md"),
     `---\ntitle: old\n---\n\n## The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life\n\n### 基本信息\n\n- **节目**：The Oprah Podcast\n- **日期**：2026-05-19\n- **链接**：https://podcasts.apple.com/us/podcast/the-co-founders-of-claude-ai-tell-oprah-about/id1782960381?i=1000768533274&utm_source=copy&uo=4\n`,
   );
+  const transcript = "This transcript discusses AI engineering, product workflows, verification, release safety, architecture, developer platforms, operational risk, review gates, auditability, and infrastructure changes in enough detail to be usable evidence.";
+  writeCuratedPodcastFile(curatedFile, [
+    {
+      archiveDate: "2026-06-23",
+      title: "The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life",
+      show: "The Oprah Podcast",
+      source: "Apple Podcasts",
+      date: "2026-05-19",
+      link: "https://podcasts.apple.com/us/podcast/the-co-founders-of-claude-ai-tell-oprah-about/id1782960381?i=1000768533274&uo=4",
+      description: "Duplicate episode with transcript.",
+      transcript,
+    },
+    ...["How Anthropic Uses Claude Fable 5 With Mike Krieger", "Most of the Web Will Never Get APIs for AI Agents | Dhruv Batra", "Building Reliable AI Developer Platforms"].map((title, index) => ({
+      archiveDate: "2026-06-23",
+      title,
+      show: "Curated Show",
+      source: "Curated Transcript",
+      date: "2026-06-23",
+      link: `https://example.com/podcast/${index}`,
+      description: "Curated episode with transcript.",
+      transcript,
+    })),
+  ]);
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
   const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
+  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
   process.env.PODCAST_DISABLE_RSS = "true";
   process.env.PODCAST_MIN_EPISODES = "3";
   process.env.PODCAST_MAX_EPISODES = "3";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
   process.env.PODCAST_HISTORY_POSTS_DIR = postsDir;
+  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   try {
     const source = await buildForeignTechPodcastSource("2026-06-23");
     assert.doesNotMatch(source, /The Oprah Podcast/);
@@ -123,16 +208,14 @@ test("foreign tech podcast filters episodes already archived on previous dates",
     assert.match(source, /How Anthropic Uses Claude Fable 5 With Mike Krieger/);
     assert.equal((source.match(/^### \d+\./gm) || []).length, 3);
   } finally {
-    if (previousDisableRss === undefined) delete process.env.PODCAST_DISABLE_RSS;
-    else process.env.PODCAST_DISABLE_RSS = previousDisableRss;
-    if (previousMinEpisodes === undefined) delete process.env.PODCAST_MIN_EPISODES;
-    else process.env.PODCAST_MIN_EPISODES = previousMinEpisodes;
-    if (previousMaxEpisodes === undefined) delete process.env.PODCAST_MAX_EPISODES;
-    else process.env.PODCAST_MAX_EPISODES = previousMaxEpisodes;
-    if (previousAudioTranscribe === undefined) delete process.env.PODCAST_AUDIO_TRANSCRIBE;
-    else process.env.PODCAST_AUDIO_TRANSCRIBE = previousAudioTranscribe;
-    if (previousHistoryPostsDir === undefined) delete process.env.PODCAST_HISTORY_POSTS_DIR;
-    else process.env.PODCAST_HISTORY_POSTS_DIR = previousHistoryPostsDir;
+    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
+    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_HISTORY_POSTS_DIR", previousHistoryPostsDir);
+    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    fs.rmSync(curatedFile, { force: true });
   }
 });
 
