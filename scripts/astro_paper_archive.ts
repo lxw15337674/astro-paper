@@ -215,7 +215,7 @@ function rejectPureTutorialWeekly(markdown: string): void {
 }
 
 function formatTechWeekly(text: string): string {
-  const normalized = normalizeMarkdown(text);
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   rejectPureTutorialWeekly(normalized);
   const requiredAny = [/^##\s+本周快讯\s*$/m, /^##\s+工程观察\s*$/m, /^##\s+工具与项目\s*$/m, /^##\s+版本与安全\s*$/m, /^##\s+值得读的长文\s*$/m];
   const matched = requiredAny.filter(pattern => pattern.test(normalized)).length;
@@ -248,7 +248,7 @@ function formatTechBusinessWeekly(text: string): string {
 }
 
 function formatAiWeekly(text: string): string {
-  const normalized = normalizeMarkdown(text);
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   rejectAiWeeklyNoise(normalized);
   const requiredAny = [/^##\s+本周模型与产品\s*$/m, /^##\s+Agent 与工程化\s*$/m, /^##\s+AI Infra 与成本\s*$/m, /^##\s+安全、评测与治理\s*$/m, /^##\s+值得读的案例\/长文\s*$/m];
   const matched = requiredAny.filter(pattern => pattern.test(normalized)).length;
@@ -259,6 +259,10 @@ function formatAiWeekly(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
+function stripLeadingTitleHeading(markdown: string): string {
+  return markdown.replace(/^#\s+[^\n]+\n{2,}/, "");
+}
+
 function rejectDuplicateLinksAndHeadings(markdown: string, label: string): void {
   const links = (markdown.match(/https?:\/\/\S+/g) || []).map(link => link.replace(/[)）.,，。]+$/, "").toLowerCase());
   if (new Set(links).size !== links.length) throw new Error(`${label} contains duplicate links`);
@@ -267,7 +271,7 @@ function rejectDuplicateLinksAndHeadings(markdown: string, label: string): void 
 }
 
 function formatTechDaily(text: string): string {
-  const normalized = normalizeMarkdown(text);
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   rejectPureTutorialWeekly(normalized);
   rejectDuplicateLinksAndHeadings(normalized, "tech daily");
   const links = normalized.match(/https?:\/\/\S+/g) || [];
@@ -277,7 +281,7 @@ function formatTechDaily(text: string): string {
 }
 
 function formatAiDaily(text: string): string {
-  const normalized = normalizeMarkdown(text);
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   rejectAiWeeklyNoise(normalized);
   rejectDuplicateLinksAndHeadings(normalized, "AI daily");
   const links = normalized.match(/https?:\/\/\S+/g) || [];
@@ -287,7 +291,7 @@ function formatAiDaily(text: string): string {
 }
 
 function formatTechBusinessDaily(text: string): string {
-  const normalized = normalizeMarkdown(text);
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   const links = normalized.match(/https?:\/\/\S+/g) || [];
   if (links.length < 1) throw new Error(`tech business daily needs source links, got ${links.length}`);
   rejectDuplicateLinksAndHeadings(normalized, "tech business daily");
