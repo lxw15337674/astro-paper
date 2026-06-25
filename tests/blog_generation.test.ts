@@ -53,11 +53,15 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.equal(scheduledTaskInput("30 22 * * *").task, "us-market-daily");
   assert.equal(scheduledTaskInput("30 22 * * *").dateOffset, -1);
   assert.equal(scheduledTaskInput("30 0 * * *").task, "daily-digests");
+  assert.equal(scheduledTaskInput("30 9 * * *").task, "hn-top10");
   assert.equal(scheduledTaskInput("unknown schedule").task, "all");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(schedule, /^\d+ \d+ \* \* \*$/);
   }
   const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/scheduled-posts.yml"), "utf8");
+  for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
+    assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
+  }
   assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
 });
 

@@ -93,6 +93,7 @@ export const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly"
 export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number }> = {
   "30 0 * * *": { task: "daily-digests" },
   "30 1 * * *": { task: "foreign-tech-podcast" },
+  "30 9 * * *": { task: "hn-top10" },
   "0 14 * * *": { task: "asia-market-daily" },
   "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },
   "30 22 * * *": { task: "us-market-daily", dateOffset: -1 },
