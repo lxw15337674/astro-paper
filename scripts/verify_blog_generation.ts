@@ -20,7 +20,7 @@ const COMMON_FORBIDDEN_PATTERNS = [
 
 const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
 const AI_STILTED_MARKET_PATTERNS = [/当前证据只能说明/, /不能据此(?:外推|写成)?/, /不支持进一步外推/, /就当前证据而言/, /整体看，/, /只适合作为/, /不能替代/];
-const CRYPTO_STILTED_PATTERNS = [/当前证据只(?:能|是)/, /当前证据不足以/, /不能据此/, /不能单独推出/, /仅凭这些数字不能/, /整体看，/, /只适合作为/, /不能替代/, /期权市场看空信号/, /主要到期日中/, /最大 Put OI 行权价/, /ATM IV 期限结构为/, /放量|缩量|量能修复|成交修复|成交活跃|活跃交易|交易活跃/];
+const CRYPTO_STILTED_PATTERNS = [/当前证据只(?:能|是)/, /当前证据不足以/, /不能据此/, /不能单独推出/, /仅凭这些数字不能/, /整体看，/, /只适合作为/, /不能替代/, /期权市场看空信号/, /主要到期日中/, /最大 Put OI 行权价/, /ATM IV 期限结构为/, /放量|缩量|量能修复|成交修复|成交活跃|活跃交易|交易活跃|\*\*(判断|关键证据|克制收束)：\*\*/];
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
   if (trimmed.startsWith("{")) return JSON.parse(trimmed);
