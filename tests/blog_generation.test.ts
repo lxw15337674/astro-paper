@@ -63,6 +63,10 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
   }
   assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
+  for (const task of ["ai-daily", "ai-weekly"]) {
+    const prompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", `${task}.md`), "utf8");
+    assert.match(prompt, /从零|入门教程|一文[读懂搞懂]/, `${task} prompt should mirror low-signal validator terms`);
+  }
 });
 
 test("Yahoo Finance article extraction prefers public articleBody text", () => {
