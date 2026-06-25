@@ -277,6 +277,10 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     if (headingOrder.some(index => index < 0) || headingOrder.some((index, i) => i > 0 && index < headingOrder[i - 1])) {
       throw new Error(`${relPath} us market daily must use summary-first top-down structure`);
     }
+    const broadIndexSection = body.match(/## 宽基指数\n([\s\S]*?)(?=\n## 行业指数)/)?.[1] || "";
+    if (/[（(][A-Z]{2,6}[）)]/.test(broadIndexSection)) {
+      throw new Error(`${relPath} discusses stock tickers before the stock-sample section`);
+    }
   }
 }
 
