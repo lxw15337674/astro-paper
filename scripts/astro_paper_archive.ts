@@ -303,6 +303,19 @@ function formatTechBusinessDaily(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
+function assertGitHubTrendingStats(markdown: string): void {
+  const headings = [...markdown.matchAll(/^###\s+\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)\s*$/gm)];
+  for (let index = 0; index < headings.length; index += 1) {
+    const match = headings[index];
+    const start = match.index || 0;
+    const end = index + 1 < headings.length ? headings[index + 1].index || markdown.length : markdown.length;
+    const block = markdown.slice(start, end);
+    for (const label of ["Stars", "Forks", "今日新增 Stars"]) {
+      if (!new RegExp(`^- ${label}：\\S+`, "m").test(block)) throw new Error(`GitHub trending daily item missing ${label} metadata: ${match[0]}`);
+    }
+  }
+}
+
 function formatGitHubTrendingDaily(text: string): string {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   for (const section of ["总结", "今日项目精选", "趋势观察", "数据边界"]) {
@@ -311,6 +324,7 @@ function formatGitHubTrendingDaily(text: string): string {
   rejectDuplicateLinksAndHeadings(normalized, "GitHub trending daily");
   const itemLinks = normalized.match(/^###\s+\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)/gm) || [];
   if (itemLinks.length < 5) throw new Error(`GitHub trending daily needs at least five linked project headings, got ${itemLinks.length}`);
+  assertGitHubTrendingStats(normalized);
   if (!/GitHub Trending|Trending|README|项目自述|榜单|Stars|stars/.test(normalized)) throw new Error("GitHub trending daily lacks source-bound trend language");
   for (const pattern of [/值得关注/, /不容错过/, /革命性/, /颠覆/, /赋能/, /投资建议/, /融资猜测/, /安全背书/, /待补充/, /示例/, /无法判断/, /本文将/]) {
     if (pattern.test(normalized)) throw new Error(`GitHub trending daily contains forbidden language: ${pattern.source}`);
