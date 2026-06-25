@@ -12,6 +12,7 @@ import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
+import { parseGitHubTrendingHtml } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -328,6 +329,27 @@ test("HN source payload carries original and comment evidence", () => {
   assert.match(payload.hn_comment_excerpt, /reverse proxies/);
 });
 
+test("GitHub Trending parser extracts repository metadata", () => {
+  const html = `<!doctype html><html><body>
+    <article class="Box-row">
+      <h2><a href="/acme/agent-lab"> acme / agent-lab </a></h2>
+      <p>Local AI agent workbench for developers</p>
+      <span itemprop="programmingLanguage">TypeScript</span>
+      <a href="/acme/agent-lab/stargazers">12,345</a>
+      <a href="/acme/agent-lab/forks">678</a>
+      <span class="d-inline-block float-sm-right">321 stars today</span>
+    </article>
+  </body></html>`;
+  const repos = parseGitHubTrendingHtml(html, 10);
+  assert.equal(repos.length, 1);
+  assert.equal(repos[0].fullName, "acme/agent-lab");
+  assert.equal(repos[0].language, "TypeScript");
+  assert.equal(repos[0].stars, 12_345);
+  assert.equal(repos[0].forks, 678);
+  assert.equal(repos[0].todayStars, 321);
+  assert.equal(repos[0].url, "https://github.com/acme/agent-lab");
+});
+
 test("archive and verifier accept generated HN, market posts, podcast notes, weekly and daily digests", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-archive-"));
   const hnBody = `1. 🔥 Developers don't understand CORS
@@ -481,6 +503,20 @@ test("tech weekly rejects pure tutorial language", () => {
 
 这是一篇没有工程事件的 API 详解，只是在讲基础知识。https://example.com/redis https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e`;
   assert.throws(() => archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body, force: true }), /pure tutorial language|at least three expected sections/);
+});
+
+test("archive and verifier accept generated GitHub trending daily", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-github-trending-"));
+  const body = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/github-trending-daily.md"), "utf8");
+  const result = archivePost({ task: "github-trending-daily", date: "2099-01-06", repo, body, force: true });
+  const markdown = fs.readFileSync(path.join(repo, result.path), "utf8");
+  assert.match(markdown, /title: "GitHub 项目日报｜2099-01-06"/);
+  assert.match(markdown, /GitHub项目日报/);
+  assert.match(markdown, /^## 今日项目精选/m);
+  assert.match(markdown, /^### \[acme\/agent-lab\]\(https:\/\/github\.com\/acme\/agent-lab\)/m);
+  const resultJson = path.join(repo, "result.json");
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [result] }));
+  assert.equal(verifyResultJson(repo, resultJson), 1);
 });
 
 test("AI weekly rejects low-signal AI content", () => {
