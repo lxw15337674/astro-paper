@@ -22,8 +22,8 @@
     "@astrojs/rss": "^4.0.18",
     "@astrojs/sitemap": "^3.7.3",
     "@mozilla/readability": "^0.6.0",
-    "@tailwindcss/vite": "^4.3.0",
-    "astro": "^6.4.2",
+    "@tailwindcss/vite": "^4.3.1",
+    "astro": "^6.4.8",
     "coingecko-api-v3": "^0.0.31",
     "dayjs": "^1.11.21",
     "jsdom": "^29.1.1",
@@ -56,5 +56,14 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "^7.3.5",
+      "esbuild": "0.28.1",
+      "js-yaml": "4.2.0",
+      "yaml": "^2.8.3",
+      "brace-expansion": "^5.0.6"
+    }
   }
 }
