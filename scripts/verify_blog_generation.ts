@@ -271,7 +271,8 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     if (/数字货币当日未获取到可用公开市场数据|全市场总市值|BTC\/ETH 占比/.test(body)) throw new Error(`${relPath} contains legacy crypto market data language`);
   }
   if (task === "us-market-daily" && !/美股当日未产生完整常规收盘数据|美股当日未获取到完整常规收盘数据/.test(body)) {
-    requireTerms(relPath, body, ["道指", "纳指", "标普500", "行业 ETF", "核心个股"]);
+    requireTerms(relPath, body, ["道指", "纳指", "行业 ETF", "核心个股"]);
+    requireTermPatterns(relPath, body, [{ label: "标普500", pattern: /标普\s*500/ }]);
     requireTerms(relPath, body, ["## 总结", "## 宽基指数", "## 行业指数", "## 个股样本"]);
     const headingOrder = ["## 总结", "## 宽基指数", "## 行业指数", "## 个股样本"].map(heading => body.indexOf(heading));
     if (headingOrder.some(index => index < 0) || headingOrder.some((index, i) => i > 0 && index < headingOrder[i - 1])) {
