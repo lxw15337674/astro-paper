@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { JSDOM } from "jsdom";
-import { clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 type AiWeeklyCategory = "model" | "agent" | "infra" | "coding" | "safety" | "research" | "product";
 
@@ -191,8 +191,8 @@ function selectDiverseItems(items: AiWeeklyItem[], limit: number): AiWeeklyItem[
 
 function displayTitle(item: AiWeeklyItem): string {
   const project = item.source.replace(/ Releases$/, "");
-  if (/^v?\d+(?:\.\d+|[-,]|$)/i.test(item.title)) return `${project} ${item.title}`;
-  return item.title;
+  const title = /^v?\d+(?:\.\d+|[-,]|$)/i.test(item.title) ? `${project} ${item.title}` : item.title;
+  return avoidCloudflareEmailObfuscation(title);
 }
 
 async function fetchSource(source: FeedSource): Promise<AiWeeklyItem[]> {

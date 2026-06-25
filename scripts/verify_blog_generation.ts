@@ -15,6 +15,7 @@ const COMMON_FORBIDDEN_PATTERNS = [
   /示例(?:标题|正文|内容|链接|数据|文章|输出)/,
   /这是一[个篇段].{0,20}示例/,
   /赚钱点子|交易建议|投资建议/,
+  /@[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+@v?\d/,
 ];
 
 const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
@@ -56,12 +57,19 @@ function requireTermPatterns(relPath: string, body: string, terms: { label: stri
   if (missing.length) throw new Error(`${relPath} missing required terms: ${missing.join(", ")}`);
 }
 
-function verifyNoPositiveDeclineLabel(relPath: string, body: string): void {
-  const blocks = body.matchAll(/跌幅[^：\n。]*：([^。\n]+)/g);
-  for (const match of blocks) {
+function verifyNoMisleadingPercentageLabels(relPath: string, body: string): void {
+  const declineBlocks = body.matchAll(/跌幅[^：\n。]*：([^。\n]+)/g);
+  for (const match of declineBlocks) {
     const values = [...match[1].matchAll(/([+-]?\d+(?:\.\d+)?)%/g)].map(item => Number(item[1]));
     if (values.length && values.every(value => value >= 0)) {
       throw new Error(`${relPath} labels non-negative percentage list as decline: ${match[0]}`);
+    }
+  }
+  const gainBlocks = body.matchAll(/涨幅[^：\n。]*：([^。\n]+)/g);
+  for (const match of gainBlocks) {
+    const values = [...match[1].matchAll(/([+-]?\d+(?:\.\d+)?)%/g)].map(item => Number(item[1]));
+    if (values.some(value => value < 0)) {
+      throw new Error(`${relPath} labels negative percentage as gain: ${match[0]}`);
     }
   }
 }
@@ -248,7 +256,7 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     verifyGitHubTrendingDaily(relPath, body);
     return;
   }
-  verifyNoPositiveDeclineLabel(relPath, body);
+  verifyNoMisleadingPercentageLabels(relPath, body);
   if (task === "asia-market-daily") {
     requireTerms(relPath, body, ["上证指数", "深证成指", "创业板指", "恒生指数", "国企指数", "恒生科技指数"]);
     if (/未获取到完整数据的指数|创业板指未获取到完整数据|恒生科技指数未获取到完整数据/.test(body)) {
@@ -263,7 +271,17 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     if (/数字货币当日未获取到可用公开市场数据|全市场总市值|BTC\/ETH 占比/.test(body)) throw new Error(`${relPath} contains legacy crypto market data language`);
   }
   if (task === "us-market-daily" && !/美股当日未产生完整常规收盘数据|美股当日未获取到完整常规收盘数据/.test(body)) {
-    requireTerms(relPath, body, ["道指", "纳指", "标普500"]);
+    requireTerms(relPath, body, ["道指", "纳指", "行业 ETF", "核心个股"]);
+    requireTermPatterns(relPath, body, [{ label: "标普500", pattern: /标普\s*500/ }]);
+    requireTerms(relPath, body, ["## 总结", "## 宽基指数", "## 行业指数", "## 个股样本"]);
+    const headingOrder = ["## 总结", "## 宽基指数", "## 行业指数", "## 个股样本"].map(heading => body.indexOf(heading));
+    if (headingOrder.some(index => index < 0) || headingOrder.some((index, i) => i > 0 && index < headingOrder[i - 1])) {
+      throw new Error(`${relPath} us market daily must use summary-first top-down structure`);
+    }
+    const broadIndexSection = body.match(/## 宽基指数\n([\s\S]*?)(?=\n## 行业指数)/)?.[1] || "";
+    if (/[（(][A-Z]{2,6}[）)]/.test(broadIndexSection)) {
+      throw new Error(`${relPath} discusses stock tickers before the stock-sample section`);
+    }
   }
 }
 
