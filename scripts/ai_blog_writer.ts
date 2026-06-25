@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import fs from "node:fs";
 import path from "node:path";
-import { parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, DEFAULT_MAX_TOKENS, callBlogAi, chatCompletionsUrl } from "./blog_ai_client.ts";
 
 export { chatCompletionsUrl };
@@ -17,7 +17,7 @@ export function stripMarkdownFence(text: string): string {
 }
 
 export function validateMarkdown(text: string): string {
-  const cleaned = stripMarkdownFence(text);
+  const cleaned = avoidCloudflareEmailObfuscation(stripMarkdownFence(text));
   if (cleaned.trim().length < 200) throw new Error("AI markdown output is too short to publish");
   const forbidden = [/Traceback \(most recent call last\)/i, /Script not found:/i, /归档失败/i, /\{\{[^}]+\}\}/, /TODO/i];
   for (const pattern of forbidden) {

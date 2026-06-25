@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { JSDOM } from "jsdom";
-import { clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 type FeedSource = {
   name: string;
@@ -183,8 +183,8 @@ function selectDiverseItems(items: TechWeeklyItem[], limit: number): TechWeeklyI
 
 function displayTitle(item: TechWeeklyItem): string {
   const project = item.source.replace(/ Releases$/, "");
-  if (item.category === "release" || /^v?\d+(?:\.\d+|[-,]|$)/i.test(item.title)) return `${project} ${item.title}`;
-  return item.title;
+  const title = item.category === "release" || /^v?\d+(?:\.\d+|[-,]|$)/i.test(item.title) ? `${project} ${item.title}` : item.title;
+  return avoidCloudflareEmailObfuscation(title);
 }
 
 async function fetchSource(source: FeedSource): Promise<TechWeeklyItem[]> {

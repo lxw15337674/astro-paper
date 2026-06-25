@@ -538,6 +538,13 @@ function boardLine(label: string, rows: BoardRow[]): string {
   return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
 }
 
+function leadingLabel(base: string, rows: { pct: number }[]): string {
+  if (!rows.length) return base;
+  if (rows.every(row => row.pct > 0.005)) return base;
+  if (rows.every(row => row.pct < -0.005)) return base.replace("涨幅靠前", "跌幅相对较小");
+  return base.replace("涨幅靠前", "表现靠前");
+}
+
 function laggingLabel(base: string, rows: { pct: number }[]): string {
   if (!rows.length) return base;
   if (rows.some(row => row.pct < -0.005)) return base;
@@ -599,7 +606,9 @@ function externalArticleLines(articles: ExternalMarketArticle[]): string[] {
 
 function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T[]; bottom: T[] } {
   const sorted = rows.toSorted((a, b) => b.pct - a.pct);
-  return { top: sorted.slice(0, limit), bottom: sorted.slice(-limit).reverse() };
+  const top = sorted.slice(0, limit);
+  const bottomPool = sorted.slice(top.length);
+  return { top, bottom: bottomPool.slice(-limit).reverse() };
 }
 
 function buildAShareSection(rows: QuoteRows, date: string, industryRows: BoardRow[]): MarketSection {
@@ -632,7 +641,7 @@ function buildAShareSection(rows: QuoteRows, date: string, industryRows: BoardRo
       "",
       "## A股行业板块",
       "",
-      boardLine("涨幅靠前行业", top),
+      boardLine(leadingLabel("涨幅靠前行业", top), top),
       boardLine(laggingLabel("跌幅靠前行业", bottom), bottom),
       boardBoundary,
     ].join("\n"),
@@ -688,14 +697,17 @@ export function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow
   const { top, bottom } = topAndBottom(sectors);
   const { top: stockTop, bottom: stockBottom } = topAndBottom(stocks, 4);
   const sectorVolumeLeaders = sectors.filter(row => Number.isFinite(row.volumeRatio)).toSorted((a, b) => Number(b.volumeRatio || 0) - Number(a.volumeRatio || 0)).slice(0, 3);
-  const stockSummary = stocks.length ? `核心个股方面，${stockTop.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠前，${stockBottom.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠后。` : "核心个股样本未获取到稳定数据，本篇不使用个股表现解释指数结构。";
+  const sectorSummary = sectors.length
+    ? `行业层面，${top.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠前，${bottom.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠后`
+    : "行业 ETF 样本未获取到稳定数据，本篇不外推行业强弱";
+  const stockSummary = stocks.length ? `个股样本层面，${stockTop.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠前，${stockBottom.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠后` : "核心个股样本未获取到稳定数据，本篇不使用个股表现解释指数结构";
   return {
     key: "us",
     title: "美股",
     open: true,
-    summary: `美股三大指数分别为道指 ${pct(dji.f3)}、纳指 ${pct(nasdaq.f3)}、标普500 ${pct(spx.f3)}`,
+    summary: `宽基指数：道指 ${pct(dji.f3)}、纳指 ${pct(nasdaq.f3)}、标普500 ${pct(spx.f3)}；${sectorSummary}；${stockSummary}`,
     markdown: [
-      "## 美股",
+      "## 宽基指数",
       "",
       `按已获取的完整常规收盘口径，道指 ${pct(dji.f3)}，纳指 ${pct(nasdaq.f3)}，标普500 ${pct(spx.f3)}。`,
       "",
@@ -703,16 +715,18 @@ export function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow
       "",
       volumeActivityLine("主要宽基 ETF 成交活跃度", broadEtfs),
       "",
-      instrumentLine("核心个股涨幅靠前", stockTop),
-      instrumentLine(laggingLabel("核心个股跌幅靠前", stockBottom), stockBottom),
-      stockSummary,
-      "",
-      "## 美股行业板块",
+      "## 行业指数",
       "",
       sectorLine("表现靠前行业 ETF", top),
       sectorLine("表现靠后行业 ETF", bottom),
       sectorVolumeLeaders.length ? volumeActivityLine("成交活跃度靠前的行业 ETF", sectorVolumeLeaders) : "行业 ETF 近 20 个交易日成交量均值不足，暂不判断行业 ETF 放量或缩量。",
       "行业板块采用 S&P 500 行业 ETF 作为近似口径，用于观察风格结构，不等同于完整成分股贡献；成交量只能描述活跃度，不等同于真实资金流。",
+      "",
+      "## 个股样本",
+      "",
+      instrumentLine(leadingLabel("核心个股涨幅靠前", stockTop), stockTop),
+      instrumentLine(laggingLabel("核心个股跌幅靠前", stockBottom), stockBottom),
+      `${stockSummary}。`,
       "",
       ...externalArticleLines(externalArticles),
     ].join("\n"),

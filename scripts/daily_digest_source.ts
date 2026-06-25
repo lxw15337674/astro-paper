@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { JSDOM } from "jsdom";
-import { clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 type DailyRoughCategory = "tech" | "ai" | "business" | "security" | "release" | "infra" | "data";
 
@@ -257,7 +257,7 @@ export async function buildDailyDigestSource(date: string, { lookbackHours = 24,
 
   filtered.forEach((item, index) => {
     lines.push(
-      `## ${index + 1}. ${item.title}`,
+      `## ${index + 1}. ${avoidCloudflareEmailObfuscation(item.title)}`,
       "",
       `- 来源：${item.source}`,
       `- 粗分类：${item.category}`,

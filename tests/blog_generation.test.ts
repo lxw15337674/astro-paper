@@ -32,6 +32,7 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
 
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
+  assert.match(validateMarkdown("## 标题\n\n### [@ai-sdk/workflow-harness@1.0.0-beta.0](https://example.com)\n\n" + "这是一段完整中文正文。".repeat(30)), /@ai-sdk\/workflow-harness v1\.0\.0-beta\.0/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
 });
 
@@ -107,6 +108,10 @@ test("US market section includes stock and volume evidence without treating volu
     ],
     [
       { symbol: "NVDA", name: "英伟达(NVDA)", close: 180, pct: 2.4, volume: 240_000_000, avgVolume20: 200_000_000, volumeRatio: 1.2 },
+      { symbol: "AAPL", name: "苹果(AAPL)", close: 220, pct: 1.1, volume: 70_000_000, avgVolume20: 80_000_000, volumeRatio: 0.88 },
+      { symbol: "MSFT", name: "微软(MSFT)", close: 510, pct: 0.6, volume: 30_000_000, avgVolume20: 28_000_000, volumeRatio: 1.07 },
+      { symbol: "AMZN", name: "亚马逊(AMZN)", close: 230, pct: 0.2, volume: 45_000_000, avgVolume20: 44_000_000, volumeRatio: 1.02 },
+      { symbol: "META", name: "Meta(META)", close: 700, pct: -1.0, volume: 20_000_000, avgVolume20: 21_000_000, volumeRatio: 0.95 },
       { symbol: "TSLA", name: "特斯拉(TSLA)", close: 300, pct: -2.1, volume: 100_000_000, avgVolume20: 140_000_000, volumeRatio: 0.71 },
     ],
     [{ symbol: "QQQ", name: "QQQ", close: 560, pct: -0.4, volume: 65_000_000, avgVolume20: 50_000_000, volumeRatio: 1.3 }],
@@ -121,6 +126,9 @@ test("US market section includes stock and volume evidence without treating volu
   );
 
   assert.match(section.markdown, /按已获取的完整常规收盘口径/);
+  assert.match(section.markdown, /## 宽基指数/);
+  assert.match(section.markdown, /## 行业指数/);
+  assert.match(section.markdown, /## 个股样本/);
   assert.match(section.markdown, /核心个股涨幅靠前：英伟达\(NVDA\) \+2\.40%/);
   assert.match(section.markdown, /核心个股跌幅靠前：特斯拉\(TSLA\) -2\.10%/);
   assert.match(section.markdown, /主要宽基 ETF 成交活跃度：QQQ 当日成交量约 6500万股，约为近 20 个交易日均量的 1\.30 倍，成交活跃度偏高/);
@@ -442,18 +450,7 @@ Fear & Greed：17（Extreme Fear）。现货偏弱、情绪极恐、近端下行
 
 数据边界：本篇只覆盖 BTC；现货使用 CoinGecko 聚合报价，永续与期权使用 Deribit public book summary，情绪使用 Alternative.me Fear & Greed。Deribit OI、volume 与 IV 是交易所公开口径，不等同于全市场持仓、链上资金流或交易动作。
 `;
-  const usBody = `## 总结
-
-本篇美股市场日报覆盖完整常规收盘后的主要指数与行业 ETF 结构。美股三大指数分别为道指 +0.14%、纳指 +1.91%、标普500 +1.08%。
-
-## 美股
-
-美股最近一个完整常规收盘交易日，道指 +0.14%，纳指 +1.91%，标普500 +1.08%。
-
-## 美股行业板块
-
-表现靠前行业 ETF：科技 +1.85%、通信服务 +1.42%、可选消费 +0.92%、金融 +0.50%、工业 +0.31%。表现靠后行业 ETF：能源 -1.20%、公用事业 -0.60%、房地产 -0.44%、必需消费 -0.18%、材料 -0.10%。行业板块采用 S&P 500 行业 ETF 作为近似口径，用于观察风格结构，不等同于完整成分股贡献。
-`;
+  const usBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/us-market-daily.md"), "utf8");
   const hn = archivePost({ task: "hn-top10", date: "2099-01-02", repo, body: hnBody, force: true });
   const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
   assert.match(hnMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
@@ -498,7 +495,9 @@ Fear & Greed：17（Extreme Fear）。现货偏弱、情绪极恐、近端下行
   assert.doesNotMatch(cryptoMarkdown, /^##\s*数据边界(?:说明)?\s*$/m);
   assert.doesNotMatch(cryptoMarkdown, /ETH|Solana|SOL|BNB|主流资产|分类板块|全市场概览/);
   assert.match(usMarkdown, /title: "美股市场日报｜2099-01-02"/);
-  assert.match(usMarkdown, /美股行业板块/);
+  assert.match(usMarkdown, /## 宽基指数/);
+  assert.match(usMarkdown, /## 行业指数/);
+  assert.match(usMarkdown, /## 个股样本/);
   assert.match(podcastMarkdown, /title: "海外科技访谈播客笔记｜2099-01-02"/);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);

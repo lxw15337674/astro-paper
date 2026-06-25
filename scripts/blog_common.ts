@@ -149,6 +149,10 @@ export function clipText(text = "", limit = 1600): string {
   return cut || cleaned.slice(0, limit).trim();
 }
 
+export function avoidCloudflareEmailObfuscation(text = ""): string {
+  return String(text).replace(/(@[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+)@(?=v?\d)/g, "$1 v");
+}
+
 export function writeStdout(text: string): void {
   process.stdout.write(text);
 }

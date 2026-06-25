@@ -4,7 +4,7 @@ import path from "node:path";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
 import { callBlogAi, envAiConfig } from "./blog_ai_client.ts";
-import { bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
@@ -302,7 +302,7 @@ async function classifiedDailySourceForTask({
 
 
 function normalizedHeadingTitle(title: string): string {
-  return title.replace(/\s+/g, " ").trim().toLowerCase();
+  return avoidCloudflareEmailObfuscation(title).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function sourceTitleLinks(source: string): Map<string, string> {
