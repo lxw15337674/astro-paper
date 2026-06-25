@@ -20,6 +20,7 @@ const COMMON_FORBIDDEN_PATTERNS = [
 
 const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
 const AI_STILTED_MARKET_PATTERNS = [/当前证据只能说明/, /不能据此(?:外推|写成)?/, /不支持进一步外推/, /就当前证据而言/, /整体看，/, /只适合作为/, /不能替代/];
+const CRYPTO_STILTED_PATTERNS = [/当前证据只(?:能|是)/, /当前证据不足以/, /不能据此/, /不能单独推出/, /仅凭这些数字不能/, /整体看，/, /只适合作为/, /不能替代/, /期权市场看空信号/, /主要到期日中/, /最大 Put OI 行权价/, /ATM IV 期限结构为/];
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
   if (trimmed.startsWith("{")) return JSON.parse(trimmed);
@@ -266,8 +267,16 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
   }
   if (task === "crypto-market-daily") {
     requireTerms(relPath, body, ["BTC", "现货", "永续", "期权", "Put/Call", "ATM IV", "数据边界"]);
+    requireTerms(relPath, body, ["## 总结", "## BTC 现货状态", "## 永续与杠杆结构", "## 期权与保护需求", "## 情绪与风险边界"]);
+    const headingOrder = ["## 总结", "## BTC 现货状态", "## 永续与杠杆结构", "## 期权与保护需求", "## 情绪与风险边界"].map(heading => body.indexOf(heading));
+    if (headingOrder.some(index => index < 0) || headingOrder.some((index, i) => i > 0 && index < headingOrder[i - 1])) {
+      throw new Error(`${relPath} crypto market daily must use fixed BTC structure`);
+    }
     for (const pattern of [/ETH|Solana|SOL|BNB|山寨币|主流资产|分类板块|全市场概览/]) {
       if (pattern.test(body)) throw new Error(`${relPath} contains forbidden legacy crypto-market term: ${pattern.source}`);
+    }
+    for (const pattern of CRYPTO_STILTED_PATTERNS) {
+      if (pattern.test(body)) throw new Error(`${relPath} contains AI-stilted crypto-market prose: ${pattern.source}`);
     }
     if (/数字货币当日未获取到可用公开市场数据|全市场总市值|BTC\/ETH 占比/.test(body)) throw new Error(`${relPath} contains legacy crypto market data language`);
   }

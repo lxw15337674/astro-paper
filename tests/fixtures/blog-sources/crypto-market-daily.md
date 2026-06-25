@@ -14,7 +14,7 @@ CoinGecko 更新时间：2026-06-23T23:30:00.000Z。
 Deribit BTC-PERPETUAL mark price 约 62,510 美元，8小时资金费率 -0.0010%，当前 funding -0.0008%。
 永续 OI 约 6,159,000,000 美元，24小时成交额约 296,000,000 美元，价格变化 -2.10%。
 
-## 期权市场看空信号
+## 期权与保护需求
 
 Deribit BTC option book 全期限 Put/Call OI ratio：0.61；Put/Call volume ratio：1.28。
 主要到期日 OI/P-C 分布：2026-06-24 OI 8420.0，P/C 1.45；2026-06-27 OI 21130.0，P/C 0.58；2026-07-25 OI 18440.0，P/C 0.49。

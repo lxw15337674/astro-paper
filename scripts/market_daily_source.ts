@@ -1023,7 +1023,7 @@ async function buildCryptoSection(): Promise<MarketSection> {
         `Deribit BTC-PERPETUAL mark price 约 ${usd(Number(perp.mark_price || spot.price), 0)}，8小时资金费率 ${pct(funding8h)}，当前 funding ${pct(Number(perp.current_funding || 0) * 100)}。`,
         `永续 OI 约 ${usd(perpOi, 0)}，24小时成交额约 ${usd(perpVolumeUsd, 0)}，价格变化 ${pct(Number(perp.price_change || 0))}。`,
         "",
-        "## 期权市场看空信号",
+        "## 期权与保护需求",
         "",
         `Deribit BTC option book 全期限 Put/Call OI ratio：${formatRatio(options.putCallOiRatio)}；Put/Call volume ratio：${formatRatio(options.putCallVolumeRatio)}。`,
         `主要到期日 OI/P-C 分布：${options.topExpiries.map(item => `${item.expiry} OI ${number(item.totalOi, 1)}，P/C ${formatRatio(item.putCallOiRatio)}`).join("；")}。`,
