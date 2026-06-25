@@ -78,7 +78,7 @@ jobs:
           cache: "pnpm"
 
       - name: Use Python
-        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'apple-top-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '0 2 * * *' }}
+        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' }}
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -87,7 +87,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: "🎙️ Install local Whisper dependencies"
-        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'apple-top-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '0 2 * * *' }}
+        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
@@ -114,6 +114,10 @@ jobs:
           PODCAST_WHISPER_MODEL: ${{ github.event.inputs.podcast_whisper_model || 'tiny.en' }}
         run: |
           set -euo pipefail
+          if [ "$INPUT_TASK" = "apple-top-podcasts" ] || [ "$EVENT_SCHEDULE" = "0 2 * * *" ]; then
+            export PODCAST_TRANSCRIBE_PROVIDER=groq
+            echo "Using Groq-only transcription for apple-top-podcasts."
+          fi
           args=(--ai --artifacts-dir blog-generation-artifacts)
           if [ -n "$INPUT_TASK" ]; then
             args+=(--task "$INPUT_TASK")
