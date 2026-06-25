@@ -1,8 +1,9 @@
 #!/usr/bin/env tsx
 import fs from "node:fs";
 import path from "node:path";
-import { bjtTimestamp, compact, frontmatter, parseArgs, readStdin, repoRoot, stringArg, TOTAL_TAG, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtTimestamp, compact, frontmatter, parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { assertNoHistoricalPodcastDuplicates } from "./foreign_tech_podcast_dedupe.ts";
+import { isTask, taskInfo, taskPostRelPath, taskTags, taskTitle } from "./blog_tasks.ts";
 
 const HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg";
 const ARCHIVE_PAYLOAD_MARKER = "===ARCHIVE_PAYLOAD===";
@@ -317,104 +318,25 @@ function formatGitHubTrendingDaily(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
-function taskInfo(task: string): { titlePrefix: string; tag: string; description: string; fileName: string } {
-  const tasks: Record<string, { titlePrefix: string; tag: string; description: string; fileName: string }> = {
-    "hn-top10": {
-      titlePrefix: "HackerNews Top 10",
-      tag: "HackerNews",
-      description: "每日 Hacker News 热门文章 Top 10 中文整理，按当天归档并覆盖更新。",
-      fileName: "hackernews-{date}.md",
-    },
-    "asia-market-daily": {
-      titlePrefix: "亚洲市场日报",
-      tag: "亚洲市场日报",
-      description: "每日 A股与港股市场日报，按北京时间自然日汇总主要指数、成交与板块结构。",
-      fileName: "亚洲市场日报-{date}.md",
-    },
-    "crypto-market-daily": {
-      titlePrefix: "比特币日报",
-      tag: "比特币日报",
-      description: "每日比特币市场日报，汇总 BTC 现货、永续、期权保护结构、情绪与风险边界。",
-      fileName: "比特币日报-{date}.md",
-    },
-    "us-market-daily": {
-      titlePrefix: "美股市场日报",
-      tag: "美股市场日报",
-      description: "每日美股市场日报，按完整常规收盘口径汇总主要指数与行业板块结构。",
-      fileName: "美股市场日报-{date}.md",
-    },
-    "github-trending-daily": {
-      titlePrefix: "GitHub 项目日报",
-      tag: "GitHub项目日报",
-      description: "每日 GitHub Trending 项目中文整理，基于榜单元数据与 README 摘录提炼开源项目趋势。",
-      fileName: "GitHub项目日报-{date}.md",
-    },
-    "foreign-tech-podcast": {
-      titlePrefix: "海外科技访谈播客笔记",
-      tag: "海外科技播客",
-      description: "每日海外科技访谈播客中文长文笔记，整理技术、产品、产业与职业判断。",
-      fileName: "海外科技播客-{date}.md",
-    },
-    "tech-weekly": {
-      titlePrefix: "技术趋势与工程观察",
-      tag: "技术周刊",
-      description: "每周技术趋势与工程观察，覆盖全技术领域的事件、工具、版本、安全与工程实践变化，不做纯教程搬运。",
-      fileName: "技术周刊-{date}.md",
-    },
-    "ai-weekly": {
-      titlePrefix: "AI 周刊",
-      tag: "AI周刊",
-      description: "每周 AI 模型、Agent、AI infra、安全评测与企业落地观察，过滤融资、营销、工具榜单和纯论文导读。",
-      fileName: "AI周刊-{date}.md",
-    },
-    "tech-daily": {
-      titlePrefix: "技术工程日报",
-      tag: "技术工程日报",
-      description: "每日技术工程深度整理，覆盖过去 24 小时的工程实践、开源项目、版本、安全、架构与工具链变化。",
-      fileName: "技术工程日报-{date}.md",
-    },
-    "ai-daily": {
-      titlePrefix: "AI 工程日报",
-      tag: "AI工程日报",
-      description: "每日 AI 工程深度整理，覆盖过去 24 小时的模型、Agent、AI infra、评测、安全治理与企业落地。",
-      fileName: "AI工程日报-{date}.md",
-    },
-    "tech-business-daily": {
-      titlePrefix: "科技商业观察日报",
-      tag: "科技商业观察日报",
-      description: "每日科技商业观察，覆盖过去 24 小时的科技公司、平台政策、监管、安全事件、芯片/云供应链与产业竞争。",
-      fileName: "科技商业观察日报-{date}.md",
-    },
-    "tech-business-weekly": {
-      titlePrefix: "科技商业观察周刊",
-      tag: "科技商业观察",
-      description: "每周科技商业观察，覆盖科技公司、平台政策、AI/芯片/云、监管、安全事件、开源生态与商业落地。",
-      fileName: "科技商业观察-{date}.md",
-    },
-  };
-  const info = tasks[task];
-  if (!info) throw new Error(`unsupported task: ${task}`);
-  return info;
-}
-
 export function archivePost({ task, date, repo, body, force }: { task: string; date: string; repo: string; body: string; force: boolean }): ArchiveResult {
+  if (!isTask(task)) throw new Error(`unsupported task: ${task}`);
   const info = taskInfo(task);
-  const relPath = path.join("src/content/posts/zh-cn", info.fileName.replace("{date}", date));
+  const relPath = taskPostRelPath(task, date);
   const absPath = path.join(repo, relPath);
   if (!force && fs.existsSync(absPath)) {
-    return { task, path: relPath, title: `${info.titlePrefix}｜${date}`, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: [TOTAL_TAG, info.tag] };
+    return { task, path: relPath, title: taskTitle(task, date), created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
   const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
   if (task === "foreign-tech-podcast") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
-  const title = `${info.titlePrefix}｜${date}`;
+  const title = taskTitle(task, date);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
   fs.writeFileSync(
     absPath,
-    `${frontmatter({ title, date, description: info.description, tags: [TOTAL_TAG, info.tag], ogImage: formatted.ogImage })}${formatted.markdown.trim()}\n`,
+    `${frontmatter({ title, date, description: info.description, tags: taskTags(task), ogImage: formatted.ogImage })}${formatted.markdown.trim()}\n`,
     "utf8",
   );
-  return { task, path: relPath, title, created: !existed, skipped: false, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: [TOTAL_TAG, info.tag] };
+  return { task, path: relPath, title, created: !existed, skipped: false, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
 }
 
 async function main(): Promise<void> {

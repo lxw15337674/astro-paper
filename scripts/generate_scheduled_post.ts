@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
+import { callBlogAi, envAiConfig } from "./blog_ai_client.ts";
 import { bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
 import { generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
@@ -12,31 +14,6 @@ import { buildAiWeeklySource } from "./ai_weekly_source.ts";
 import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
-
-const TASKS = ["hn-top10", "asia-market-daily", "crypto-market-daily", "us-market-daily", "github-trending-daily", "foreign-tech-podcast", "tech-weekly", "ai-weekly", "tech-business-weekly", "tech-daily", "ai-daily", "tech-business-daily"] as const;
-type Task = (typeof TASKS)[number];
-
-const DAILY_DIGEST_TASKS = ["tech-daily", "ai-daily", "tech-business-daily"] as const satisfies readonly Task[];
-const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly", ...DAILY_DIGEST_TASKS]);
-
-function isDailyDigestTask(task: Task): boolean {
-  return (DAILY_DIGEST_TASKS as readonly string[]).includes(task);
-}
-
-const TASK_META: Record<Task, { titlePrefix: string; fileName: string; tags: string[] }> = {
-  "hn-top10": { titlePrefix: "HackerNews Top 10", fileName: "hackernews-{date}.md", tags: ["定时文章", "HackerNews"] },
-  "asia-market-daily": { titlePrefix: "亚洲市场日报", fileName: "亚洲市场日报-{date}.md", tags: ["定时文章", "亚洲市场日报"] },
-  "crypto-market-daily": { titlePrefix: "比特币日报", fileName: "比特币日报-{date}.md", tags: ["定时文章", "比特币日报"] },
-  "us-market-daily": { titlePrefix: "美股市场日报", fileName: "美股市场日报-{date}.md", tags: ["定时文章", "美股市场日报"] },
-  "github-trending-daily": { titlePrefix: "GitHub 项目日报", fileName: "GitHub项目日报-{date}.md", tags: ["定时文章", "GitHub项目日报"] },
-  "foreign-tech-podcast": { titlePrefix: "海外科技访谈播客笔记", fileName: "海外科技播客-{date}.md", tags: ["定时文章", "海外科技播客"] },
-  "tech-weekly": { titlePrefix: "技术趋势与工程观察", fileName: "技术周刊-{date}.md", tags: ["定时文章", "技术周刊"] },
-  "ai-weekly": { titlePrefix: "AI 周刊", fileName: "AI周刊-{date}.md", tags: ["定时文章", "AI周刊"] },
-  "tech-business-weekly": { titlePrefix: "科技商业观察周刊", fileName: "科技商业观察-{date}.md", tags: ["定时文章", "科技商业观察"] },
-  "tech-daily": { titlePrefix: "技术工程日报", fileName: "技术工程日报-{date}.md", tags: ["定时文章", "技术工程日报"] },
-  "ai-daily": { titlePrefix: "AI 工程日报", fileName: "AI工程日报-{date}.md", tags: ["定时文章", "AI工程日报"] },
-  "tech-business-daily": { titlePrefix: "科技商业观察日报", fileName: "科技商业观察日报-{date}.md", tags: ["定时文章", "科技商业观察日报"] },
-};
 
 type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
@@ -49,48 +26,41 @@ type ResultItem = ReturnType<typeof archivePost> & {
   };
 };
 
-function isTask(value: string): value is Task {
-  return (TASKS as readonly string[]).includes(value);
-}
-
 function offsetBjtDate(days: number): string {
   return bjtDateString(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
 }
 
 function targetPath(task: Task, repo: string, date: string): string {
-  const file = TASK_META[task].fileName.replace("{date}", date);
-  return path.join(repo, "src/content/posts/zh-cn", file);
+  return path.join(repo, taskPostRelPath(task, date));
 }
 
 function skippedExisting(task: Task, repo: string, date: string): ResultItem | null {
   const postPath = targetPath(task, repo, date);
   if (!fs.existsSync(postPath)) return null;
-  const meta = TASK_META[task];
   return {
     task,
     path: path.relative(repo, postPath),
-    title: `${meta.titlePrefix}｜${date}`,
+    title: taskTitle(task, date),
     created: false,
     skipped: true,
     updated_at_bjt: "",
     commit: "",
     push: "",
-    tags: meta.tags,
+    tags: taskTags(task),
   };
 }
 
 function skippedLowQuality(task: Task, date: string, reason: string): ResultItem {
-  const meta = TASK_META[task];
   return {
     task,
     path: "",
-    title: `${meta.titlePrefix}｜${date}`,
+    title: taskTitle(task, date),
     created: false,
     skipped: true,
     updated_at_bjt: "",
     commit: "",
     push: "",
-    tags: meta.tags,
+    tags: taskTags(task),
     skip_reason: reason,
   };
 }
@@ -101,19 +71,24 @@ function fixtureSource(task: Task, sourceFixtureDir: string): string {
   return fs.readFileSync(file, "utf8");
 }
 
+const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
+  "hn-top10": () => buildHnSource(),
+  "asia-market-daily": date => generateAsiaMarketDaily(date),
+  "crypto-market-daily": () => generateCryptoMarketDaily(),
+  "us-market-daily": date => generateUsMarketDaily(date),
+  "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
+  "foreign-tech-podcast": date => buildForeignTechPodcastSource(date),
+  "tech-weekly": date => buildTechWeeklySource(date),
+  "ai-weekly": date => buildAiWeeklySource(date),
+  "tech-business-weekly": date => buildTechBusinessWeeklySource(date),
+  "tech-daily": date => buildDailyDigestSource(date),
+  "ai-daily": date => buildDailyDigestSource(date),
+  "tech-business-daily": date => buildDailyDigestSource(date),
+};
+
 async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): Promise<string> {
   if (sourceFixtureDir) return fixtureSource(task, sourceFixtureDir);
-  if (task === "hn-top10") return buildHnSource();
-  if (task === "asia-market-daily") return generateAsiaMarketDaily(date);
-  if (task === "us-market-daily") return generateUsMarketDaily(date);
-  if (task === "crypto-market-daily") return generateCryptoMarketDaily();
-  if (task === "github-trending-daily") return buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") });
-  if (task === "foreign-tech-podcast") return buildForeignTechPodcastSource(date);
-  if (task === "tech-weekly") return buildTechWeeklySource(date);
-  if (task === "ai-weekly") return buildAiWeeklySource(date);
-  if (task === "tech-business-weekly") return buildTechBusinessWeeklySource(date);
-  if (isDailyDigestTask(task)) return buildDailyDigestSource(date);
-  throw new Error(`unsupported task: ${task}`);
+  return SOURCE_BUILDERS[task](date);
 }
 
 function writeArtifact(artifactsDir: string, task: string, name: string, content: string): string {
@@ -125,31 +100,8 @@ function writeArtifact(artifactsDir: string, task: string, name: string, content
 }
 
 async function callAi(prompt: string, model: string): Promise<string> {
-  const apiKey = process.env.AI_API_KEY || "";
-  const baseUrl = (process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
-  const effectiveModel = model || process.env.AI_MODEL || "gpt-4o-mini";
-  if (!apiKey) throw new Error("AI_API_KEY is required for live AI blog generation");
-  if (!baseUrl) throw new Error("AI_BASE_URL is required for live AI blog generation");
-  if (!effectiveModel) throw new Error("AI_MODEL is required for live AI blog generation");
-  const response = await fetch(`${baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: effectiveModel,
-      messages: [
-        { role: "system", content: "你是严格的中文博客编辑。只输出可归档的 Markdown 正文，不输出解释、前后缀或代码围栏。" },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.4,
-      max_tokens: 4096,
-    }),
-  });
-  const raw = await response.text();
-  if (!response.ok) throw new Error(`AI provider HTTP ${response.status}: ${raw.slice(0, 1200)}`);
-  const data = JSON.parse(raw) as { choices?: { message?: { content?: string } }[] };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content?.trim()) throw new Error(`AI response missing message content: ${raw}`);
-  return content;
+  const config = envAiConfig({ model });
+  return callBlogAi({ prompt, ...config });
 }
 
 function retryAttempts(): number {
@@ -486,14 +438,16 @@ async function generateTask({
 
 async function main(): Promise<void> {
   const args = parseArgs();
-  const taskArg = stringArg(args, "task", "all");
+  const scheduled = scheduledTaskInput(process.env.EVENT_SCHEDULE || "");
+  const taskArg = stringArg(args, "task", scheduled.task);
+  if (!isTaskInput(taskArg)) throw new Error(`unsupported task: ${taskArg}`);
   const repo = path.resolve(stringArg(args, "repo", repoRoot()));
   const explicitDate = stringArg(args, "date");
-  const offset = Number(stringArg(args, "date-offset", "0"));
-  if (!Number.isInteger(offset)) throw new Error(`invalid --date-offset: ${String(args["date-offset"])}`);
+  const offsetArg = stringArg(args, "date-offset");
+  const offset = Number(offsetArg || scheduled.dateOffset);
+  if (!Number.isInteger(offset)) throw new Error(`invalid --date-offset: ${offsetArg || scheduled.dateOffset}`);
   const date = explicitDate || offsetBjtDate(offset);
-  const tasks = taskArg === "all" ? [...TASKS] : taskArg === "daily-digests" ? [...DAILY_DIGEST_TASKS] : [taskArg];
-  if (tasks.some(task => !isTask(task))) throw new Error(`unsupported task: ${taskArg}`);
+  const tasks = tasksForInput(taskArg);
   const results = [];
   for (const task of tasks as Task[]) {
     results.push(
