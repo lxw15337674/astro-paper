@@ -182,10 +182,6 @@ function maxWindowDays(): number {
   return envNumber("PODCAST_LOOKBACK_DAYS", 10);
 }
 
-function transcriptChars(): number {
-  return envNumber("PODCAST_TRANSCRIPT_CHARS", 10_000);
-}
-
 function minTranscriptChars(): number {
   return envNumber("PODCAST_MIN_TRANSCRIPT_CHARS", 1000);
 }
@@ -526,9 +522,9 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
       "",
       ...metadata,
       "",
-      "#### Transcript excerpt",
+      "#### Transcript",
       "",
-      String(episode.transcript || "").slice(0, transcriptChars()),
+      String(episode.transcript || ""),
       "",
     );
   }
@@ -538,7 +534,7 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
     "- 这是基于播客 transcript 的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
     "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
     "- 每条分析必须能回到 transcript 证据；不得仅凭标题、链接、图片或简短简介扩写。",
-    "- 不要生成投资建议、产品购买建议或夸张标题。",
+    "- 不要生成金融建议、产品购买建议或夸张标题。",
   );
   return `${lines.join("\n").trim()}\n`;
 }

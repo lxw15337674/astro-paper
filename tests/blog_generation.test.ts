@@ -209,6 +209,7 @@ test("foreign tech podcast source supports curated episodes with transcripts", a
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
   const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
   const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  const previousTranscriptChars = process.env.PODCAST_TRANSCRIPT_CHARS;
   writeCuratedPodcastFile(curatedFile, [
     {
       archiveDate: "2026-06-23",
@@ -228,11 +229,15 @@ test("foreign tech podcast source supports curated episodes with transcripts", a
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
   process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
   process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
+  process.env.PODCAST_TRANSCRIPT_CHARS = "10";
   try {
     const source = await buildForeignTechPodcastSource("2026-06-23");
     assert.match(source, /Building Reliable AI Developer Platforms/);
     assert.match(source, /Platform Lead/);
     assert.match(source, /AI coding agents change developer platforms/);
+    assert.match(source, /generated pull requests can arrive continuously/);
+    assert.match(source, /#### Transcript/);
+    assert.doesNotMatch(source, /#### Transcript excerpt/);
     assert.doesNotMatch(source, /未提供 transcript/);
   } finally {
     restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
@@ -241,6 +246,7 @@ test("foreign tech podcast source supports curated episodes with transcripts", a
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
     restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    restoreEnv("PODCAST_TRANSCRIPT_CHARS", previousTranscriptChars);
     fs.rmSync(curatedFile, { force: true });
   }
 });
