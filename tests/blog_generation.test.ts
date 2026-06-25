@@ -26,6 +26,9 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
   fs.writeFileSync(path.join(dir, "hn-top10.md"), "task={task}\ndate={date}\nsource={source_text}");
   const prompt = renderPrompt({ task: "hn-top10", date: "2099-01-02", sourceText: "hello", promptDir: dir });
   assert.equal(prompt, "task=hn-top10\ndate=2099-01-02\nsource=hello");
+  fs.writeFileSync(path.join(dir, "_common-article-rules.md"), "common rules");
+  const promptWithCommon = renderPrompt({ task: "hn-top10", date: "2099-01-02", sourceText: "hello", promptDir: dir });
+  assert.equal(promptWithCommon, "common rules\n\ntask=hn-top10\ndate=2099-01-02\nsource=hello");
   assert.equal(chatCompletionsUrl("https://api.example.com/v1"), "https://api.example.com/v1/chat/completions");
   assert.equal(chatCompletionsUrl("https://api.example.com/v1/chat/completions"), "https://api.example.com/v1/chat/completions");
 });
@@ -44,6 +47,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     assert.ok(info.description);
     assert.match(taskPostRelPath(task, "2099-01-02"), /^src\/content\/posts\/zh-cn\/.+2099-01-02\.md$/);
     assert.equal(fs.existsSync(path.join(process.cwd(), "prompts/blog", `${task}.md`)), true, `${task} prompt missing`);
+    assert.equal(fs.existsSync(path.join(process.cwd(), "prompts/blog", "_common-article-rules.md")), true, "common article rules prompt missing");
     assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}.md`)), true, `${task} source fixture missing`);
     assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}.md`)), true, `${task} AI fixture missing`);
   }

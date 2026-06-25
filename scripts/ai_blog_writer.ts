@@ -9,7 +9,10 @@ export { chatCompletionsUrl };
 export function renderPrompt({ task, date, sourceText, promptDir }: { task: string; date: string; sourceText: string; promptDir: string }): string {
   const file = path.join(promptDir, `${task}.md`);
   if (!fs.existsSync(file)) throw new Error(`prompt template not found for task ${task}: ${file}`);
-  return fs.readFileSync(file, "utf8").replaceAll("{task}", task).replaceAll("{date}", date).replaceAll("{source_text}", sourceText.trim());
+  const commonFile = path.join(promptDir, "_common-article-rules.md");
+  const common = fs.existsSync(commonFile) ? `${fs.readFileSync(commonFile, "utf8").trim()}\n\n` : "";
+  const taskPrompt = fs.readFileSync(file, "utf8").replaceAll("{task}", task).replaceAll("{date}", date).replaceAll("{source_text}", sourceText.trim());
+  return `${common}${taskPrompt.trimStart()}`;
 }
 
 export function stripMarkdownFence(text: string): string {
