@@ -361,6 +361,103 @@ function runLocalWhisper(audioFile: string, outDir: string): string {
   return transcript;
 }
 
+function transcriptionProviders(): string[] {
+  const raw = process.env.PODCAST_TRANSCRIBE_PROVIDER || process.env.PODCAST_TRANSCRIBE_PROVIDERS || "groq,local";
+  return raw
+    .split(/[,>]/)
+    .map(provider => provider.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function groqApiKey(): string {
+  return process.env.GROQ_API_KEY || process.env.PODCAST_GROQ_API_KEY || "";
+}
+
+function groqModel(): string {
+  return process.env.PODCAST_GROQ_MODEL || "whisper-large-v3-turbo";
+}
+
+function runFfmpeg(args: string[], timeoutMs: number): void {
+  const bin = process.env.PODCAST_FFMPEG_BIN || "ffmpeg";
+  const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
+}
+
+function prepareGroqAudioChunks(audioFile: string, outDir: string): string[] {
+  ensureDir(outDir);
+  const segmentSeconds = envNumber("PODCAST_GROQ_SEGMENT_SECONDS", 20 * 60);
+  const bitrate = process.env.PODCAST_GROQ_AUDIO_BITRATE || "64k";
+  const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
+  runFfmpeg(["-y", "-i", audioFile, "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate, "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1", path.join(outDir, "chunk-%03d.mp3")], timeoutMs);
+  const maxBytes = envNumber("PODCAST_GROQ_MAX_CHUNK_MB", 24) * 1024 * 1024;
+  const chunks = fs
+    .readdirSync(outDir)
+    .filter(file => file.endsWith(".mp3"))
+    .map(file => path.join(outDir, file))
+    .toSorted();
+  if (!chunks.length) throw new Error("ffmpeg produced no Groq audio chunks");
+  const oversized = chunks.find(file => fs.statSync(file).size > maxBytes);
+  if (oversized) throw new Error(`Groq audio chunk exceeds ${Math.round(maxBytes / 1024 / 1024)}MB: ${path.basename(oversized)}`);
+  return chunks;
+}
+
+async function transcribeGroqChunk(chunkFile: string): Promise<string> {
+  const key = groqApiKey();
+  if (!key) throw new Error("GROQ_API_KEY is not configured");
+  const timeoutMs = envNumber("PODCAST_GROQ_TIMEOUT_MS", 10 * 60 * 1000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(fs.readFileSync(chunkFile))], { type: "audio/mpeg" }), path.basename(chunkFile));
+    form.append("model", groqModel());
+    form.append("response_format", "json");
+    form.append("temperature", "0");
+    const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}` },
+      body: form,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`Groq transcription HTTP ${response.status}: ${text.slice(0, 1000)}`);
+    const payload = JSON.parse(text) as { text?: string };
+    return compact(payload.text || "");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runGroqWhisper(audioFile: string, outDir: string): Promise<string> {
+  if (!groqApiKey()) throw new Error("GROQ_API_KEY is not configured");
+  const chunks = prepareGroqAudioChunks(audioFile, outDir);
+  const parts: string[] = [];
+  for (const [index, chunk] of chunks.entries()) {
+    writeStderr(`Groq transcribing chunk ${index + 1}/${chunks.length}: ${path.basename(chunk)}`);
+    parts.push(await transcribeGroqChunk(chunk));
+  }
+  const transcript = compact(parts.join("\n"));
+  if (transcript.length < minTranscriptChars()) throw new Error(`Groq transcript too short (${transcript.length} chars)`);
+  return transcript;
+}
+
+async function transcribeAudio(audioFile: string, outDir: string): Promise<string> {
+  const errors: string[] = [];
+  for (const provider of transcriptionProviders()) {
+    try {
+      if (provider === "groq") return await runGroqWhisper(audioFile, path.join(outDir, "groq"));
+      if (["local", "local-whisper", "whisper"].includes(provider)) return runLocalWhisper(audioFile, path.join(outDir, "local"));
+      errors.push(`${provider}: unsupported transcription provider`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${provider}: ${message}`);
+      writeStderr(`WARN: ${provider} transcription failed; trying next provider: ${message}`);
+    }
+  }
+  throw new Error(`all transcription providers failed: ${errors.join("; ")}`);
+}
+
 async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "foreign-tech-podcast-"));
   try {
@@ -383,7 +480,7 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
       const outDir = path.join(tmp, `transcript-${index}`);
       try {
         await downloadAudio(episode.audioUrl, rawAudio);
-        const transcript = runLocalWhisper(rawAudio, outDir);
+        const transcript = await transcribeAudio(rawAudio, outDir);
         enriched.push({ ...episode, transcript });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
