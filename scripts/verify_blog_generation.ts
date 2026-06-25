@@ -19,6 +19,7 @@ const COMMON_FORBIDDEN_PATTERNS = [
 ];
 
 const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
+const AI_STILTED_MARKET_PATTERNS = [/当前证据只能说明/, /不能据此(?:外推|写成)/, /不支持进一步外推/, /就当前证据而言/, /整体看，/];
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
   if (trimmed.startsWith("{")) return JSON.parse(trimmed);
@@ -281,6 +282,9 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
     const broadIndexSection = body.match(/## 宽基指数\n([\s\S]*?)(?=\n## 行业指数)/)?.[1] || "";
     if (/[（(][A-Z]{2,6}[）)]/.test(broadIndexSection)) {
       throw new Error(`${relPath} discusses stock tickers before the stock-sample section`);
+    }
+    for (const pattern of AI_STILTED_MARKET_PATTERNS) {
+      if (pattern.test(body)) throw new Error(`${relPath} contains AI-stilted market prose: ${pattern.source}`);
     }
   }
 }
