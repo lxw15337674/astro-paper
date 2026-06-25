@@ -36,7 +36,7 @@ export const BLOG_TASKS = {
   "github-trending-daily": {
     titlePrefix: "GitHub 项目日报",
     tag: "GitHub项目日报",
-    description: "每日 GitHub Trending 项目中文整理，基于榜单元数据与 README 摘录提炼开源项目趋势。",
+    description: "每日 GitHub Trending 项目中文整理，基于榜单元数据与 README 正文提炼开源项目趋势。",
     fileName: "GitHub项目日报-{date}.md",
   },
   "foreign-tech-podcast": {

@@ -3,7 +3,7 @@ import https from "node:https";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import YahooFinance from "yahoo-finance2";
-import { bjtDateString, clipText, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
@@ -94,7 +94,7 @@ type InstrumentRow = { symbol: string; name: string; pct: number; close: number;
 type SectorRow = InstrumentRow;
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
 type YahooFinanceFeedItem = { title: string; url: string; publishedAt: string; summary: string };
-type ExternalMarketArticle = { title: string; url: string; publishedAt: string; excerpt: string };
+type ExternalMarketArticle = { title: string; url: string; publishedAt: string; bodyText: string };
 type UsIndexSnapshot = { dji: number; nasdaq: number; spx: number };
 type YahooChartPayload = {
   chart?: {
@@ -166,10 +166,6 @@ function compactVolume(value: unknown): string {
 
 function textOf(element: Element | null): string {
   return compact(element?.textContent || "");
-}
-
-function attr(element: Element | null, name: string): string {
-  return compact(element?.getAttribute(name) || "");
 }
 
 function parseFeedDate(value = ""): string {
@@ -296,7 +292,7 @@ async function fetchYahooFinanceArticle(item: YahooFinanceFeedItem, snapshot: Us
     );
     if (text.length < 240) return null;
     if (articleConflictsWithIndexSnapshot(text, snapshot)) return null;
-    return { title: item.title, url: item.url, publishedAt: item.publishedAt, excerpt: clipText(text, 900) };
+    return { title: item.title, url: item.url, publishedAt: item.publishedAt, bodyText: text };
   } catch {
     return null;
   }
@@ -327,10 +323,16 @@ function fetchTextWithLargeHeaders(url: string, { timeoutMs, maxChars }: { timeo
         }
         response.setEncoding("utf8");
         let text = "";
+        let exceeded = false;
         response.on("data", chunk => {
-          if (text.length < maxChars) text += String(chunk).slice(0, maxChars - text.length);
+          const piece = String(chunk);
+          if (text.length + piece.length > maxChars) exceeded = true;
+          if (text.length < maxChars) text += piece.slice(0, maxChars - text.length);
         });
-        response.on("end", () => resolve(text));
+        response.on("end", () => {
+          if (exceeded) reject(new Error(`response exceeded ${maxChars} characters for ${url}`));
+          else resolve(text);
+        });
       },
     );
     request.on("timeout", () => request.destroy(new Error(`timeout fetching ${url}`)));
@@ -340,7 +342,7 @@ function fetchTextWithLargeHeaders(url: string, { timeoutMs, maxChars }: { timeo
 
 async function yahooFinanceMarketArticles(date: string, snapshot: UsIndexSnapshot): Promise<ExternalMarketArticle[]> {
   try {
-    const xml = await fetchText(YAHOO_FINANCE_RSS, { timeoutMs: 15_000, maxChars: 800_000 });
+    const xml = await fetchText(YAHOO_FINANCE_RSS, { timeoutMs: 15_000, maxChars: 800_000, throwOnMaxChars: true });
     const candidates = parseYahooFinanceFeedItems(xml)
       .filter(item => isWithinFeedWindow(item, date))
       .map(item => ({ item, score: scoreYahooMarketItem(item) }))
@@ -589,7 +591,7 @@ function externalArticleLines(articles: ExternalMarketArticle[]): string[] {
   return [
     "## 外部财经文章正文线索",
     "",
-    "以下线索来自 Yahoo Finance 公开可访问文章页的短摘录，只作为市场叙事辅助证据；不包含 MarketWatch 或 Seeking Alpha 正文，不代表完整新闻归因。",
+    "以下线索来自 Yahoo Finance 公开可访问文章页正文，只作为市场叙事辅助证据；不包含 MarketWatch 或 Seeking Alpha 正文，不代表完整新闻归因。",
     "",
     ...articles.flatMap((article, index) => [
       `### ${index + 1}. ${article.title}`,
@@ -597,10 +599,10 @@ function externalArticleLines(articles: ExternalMarketArticle[]): string[] {
       `- 来源：Yahoo Finance`,
       `- 链接：${article.url}`,
       article.publishedAt ? `- 发布时间：${article.publishedAt}` : "- 发布时间：未获取到稳定发布时间",
-      `- 正文短摘录：${article.excerpt}`,
+      `- 正文：${article.bodyText}`,
       "",
     ]),
-    "外部文章短摘录只能用于辅助识别当日市场叙事；不得复制原文大段内容，也不得在没有明确证据时把标题或摘录写成确定因果。",
+    "外部文章正文只能用于辅助识别当日市场叙事；不得复制原文大段内容，也不得在没有明确证据时把标题或正文写成确定因果。",
   ];
 }
 

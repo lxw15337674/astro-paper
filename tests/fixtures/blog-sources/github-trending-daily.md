@@ -18,7 +18,7 @@
 - Forks：620
 - 今日新增 Stars：820
 - README 状态：ok
-- README 摘录：Agent Lab provides local task orchestration, tool execution, memory, and session state for developer agents.
+- README 正文：Agent Lab provides local task orchestration, tool execution, memory, and session state for developer agents.
 
 ### 2. [river/fast-ui](https://github.com/river/fast-ui)
 
@@ -28,7 +28,7 @@
 - Forks：410
 - 今日新增 Stars：510
 - README 状态：ok
-- README 摘录：Fast UI contains accessible components, design tokens, and application shell patterns.
+- README 正文：Fast UI contains accessible components, design tokens, and application shell patterns.
 
 ### 3. [byteforge/code-map](https://github.com/byteforge/code-map)
 
@@ -38,7 +38,7 @@
 - Forks：210
 - 今日新增 Stars：420
 - README 状态：ok
-- README 摘录：Code Map parses repositories, extracts dependency graphs, and renders code relationships.
+- README 正文：Code Map parses repositories, extracts dependency graphs, and renders code relationships.
 
 ### 4. [nimbus/cli-kit](https://github.com/nimbus/cli-kit)
 
@@ -48,7 +48,7 @@
 - Forks：188
 - 今日新增 Stars：350
 - README 状态：ok
-- README 摘录：CLI Kit includes configuration loading, plugins, command routing, and release helpers.
+- README 正文：CLI Kit includes configuration loading, plugins, command routing, and release helpers.
 
 ### 5. [openpath/docsync](https://github.com/openpath/docsync)
 
@@ -58,4 +58,4 @@
 - Forks：155
 - 今日新增 Stars：290
 - README 状态：ok
-- README 摘录：Docsync synchronizes Markdown documentation between repositories, websites, and internal knowledge bases.
+- README 正文：Docsync synchronizes Markdown documentation between repositories, websites, and internal knowledge bases.

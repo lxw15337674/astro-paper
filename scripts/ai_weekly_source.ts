@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { JSDOM } from "jsdom";
-import { avoidCloudflareEmailObfuscation, clipText, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, compact, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 type AiWeeklyCategory = "model" | "agent" | "infra" | "coding" | "safety" | "research" | "product";
 
@@ -196,7 +196,7 @@ function displayTitle(item: AiWeeklyItem): string {
 }
 
 async function fetchSource(source: FeedSource): Promise<AiWeeklyItem[]> {
-  const xml = await fetchText(source.url, { timeoutMs: 20_000, maxChars: 800_000 });
+  const xml = await fetchText(source.url, { timeoutMs: 20_000, maxChars: 800_000, throwOnMaxChars: true });
   return parseFeedItems(xml, source);
 }
 
@@ -236,7 +236,7 @@ export async function buildAiWeeklySource(date: string, { lookbackDays = 10, lim
       `- 分类：${item.category}`,
       `- 发布时间：${item.publishedAt || "未知"}`,
       `- 链接：${item.url}`,
-      `- 摘要证据：${clipText(item.summary || item.title, 700)}`,
+      `- 摘要证据：${compact(item.summary || item.title)}`,
       "",
     );
   });

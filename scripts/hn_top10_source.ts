@@ -1,12 +1,10 @@
 #!/usr/bin/env tsx
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
-import { clipText, compact, fetchJson, fetchText, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
+import { compact, fetchJson, fetchText, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
 
 const HN_TOP_URL = "https://news.ycombinator.com/";
 const hnApiItem = (id: number) => `https://hacker-news.firebaseio.com/v0/item/${id}.json`;
-const MAX_ORIGINAL_CHARS = 2200;
-const MAX_COMMENT_CHARS = 1800;
 
 type HnItem = {
   id?: number;
@@ -51,7 +49,7 @@ export function classify(title = ""): string {
 }
 
 export async function scrapeTopIds(): Promise<number[]> {
-  const html = await fetchText(HN_TOP_URL, { timeoutMs: 20_000 });
+  const html = await fetchText(HN_TOP_URL, { timeoutMs: 20_000, throwOnMaxChars: true });
   const ids = [...html.matchAll(/<span class="rank">(\d+)\.<\/span>.*?id="score_(\d+)"/gs)].map(match => Number(match[2]));
   return [...new Set(ids)].slice(0, 10);
 }
@@ -75,7 +73,7 @@ async function githubExcerpt(url: string): Promise<string> {
       const issue = await fetchJson<{ title?: string; body?: string }>(`https://api.github.com/repos/${owner}/${repo}/issues/${parts[3]}`, {
         timeoutMs: 12_000,
       });
-      return clipText(`${issue.title || ""}. ${stripHtml(issue.body || "")}`, MAX_ORIGINAL_CHARS);
+      return compact(`${issue.title || ""}. ${stripHtml(issue.body || "")}`);
     } catch {
       return "";
     }
@@ -84,9 +82,10 @@ async function githubExcerpt(url: string): Promise<string> {
     try {
       const readme = await fetchText(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/README.md`, {
         timeoutMs: 10_000,
-        maxChars: 300_000,
+        maxChars: 500_000,
+        throwOnMaxChars: true,
       });
-      if (compact(readme).length >= 160) return clipText(readme, MAX_ORIGINAL_CHARS);
+      if (compact(readme).length >= 160) return compact(readme);
     } catch {
       // try next branch
     }
@@ -103,8 +102,8 @@ export async function fetchOriginalExcerpt(url: string): Promise<string> {
     // fall through to generic readability
   }
   try {
-    const html = await fetchText(url, { timeoutMs: 14_000, maxChars: 1_200_000 });
-    return clipText(readableFromHtml(html, url), MAX_ORIGINAL_CHARS);
+    const html = await fetchText(url, { timeoutMs: 14_000, maxChars: 1_200_000, throwOnMaxChars: true });
+    return readableFromHtml(html, url);
   } catch {
     return "";
   }
@@ -135,9 +134,8 @@ export async function fetchCommentExcerpt(item: HnItem, { topLimit = 8, repliesP
       const reply = await commentText(replyId);
       if (reply.length >= 40) snippets.push(reply);
     }
-    if (snippets.join(" / ").length >= MAX_COMMENT_CHARS) break;
   }
-  return clipText(snippets.join(" / "), MAX_COMMENT_CHARS);
+  return compact(snippets.join(" / "));
 }
 
 export function buildPayload(item: HnItem, rank: number, { originalExcerpt = "", commentExcerpt = "" } = {}): HnPayloadItem {
@@ -163,8 +161,8 @@ function evidenceCounts(text: string): { original: number; comments: number } {
   let original = 0;
   let comments = 0;
   for (const line of text.split("\n")) {
-    if (line.startsWith("- 原文摘录：") && line.split("：").slice(1).join("：").trim().length >= 120) original += 1;
-    if (line.startsWith("- HN 评论摘录：") && line.split("：").slice(1).join("：").trim().length >= 60) comments += 1;
+    if (line.startsWith("- 原文正文：") && line.split("：").slice(1).join("：").trim().length >= 120) original += 1;
+    if (line.startsWith("- HN 评论样本：") && line.split("：").slice(1).join("：").trim().length >= 60) comments += 1;
   }
   return { original, comments };
 }
@@ -187,8 +185,8 @@ export async function buildHnSource(): Promise<string> {
       `- 主题：${payload.topic}`,
       `- 原文：${url}`,
       `- HN 讨论：${payload.hn_link}`,
-      `- 原文摘录：${originalExcerpt || payload.source_text || "未抓取到可读正文；只能依据标题、链接和 HN 讨论保守处理。"}`,
-      `- HN 评论摘录：${commentExcerpt || "暂无足够长的可读评论摘录；评论总结必须保守。"}`,
+      `- 原文正文：${originalExcerpt || payload.source_text || "未抓取到可读正文；只能依据标题、链接和 HN 讨论保守处理。"}`,
+      `- HN 评论样本：${commentExcerpt || "暂无足够长的可读评论样本；评论总结必须保守。"}`,
       "",
     );
   }

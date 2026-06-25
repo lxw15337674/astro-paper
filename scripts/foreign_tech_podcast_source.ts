@@ -253,7 +253,7 @@ async function fetchRssEpisodes(date: string): Promise<Episode[]> {
   if (rssDisabled()) return [];
   const settled = await Promise.allSettled(
     FEEDS.map(async feed => {
-      const xml = await fetchText(feed.url, { timeoutMs: 25_000, maxChars: 2_500_000 });
+      const xml = await fetchText(feed.url, { timeoutMs: 25_000, maxChars: 2_500_000, throwOnMaxChars: true });
       return parseFeed(feed, xml);
     }),
   );

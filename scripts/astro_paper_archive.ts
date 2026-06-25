@@ -125,7 +125,7 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
     if ((!contentSummary || looksLowSignal(contentSummary)) && payload.content_summary) contentSummary = payload.content_summary;
     if ((!commentSummary || looksLowSignal(commentSummary)) && payload.comment_summary) commentSummary = payload.comment_summary;
     if (!contentSummary && payload.original_excerpt) contentSummary = `原文主要信息：${payload.original_excerpt}`;
-    if (!commentSummary && payload.hn_comment_excerpt) commentSummary = `HN 评论摘录显示：${payload.hn_comment_excerpt}`;
+    if (!commentSummary && payload.hn_comment_excerpt) commentSummary = `HN 评论样本显示：${payload.hn_comment_excerpt}`;
     contentSummary = normalizeParagraph(contentSummary);
     commentSummary = normalizeParagraph(commentSummary);
     if (!contentSummary) return;

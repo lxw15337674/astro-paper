@@ -12,7 +12,7 @@ import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
-import { parseGitHubTrendingHtml } from "../scripts/github_trending_daily_source.ts";
+import { parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
@@ -31,6 +31,28 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
   assert.equal(promptWithCommon, "common rules\n\ntask=hn-top10\ndate=2099-01-02\nsource=hello");
   assert.equal(chatCompletionsUrl("https://api.example.com/v1"), "https://api.example.com/v1/chat/completions");
   assert.equal(chatCompletionsUrl("https://api.example.com/v1/chat/completions"), "https://api.example.com/v1/chat/completions");
+});
+
+test("blog source evidence keeps long text sentinels instead of truncating", () => {
+  const originalTail = `Original evidence ${"x".repeat(2300)} ORIGINAL_TAIL_SENTINEL`;
+  const commentTail = `Comment evidence ${"y".repeat(1900)} COMMENT_TAIL_SENTINEL`;
+  const payload = buildPayload(
+    {
+      id: 123,
+      title: "Developers don't understand CORS",
+      url: "https://example.com/cors",
+      descendants: 88,
+      score: 185,
+      text: "fallback self text",
+    },
+    1,
+    { originalExcerpt: originalTail, commentExcerpt: commentTail },
+  );
+  assert.match(payload.original_excerpt, /ORIGINAL_TAIL_SENTINEL/);
+  assert.match(payload.hn_comment_excerpt, /COMMENT_TAIL_SENTINEL/);
+
+  const readme = sanitizeReadmeText(`# Heading\n\n${"readme ".repeat(400)} README_TAIL_SENTINEL`);
+  assert.match(readme, /README TAIL SENTINEL/);
 });
 
 test("AI writer rejects placeholder markdown", () => {
@@ -83,6 +105,14 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
 });
 
+test("RSS source builders do not truncate summary evidence with clipText", () => {
+  for (const file of ["tech_weekly_source.ts", "ai_weekly_source.ts", "tech_business_weekly_source.ts", "daily_digest_source.ts"]) {
+    const source = fs.readFileSync(path.join(process.cwd(), "scripts", file), "utf8");
+    assert.doesNotMatch(source, /clipText\(item\.summary \|\| item\.title/);
+    assert.match(source, /摘要证据：\$\{compact\(item\.summary \|\| item\.title\)\}/);
+  }
+});
+
 test("Yahoo Finance article extraction prefers public articleBody text", () => {
   const html = `<!doctype html><html><head><script type="application/ld+json">{"@type":"NewsArticle","articleBody":"Stocks closed mixed as technology shares lagged while industrial and consumer discretionary groups advanced. Analysts cited positioning around major index weights, but the article also noted that volume evidence was mixed across broad ETFs and did not by itself prove fund flows."}</script></head><body><article>fallback text</article></body></html>`;
   const text = extractYahooFinanceArticleText(html, "https://finance.yahoo.com/example");
@@ -124,7 +154,7 @@ test("US market section includes stock and volume evidence without treating volu
         title: "Stock market today: Nasdaq slips as industrials rise",
         url: "https://finance.yahoo.com/news/stock-market-today-example.html",
         publishedAt: "2099-01-06T21:30:00.000Z",
-        excerpt: "Yahoo Finance article text says stocks closed mixed as industrial shares rose while technology shares lagged, and it frames the move as a market narrative rather than a complete causal explanation.",
+        bodyText: `Yahoo Finance article text says stocks closed mixed as industrial shares rose while technology shares lagged, and it frames the move as a market narrative rather than a complete causal explanation. ${"market ".repeat(160)} MARKET_BODY_TAIL_SENTINEL`,
       },
     ],
   );
@@ -140,6 +170,7 @@ test("US market section includes stock and volume evidence without treating volu
   assert.match(section.markdown, /外部财经文章正文线索/);
   assert.match(section.markdown, /https:\/\/finance\.yahoo\.com\/news\/stock-market-today-example\.html/);
   assert.match(section.markdown, /只作为市场叙事辅助证据/);
+  assert.match(section.markdown, /MARKET_BODY_TAIL_SENTINEL/);
   assert.doesNotMatch(section.markdown, /资金流入|资金流出|机构买入|机构卖出/);
 });
 

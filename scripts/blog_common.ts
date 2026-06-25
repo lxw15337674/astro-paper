@@ -117,7 +117,12 @@ export function frontmatter({
 
 export async function fetchText(
   url: string,
-  { timeoutMs = 20_000, headers = {}, maxChars = 1_000_000 }: { timeoutMs?: number; headers?: Record<string, string>; maxChars?: number } = {},
+  {
+    timeoutMs = 20_000,
+    headers = {},
+    maxChars = 1_000_000,
+    throwOnMaxChars = false,
+  }: { timeoutMs?: number; headers?: Record<string, string>; maxChars?: number; throwOnMaxChars?: boolean } = {},
 ): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -132,7 +137,11 @@ export async function fetchText(
     });
     if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
     const text = await response.text();
-    return text.length > maxChars ? text.slice(0, maxChars) : text;
+    if (text.length > maxChars) {
+      if (throwOnMaxChars) throw new Error(`response exceeded ${maxChars} characters for ${url}`);
+      return text.slice(0, maxChars);
+    }
+    return text;
   } finally {
     clearTimeout(timer);
   }

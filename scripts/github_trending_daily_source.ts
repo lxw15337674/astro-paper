@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { JSDOM } from "jsdom";
-import { bjtDateString, clipText, compact, ensureDir, fetchJson, fetchText, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, compact, ensureDir, fetchJson, fetchText, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 type GitHubTrendingRepo = {
   rank: number;
@@ -15,7 +15,7 @@ type GitHubTrendingRepo = {
   forks: number;
   todayStars: number;
   url: string;
-  readmeExcerpt: string;
+  readmeText: string;
   readmeStatus: "ok" | "missing" | "error";
   errorMessage?: string;
 };
@@ -43,8 +43,6 @@ type GitHubReadmeResponse = {
 const VERSION = "1.0.0";
 const TRENDING_URL = "https://github.com/trending?since=daily";
 const DEFAULT_LIMIT = 10;
-const README_EXCERPT_CHARS = 1800;
-
 function parseCount(text: string): number {
   const cleaned = compact(text).replace(/,/g, "").toLowerCase();
   const match = cleaned.match(/([\d.]+)\s*([km])?/);
@@ -82,7 +80,7 @@ export function parseGitHubTrendingHtml(html: string, limit = DEFAULT_LIMIT): Gi
         forks,
         todayStars,
         url: fullName ? `https://github.com/${fullName}` : "",
-        readmeExcerpt: "",
+        readmeText: "",
         readmeStatus: "missing" as const,
       };
     })
@@ -93,8 +91,8 @@ function decodeBase64(text: string): string {
   return Buffer.from(text.replace(/\s+/g, ""), "base64").toString("utf8");
 }
 
-function sanitizeReadmeExcerpt(text: string): string {
-  return clipText(
+export function sanitizeReadmeText(text: string): string {
+  return compact(
     text
       .replace(/```[\s\S]*?```/g, " ")
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -111,7 +109,6 @@ function sanitizeReadmeExcerpt(text: string): string {
       .replace(/&gt;/gi, ">")
       .replace(/^\s{0,3}#{1,6}\s*/gm, "")
       .replace(/[`*_>]+/g, " "),
-    README_EXCERPT_CHARS,
   );
 }
 
@@ -127,7 +124,7 @@ async function fetchReadme(owner: string, repo: string): Promise<string> {
     },
     maxChars: 1_000_000,
   });
-  if (payload.download_url) return fetchText(payload.download_url, { timeoutMs: 15_000, maxChars: 500_000 });
+  if (payload.download_url) return fetchText(payload.download_url, { timeoutMs: 15_000, maxChars: 2_000_000, throwOnMaxChars: true });
   if (payload.content && payload.encoding === "base64") return decodeBase64(payload.content);
   throw new Error("GitHub README API response missing download_url/content");
 }
@@ -137,8 +134,8 @@ async function enrichReadmes(repos: GitHubTrendingRepo[]): Promise<GitHubTrendin
   for (const repo of repos) {
     try {
       const readme = await fetchReadme(repo.owner, repo.repo);
-      const excerpt = sanitizeReadmeExcerpt(readme);
-      enriched.push({ ...repo, readmeExcerpt: excerpt, readmeStatus: excerpt ? "ok" : "missing" });
+      const readmeText = sanitizeReadmeText(readme);
+      enriched.push({ ...repo, readmeText, readmeStatus: readmeText ? "ok" : "missing" });
     } catch (error) {
       enriched.push({ ...repo, readmeStatus: "error", errorMessage: error instanceof Error ? error.message : String(error) });
     }
@@ -202,7 +199,7 @@ function buildSourceMarkdown(payload: GitHubTrendingArchive, archivePath = ""): 
       `- Forks：${formatNumber(repo.forks)}`,
       `- 今日新增 Stars：${formatNumber(repo.todayStars)}`,
       `- README 状态：${repo.readmeStatus}${repo.errorMessage ? `（${repo.errorMessage}）` : ""}`,
-      `- README 摘录：${repo.readmeExcerpt || "未获取到可用 README 摘录，本项目只能基于榜单元数据描述。"}`,
+      `- README 正文：${repo.readmeText || "未获取到可用 README 正文，本项目只能基于榜单元数据描述。"}`,
       "",
     );
   }
@@ -211,7 +208,7 @@ function buildSourceMarkdown(payload: GitHubTrendingArchive, archivePath = ""): 
 }
 
 export async function buildGitHubTrendingDailySource(date = bjtDateString(), { dataDir = "", limit = DEFAULT_LIMIT }: { dataDir?: string; limit?: number } = {}): Promise<string> {
-  const html = await fetchText(TRENDING_URL, { timeoutMs: 30_000, maxChars: 1_500_000 });
+  const html = await fetchText(TRENDING_URL, { timeoutMs: 30_000, maxChars: 1_500_000, throwOnMaxChars: true });
   const repos = await enrichReadmes(parseGitHubTrendingHtml(html, limit));
   if (!repos.length) throw new Error("GitHub Trending source produced zero repositories");
   const payload = archivePayload(date, repos);
