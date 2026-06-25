@@ -555,11 +555,14 @@ test("archive and verifier accept generated GitHub trending daily", () => {
   const markdown = fs.readFileSync(path.join(repo, result.path), "utf8");
   assert.match(markdown, /title: "GitHub 项目日报｜2099-01-06"/);
   assert.match(markdown, /GitHub项目日报/);
-  assert.match(markdown, /^## 今日项目精选/m);
-  assert.match(markdown, /^### \[acme\/agent-lab\]\(https:\/\/github\.com\/acme\/agent-lab\)/m);
+  assert.doesNotMatch(markdown, /^## 总结/m);
+  assert.doesNotMatch(markdown, /^## 趋势观察/m);
+  assert.doesNotMatch(markdown, /^## 数据边界/m);
+  assert.match(markdown, /^## 1\. \[acme\/agent-lab\]\(https:\/\/github\.com\/acme\/agent-lab\)/m);
   assert.match(markdown, /^- Stars：12.4k/m);
   assert.match(markdown, /^- Forks：620/m);
   assert.match(markdown, /^- 今日新增 Stars：820/m);
+  assert.match(markdown, /^- README 摘要：/m);
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [result] }));
   assert.equal(verifyResultJson(repo, resultJson), 1);

@@ -304,13 +304,13 @@ function formatTechBusinessDaily(text: string): string {
 }
 
 function assertGitHubTrendingStats(markdown: string): void {
-  const headings = [...markdown.matchAll(/^###\s+\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)\s*$/gm)];
+  const headings = [...markdown.matchAll(/^#{2,3}\s+(?:\d+\.\s+)?\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)\s*$/gm)];
   for (let index = 0; index < headings.length; index += 1) {
     const match = headings[index];
     const start = match.index || 0;
     const end = index + 1 < headings.length ? headings[index + 1].index || markdown.length : markdown.length;
     const block = markdown.slice(start, end);
-    for (const label of ["Stars", "Forks", "今日新增 Stars"]) {
+    for (const label of ["描述", "语言", "Stars", "Forks", "今日新增 Stars", "README 摘要"]) {
       if (!new RegExp(`^- ${label}：\\S+`, "m").test(block)) throw new Error(`GitHub trending daily item missing ${label} metadata: ${match[0]}`);
     }
   }
@@ -319,10 +319,10 @@ function assertGitHubTrendingStats(markdown: string): void {
 function formatGitHubTrendingDaily(text: string): string {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   for (const section of ["总结", "今日项目精选", "趋势观察", "数据边界"]) {
-    if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized)) throw new Error(`GitHub trending daily missing section: ${section}`);
+    if (new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized)) throw new Error(`GitHub trending daily should be a project list, but contains section: ${section}`);
   }
   rejectDuplicateLinksAndHeadings(normalized, "GitHub trending daily");
-  const itemLinks = normalized.match(/^###\s+\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)/gm) || [];
+  const itemLinks = normalized.match(/^#{2,3}\s+(?:\d+\.\s+)?\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)/gm) || [];
   if (itemLinks.length < 5) throw new Error(`GitHub trending daily needs at least five linked project headings, got ${itemLinks.length}`);
   assertGitHubTrendingStats(normalized);
   if (!/GitHub Trending|Trending|README|项目自述|榜单|Stars|stars/.test(normalized)) throw new Error("GitHub trending daily lacks source-bound trend language");
