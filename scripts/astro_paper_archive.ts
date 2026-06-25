@@ -310,7 +310,7 @@ function assertGitHubTrendingStats(markdown: string): void {
     const start = match.index || 0;
     const end = index + 1 < headings.length ? headings[index + 1].index || markdown.length : markdown.length;
     const block = markdown.slice(start, end);
-    for (const label of ["描述", "语言", "Stars", "Forks", "今日新增 Stars", "README 摘要"]) {
+    for (const label of ["项目总结", "技术栈", "使用场景", "Stars", "Forks", "今日新增 Stars"]) {
       if (!new RegExp(`^- ${label}：\\S+`, "m").test(block)) throw new Error(`GitHub trending daily item missing ${label} metadata: ${match[0]}`);
     }
   }
@@ -325,7 +325,8 @@ function formatGitHubTrendingDaily(text: string): string {
   const itemLinks = normalized.match(/^#{2,3}\s+(?:\d+\.\s+)?\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)/gm) || [];
   if (itemLinks.length < 5) throw new Error(`GitHub trending daily needs at least five linked project headings, got ${itemLinks.length}`);
   assertGitHubTrendingStats(normalized);
-  if (!/GitHub Trending|Trending|README|项目自述|榜单|Stars|stars/.test(normalized)) throw new Error("GitHub trending daily lacks source-bound trend language");
+  if (/^- (?:描述|语言|README 摘要)：/m.test(normalized)) throw new Error("GitHub trending daily contains source-only fields in final output");
+  if (!/GitHub Trending|Trending|项目总结|技术栈|使用场景|榜单|Stars|stars/.test(normalized)) throw new Error("GitHub trending daily lacks source-bound trend language");
   for (const pattern of [/值得关注/, /不容错过/, /革命性/, /颠覆/, /赋能/, /投资建议/, /融资猜测/, /安全背书/, /待补充/, /示例/, /无法判断/, /本文将/]) {
     if (pattern.test(normalized)) throw new Error(`GitHub trending daily contains forbidden language: ${pattern.source}`);
   }

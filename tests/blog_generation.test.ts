@@ -562,7 +562,10 @@ test("archive and verifier accept generated GitHub trending daily", () => {
   assert.match(markdown, /^- Stars：12.4k/m);
   assert.match(markdown, /^- Forks：620/m);
   assert.match(markdown, /^- 今日新增 Stars：820/m);
-  assert.match(markdown, /^- README 摘要：/m);
+  assert.match(markdown, /^- 项目总结：/m);
+  assert.match(markdown, /^- 技术栈：/m);
+  assert.match(markdown, /^- 使用场景：/m);
+  assert.doesNotMatch(markdown, /^- README 摘要：/m);
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [result] }));
   assert.equal(verifyResultJson(repo, resultJson), 1);
