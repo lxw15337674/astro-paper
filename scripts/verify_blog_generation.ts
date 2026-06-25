@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { isDailyDigestTask, isTask, taskInfo } from "./blog_tasks.ts";
 
 const COMMON_FORBIDDEN_PATTERNS = [
   /Traceback \(most recent call last\)/i,
@@ -17,12 +18,6 @@ const COMMON_FORBIDDEN_PATTERNS = [
 ];
 
 const MARKET_FORBIDDEN_PATTERNS = [/建议关注|值得关注|继续关注|后续关注|最看好|操作|布局/];
-const DAILY_DIGEST_TASKS = new Set(["tech-daily", "ai-daily", "tech-business-daily"]);
-
-function isDailyDigestTask(task: string): boolean {
-  return DAILY_DIGEST_TASKS.has(task);
-}
-
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
   if (trimmed.startsWith("{")) return JSON.parse(trimmed);
@@ -43,21 +38,11 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
   for (const field of ["author:", "pubDatetime:", "title:", "featured:", "draft: false", "tags:", "description:", "timezone: Asia/Shanghai"]) {
     if (!frontmatter.includes(field)) throw new Error(`${file} frontmatter missing ${field}`);
   }
-  if (expectedTask === "hn-top10" && !frontmatter.includes("HackerNews")) throw new Error(`${file} frontmatter missing HackerNews tag/title`);
-  if (expectedTask === "tech-weekly" && !frontmatter.includes("技术周刊")) throw new Error(`${file} frontmatter missing 技术周刊 tag/title`);
-  if (expectedTask === "ai-weekly" && !frontmatter.includes("AI周刊")) throw new Error(`${file} frontmatter missing AI周刊 tag/title`);
-  if (expectedTask === "tech-business-weekly" && !frontmatter.includes("科技商业观察")) throw new Error(`${file} frontmatter missing 科技商业观察 tag/title`);
-  if (expectedTask === "tech-daily" && !frontmatter.includes("技术工程日报")) throw new Error(`${file} frontmatter missing 技术工程日报 tag/title`);
-  if (expectedTask === "ai-daily" && !frontmatter.includes("AI工程日报")) throw new Error(`${file} frontmatter missing AI工程日报 tag/title`);
-  if (expectedTask === "tech-business-daily" && !frontmatter.includes("科技商业观察日报")) throw new Error(`${file} frontmatter missing 科技商业观察日报 tag/title`);
-  if (expectedTask === "github-trending-daily" && !frontmatter.includes("GitHub项目日报")) throw new Error(`${file} frontmatter missing GitHub项目日报 tag/title`);
-  const marketLabels: Record<string, string> = {
-    "asia-market-daily": "亚洲市场日报",
-    "crypto-market-daily": "比特币日报",
-    "us-market-daily": "美股市场日报",
-  };
-  const expectedMarketLabel = marketLabels[expectedTask];
-  if (expectedMarketLabel && !frontmatter.includes(expectedMarketLabel)) throw new Error(`${file} frontmatter missing ${expectedMarketLabel} tag/title`);
+  if (isTask(expectedTask)) {
+    const info = taskInfo(expectedTask);
+    if (!frontmatter.includes(info.tag)) throw new Error(`${file} frontmatter missing ${info.tag} tag`);
+    if (!frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
+  }
   return text;
 }
 

@@ -14,6 +14,7 @@ import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
 import { parseGitHubTrendingHtml } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
+import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
   assert.equal(bjtArchiveInstant("2026-06-22"), "2026-06-21T16:00:00Z");
@@ -32,6 +33,32 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
+});
+
+test("blog task registry covers prompts, fixtures, archive paths and schedules", () => {
+  for (const task of TASKS) {
+    const info = taskInfo(task);
+    assert.ok(info.titlePrefix);
+    assert.ok(info.tag);
+    assert.ok(info.description);
+    assert.match(taskPostRelPath(task, "2099-01-02"), /^src\/content\/posts\/zh-cn\/.+2099-01-02\.md$/);
+    assert.equal(fs.existsSync(path.join(process.cwd(), "prompts/blog", `${task}.md`)), true, `${task} prompt missing`);
+    assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}.md`)), true, `${task} source fixture missing`);
+    assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}.md`)), true, `${task} AI fixture missing`);
+  }
+  assert.deepEqual(tasksForInput("daily-digests"), [...DAILY_DIGEST_TASKS]);
+  assert.deepEqual(tasksForInput("all"), [...TASKS]);
+  assert.equal(scheduledTaskInput("0 17 * * *").task, "crypto-market-daily");
+  assert.equal(scheduledTaskInput("0 17 * * *").dateOffset, -1);
+  assert.equal(scheduledTaskInput("30 22 * * *").task, "us-market-daily");
+  assert.equal(scheduledTaskInput("30 22 * * *").dateOffset, -1);
+  assert.equal(scheduledTaskInput("30 0 * * *").task, "daily-digests");
+  assert.equal(scheduledTaskInput("unknown schedule").task, "all");
+  for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
+    assert.match(schedule, /^\d+ \d+ \* \* \*$/);
+  }
+  const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/scheduled-posts.yml"), "utf8");
+  assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
 });
 
 test("Yahoo Finance article extraction prefers public articleBody text", () => {

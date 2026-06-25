@@ -1,11 +1,10 @@
 #!/usr/bin/env tsx
 import fs from "node:fs";
 import path from "node:path";
-import { clipText, parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, DEFAULT_MAX_TOKENS, callBlogAi, chatCompletionsUrl } from "./blog_ai_client.ts";
 
-const DEFAULT_AI_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_AI_MODEL = "gpt-4o-mini";
-const DEFAULT_MAX_TOKENS = 4096;
+export { chatCompletionsUrl };
 
 export function renderPrompt({ task, date, sourceText, promptDir }: { task: string; date: string; sourceText: string; promptDir: string }): string {
   const file = path.join(promptDir, `${task}.md`);
@@ -27,57 +26,6 @@ export function validateMarkdown(text: string): string {
   return cleaned;
 }
 
-export function chatCompletionsUrl(baseUrl: string): string {
-  const cleaned = baseUrl.replace(/\/+$/, "");
-  return cleaned.endsWith("/chat/completions") ? cleaned : `${cleaned}/chat/completions`;
-}
-
-async function callAi({
-  prompt,
-  apiKey,
-  baseUrl,
-  model,
-  timeoutMs,
-  maxTokens,
-}: {
-  prompt: string;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  timeoutMs: number;
-  maxTokens: number;
-}): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(chatCompletionsUrl(baseUrl), {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: "你是严格的中文博客编辑。只输出可归档的 Markdown 正文，不输出解释、前后缀或代码围栏。" },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.4,
-        max_tokens: maxTokens,
-      }),
-    });
-    const raw = await response.text();
-    if (!response.ok) throw new Error(`AI provider HTTP ${response.status}: ${clipText(raw, 1200)}`);
-    const data = JSON.parse(raw) as { choices?: { message?: { content?: string } }[] };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content?.trim()) throw new Error(`AI response missing message content: ${raw}`);
-    return content;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function main(): Promise<void> {
   const args = parseArgs();
   const task = stringArg(args, "task");
@@ -96,7 +44,7 @@ export async function main(): Promise<void> {
 
   const rawMarkdown = mockFile
     ? fs.readFileSync(path.resolve(mockFile), "utf8")
-    : await callAi({
+    : await callBlogAi({
         prompt,
         apiKey: stringArg(args, "api-key", process.env.AI_API_KEY || ""),
         baseUrl: stringArg(args, "base-url", process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL),
