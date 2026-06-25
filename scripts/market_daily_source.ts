@@ -1,6 +1,9 @@
 #!/usr/bin/env tsx
+import https from "node:https";
+import { Readability } from "@mozilla/readability";
+import { JSDOM } from "jsdom";
 import YahooFinance from "yahoo-finance2";
-import { bjtDateString, fetchJson, fetchText, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, clipText, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
@@ -43,6 +46,37 @@ const US_SECTOR_ETFS: Record<string, string> = {
   XLRE: "房地产",
 };
 
+const US_CORE_STOCKS: YahooSymbol[] = [
+  { symbol: "AAPL", code: "AAPL", name: "苹果(AAPL)" },
+  { symbol: "MSFT", code: "MSFT", name: "微软(MSFT)" },
+  { symbol: "NVDA", code: "NVDA", name: "英伟达(NVDA)" },
+  { symbol: "AMZN", code: "AMZN", name: "亚马逊(AMZN)" },
+  { symbol: "META", code: "META", name: "Meta(META)" },
+  { symbol: "GOOGL", code: "GOOGL", name: "Alphabet(GOOGL)" },
+  { symbol: "TSLA", code: "TSLA", name: "特斯拉(TSLA)" },
+  { symbol: "AVGO", code: "AVGO", name: "博通(AVGO)" },
+  { symbol: "NFLX", code: "NFLX", name: "Netflix(NFLX)" },
+  { symbol: "JPM", code: "JPM", name: "摩根大通(JPM)" },
+  { symbol: "XOM", code: "XOM", name: "埃克森美孚(XOM)" },
+  { symbol: "UNH", code: "UNH", name: "联合健康(UNH)" },
+];
+
+const US_BROAD_ETFS: YahooSymbol[] = [
+  { symbol: "SPY", code: "SPY", name: "SPY" },
+  { symbol: "QQQ", code: "QQQ", name: "QQQ" },
+  { symbol: "DIA", code: "DIA", name: "DIA" },
+];
+
+const YAHOO_FINANCE_RSS = "https://finance.yahoo.com/rss/stock-market-news";
+const YAHOO_MARKET_SIGNAL_PATTERNS = [
+  /market\s+(recap|wrap|today|close|rally|selloff)/i,
+  /stock\s+market/i,
+  /stocks?\s+(close|end|rise|fall|rally|drop|slip|gain|lose|retreat|plunge|advance|rebound|tank|sell[- ]off)/i,
+  /s&p\s*500|nasdaq|dow\s+jones|dow\b/i,
+  /\b(SPY|QQQ|DIA|AAPL|MSFT|NVDA|AMZN|META|GOOGL|TSLA|AVGO|NFLX|JPM|XOM|UNH)\b/i,
+];
+const YAHOO_BROAD_MARKET_TITLE_PATTERN = /market\s+(recap|wrap|today|close)|stock\s+market|stocks?\s+(close|end|rise|fall|rally|drop|slip|gain|lose|retreat|plunge|advance|rebound|tank|sell[- ]off)|s&p\s*500|nasdaq/i;
+
 type QuoteRow = Record<string, string | number | null | undefined>;
 type QuoteRows = Record<string, QuoteRow>;
 type EquityKey = "us" | "aShare" | "hk";
@@ -56,8 +90,12 @@ type MarketSection = {
 };
 
 type BoardRow = { name: string; pct: number; amount?: number };
-type SectorRow = { symbol: string; name: string; pct: number; close: number };
+type InstrumentRow = { symbol: string; name: string; pct: number; close: number; volume?: number; avgVolume20?: number; volumeRatio?: number };
+type SectorRow = InstrumentRow;
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
+type YahooFinanceFeedItem = { title: string; url: string; publishedAt: string; summary: string };
+type ExternalMarketArticle = { title: string; url: string; publishedAt: string; excerpt: string };
+type UsIndexSnapshot = { dji: number; nasdaq: number; spx: number };
 type YahooChartPayload = {
   chart?: {
     result?: {
@@ -116,6 +154,210 @@ function amountYi(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
   return `${(num / 100_000_000).toFixed(0)}亿元`;
+}
+
+function compactVolume(value: unknown): string {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return "";
+  if (num >= 100_000_000) return `${(num / 100_000_000).toFixed(2)}亿股`;
+  if (num >= 10_000) return `${(num / 10_000).toFixed(0)}万股`;
+  return `${num.toFixed(0)}股`;
+}
+
+function textOf(element: Element | null): string {
+  return compact(element?.textContent || "");
+}
+
+function attr(element: Element | null, name: string): string {
+  return compact(element?.getAttribute(name) || "");
+}
+
+function parseFeedDate(value = ""): string {
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? "" : new Date(time).toISOString();
+}
+
+function stripCdata(text: string): string {
+  return text.replace(/^<!\[CDATA\[/, "").replace(/\]\]>$/, "");
+}
+
+function parseYahooFinanceFeedItems(xml: string): YahooFinanceFeedItem[] {
+  const dom = new JSDOM(xml, { contentType: "text/xml" });
+  const document = dom.window.document;
+  return [...document.querySelectorAll("item")]
+    .map(item => ({
+      title: textOf(item.querySelector("title")),
+      url: textOf(item.querySelector("link")) || textOf(item.querySelector("guid")),
+      publishedAt: parseFeedDate(textOf(item.querySelector("pubDate"))),
+      summary: stripHtml(stripCdata(textOf(item.querySelector("description")) || textOf(item.querySelector("content\\:encoded")))),
+    }))
+    .filter(item => item.title && item.url && item.url.startsWith("https://finance.yahoo.com/"));
+}
+
+function feedWindowEnd(date: string): number {
+  return parseDate(offsetDateString(date, 1)).getTime() + 12 * 60 * 60 * 1000;
+}
+
+function isWithinFeedWindow(item: YahooFinanceFeedItem, date: string): boolean {
+  if (!item.publishedAt) return true;
+  const published = new Date(item.publishedAt).getTime();
+  if (Number.isNaN(published)) return true;
+  const end = feedWindowEnd(date);
+  return published >= end - 72 * 60 * 60 * 1000 && published <= end;
+}
+
+function scoreYahooMarketItem(item: YahooFinanceFeedItem): number {
+  const text = `${item.title}\n${item.summary}`;
+  let score = 0;
+  if (YAHOO_BROAD_MARKET_TITLE_PATTERN.test(item.title)) score += 8;
+  for (const pattern of YAHOO_MARKET_SIGNAL_PATTERNS) if (pattern.test(text)) score += 4;
+  if (/recap|wrap|close|today/i.test(item.title)) score += 4;
+  if (/motley fool|simply wall st|insider monkey/i.test(text)) score -= 4;
+  if (/underperforming|outperforming|compared to other|stock performance compared|prediction:|focused value strategy|wall street sees|upside|act now|earnings up/i.test(text)) score -= 12;
+  return score;
+}
+
+function findArticleBody(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findArticleBody(item);
+      if (found) return found;
+    }
+    return "";
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.articleBody === "string" && compact(record.articleBody).length >= 160) return record.articleBody;
+  for (const child of Object.values(record)) {
+    const found = findArticleBody(child);
+    if (found) return found;
+  }
+  return "";
+}
+
+export function extractYahooFinanceArticleText(html: string, url: string): string {
+  const dom = new JSDOM(html, { url });
+  for (const script of [...dom.window.document.querySelectorAll('script[type="application/ld+json"]')]) {
+    const raw = script.textContent?.trim();
+    if (!raw) continue;
+    try {
+      const body = compact(findArticleBody(JSON.parse(raw)));
+      if (body.length >= 160) return body;
+    } catch {
+      // Fall back to readability for pages with non-JSON script payloads.
+    }
+  }
+  const article = new Readability(dom.window.document, { keepClasses: false }).parse();
+  return compact(article?.textContent || "");
+}
+
+function explicitIndexMove(text: string, patterns: RegExp[]): number | null {
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const window = match[0];
+    const raw = Number(match.at(-1));
+    if (!Number.isFinite(raw)) continue;
+    if (/\bdown|lower|falls?|drops?|slips?|retreats?|plunges?\b/i.test(window) && raw > 0) return -raw;
+    if (/\bup|higher|rises?|gains?|advances?|rall(?:y|ies)\b/i.test(window) && raw < 0) return Math.abs(raw);
+    return raw;
+  }
+  return null;
+}
+
+export function articleConflictsWithIndexSnapshot(text: string, snapshot: UsIndexSnapshot): boolean {
+  const compacted = compact(text).slice(0, 1400);
+  const moves = [
+    explicitIndexMove(compacted, [/\b(?:S&P\s*500|SPX|SPY)\b[^.。]{0,160}?([+-]?\d+(?:\.\d+)?)%/i]),
+    explicitIndexMove(compacted, [/\b(?:Nasdaq(?:\s*100)?|NDX|QQQ)\b[^.。]{0,160}?([+-]?\d+(?:\.\d+)?)%/i]),
+    explicitIndexMove(compacted, [/\b(?:Dow(?:\s*Jones)?|DJIA|DIA)\b[^.。]{0,160}?([+-]?\d+(?:\.\d+)?)%/i]),
+  ];
+  const expected = [snapshot.spx, snapshot.nasdaq, snapshot.dji];
+  let explicitCount = 0;
+  let conflictCount = 0;
+  for (let index = 0; index < moves.length; index += 1) {
+    const move = moves[index];
+    if (move === null) continue;
+    explicitCount += 1;
+    const expectedMove = expected[index];
+    if (Math.sign(move) !== Math.sign(expectedMove) && Math.abs(move) >= 0.1 && Math.abs(expectedMove) >= 0.1) conflictCount += 1;
+    else if (Math.abs(move - expectedMove) >= 1.0) conflictCount += 1;
+  }
+  return explicitCount >= 2 && conflictCount >= 1;
+}
+
+async function fetchYahooFinanceArticle(item: YahooFinanceFeedItem, snapshot: UsIndexSnapshot): Promise<ExternalMarketArticle | null> {
+  try {
+    const html = await fetchTextWithLargeHeaders(item.url, { timeoutMs: 14_000, maxChars: 1_500_000 });
+    const text = compact(
+      extractYahooFinanceArticleText(html, item.url)
+        .replace(/\b(?:More News from|Most Read from) [\s\S]*$/i, "")
+        .replace(/^.{0,180}\b\d+\s+min\s+read\s+/i, ""),
+    );
+    if (text.length < 240) return null;
+    if (articleConflictsWithIndexSnapshot(text, snapshot)) return null;
+    return { title: item.title, url: item.url, publishedAt: item.publishedAt, excerpt: clipText(text, 900) };
+  } catch {
+    return null;
+  }
+}
+
+function fetchTextWithLargeHeaders(url: string, { timeoutMs, maxChars }: { timeoutMs: number; maxChars: number }): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = https.get(
+      url,
+      {
+        timeout: timeoutMs,
+        maxHeaderSize: 128 * 1024,
+        headers: {
+          "Accept-Encoding": "identity",
+          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+        },
+      },
+      response => {
+        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          response.resume();
+          fetchTextWithLargeHeaders(new URL(response.headers.location, url).toString(), { timeoutMs, maxChars }).then(resolve, reject);
+          return;
+        }
+        if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+          response.resume();
+          reject(new Error(`HTTP ${response.statusCode || "unknown"} for ${url}`));
+          return;
+        }
+        response.setEncoding("utf8");
+        let text = "";
+        response.on("data", chunk => {
+          if (text.length < maxChars) text += String(chunk).slice(0, maxChars - text.length);
+        });
+        response.on("end", () => resolve(text));
+      },
+    );
+    request.on("timeout", () => request.destroy(new Error(`timeout fetching ${url}`)));
+    request.on("error", reject);
+  });
+}
+
+async function yahooFinanceMarketArticles(date: string, snapshot: UsIndexSnapshot): Promise<ExternalMarketArticle[]> {
+  try {
+    const xml = await fetchText(YAHOO_FINANCE_RSS, { timeoutMs: 15_000, maxChars: 800_000 });
+    const candidates = parseYahooFinanceFeedItems(xml)
+      .filter(item => isWithinFeedWindow(item, date))
+      .map(item => ({ item, score: scoreYahooMarketItem(item) }))
+      .filter(({ score }) => score >= 8)
+      .toSorted((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(({ item }) => item);
+    const articles: ExternalMarketArticle[] = [];
+    for (const item of candidates) {
+      const article = await fetchYahooFinanceArticle(item, snapshot);
+      if (article) articles.push(article);
+      if (articles.length >= 3) break;
+    }
+    return articles;
+  } catch {
+    return [];
+  }
 }
 
 function usdWanYi(value: unknown): string {
@@ -308,6 +550,53 @@ function sectorLine(label: string, rows: SectorRow[]): string {
   return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
 }
 
+function instrumentLine(label: string, rows: InstrumentRow[]): string {
+  if (!rows.length) return `${label}：未获取到稳定数据。`;
+  return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
+}
+
+function volumeActivity(row: InstrumentRow): string | null {
+  if (!Number.isFinite(row.volumeRatio) || !row.volumeRatio || !Number.isFinite(row.volume) || !row.volume) return null;
+  const ratioText = `${row.volumeRatio.toFixed(2)} 倍`;
+  const volumeText = compactVolume(row.volume);
+  if (row.volumeRatio >= 1.2) return `${row.name} 当日成交量约 ${volumeText}，约为近 20 个交易日均量的 ${ratioText}，成交活跃度偏高`;
+  if (row.volumeRatio <= 0.8) return `${row.name} 当日成交量约 ${volumeText}，约为近 20 个交易日均量的 ${ratioText}，成交活跃度偏低`;
+  return `${row.name} 当日成交量约 ${volumeText}，约为近 20 个交易日均量的 ${ratioText}，接近近 20 日均量`;
+}
+
+function volumeActivityLine(label: string, rows: InstrumentRow[]): string {
+  const activities = rows.map(volumeActivity).filter((item): item is string => Boolean(item));
+  if (activities.length) return `${label}：${activities.join("；")}。`;
+  if (rows.some(row => Number.isFinite(row.volume) && Number(row.volume) > 0)) return `${label}：已获取当日成交量，但近 20 个交易日均量不足，暂不判断放量或缩量。`;
+  return `${label}：未获取到稳定成交量数据，暂不判断放量或缩量。`;
+}
+
+function externalArticleLines(articles: ExternalMarketArticle[]): string[] {
+  if (!articles.length) {
+    return [
+      "## 外部财经文章正文线索",
+      "",
+      "未获取到可公开访问且正文足够完整的 Yahoo Finance 相关文章；本篇不使用外部文章解释行情原因。",
+    ];
+  }
+  return [
+    "## 外部财经文章正文线索",
+    "",
+    "以下线索来自 Yahoo Finance 公开可访问文章页的短摘录，只作为市场叙事辅助证据；不包含 MarketWatch 或 Seeking Alpha 正文，不代表完整新闻归因。",
+    "",
+    ...articles.flatMap((article, index) => [
+      `### ${index + 1}. ${article.title}`,
+      "",
+      `- 来源：Yahoo Finance`,
+      `- 链接：${article.url}`,
+      article.publishedAt ? `- 发布时间：${article.publishedAt}` : "- 发布时间：未获取到稳定发布时间",
+      `- 正文短摘录：${article.excerpt}`,
+      "",
+    ]),
+    "外部文章短摘录只能用于辅助识别当日市场叙事；不得复制原文大段内容，也不得在没有明确证据时把标题或摘录写成确定因果。",
+  ];
+}
+
 function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T[]; bottom: T[] } {
   const sorted = rows.toSorted((a, b) => b.pct - a.pct);
   return { top: sorted.slice(0, limit), bottom: sorted.slice(-limit).reverse() };
@@ -374,16 +663,32 @@ function buildHkSection(rows: QuoteRows, date: string): MarketSection {
   };
 }
 
-function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow[]): MarketSection {
+function indexStructure(rows: { name: string; pct: number }[]): string {
+  const sorted = rows.toSorted((a, b) => b.pct - a.pct);
+  const strongest = sorted[0];
+  const weakest = sorted.at(-1)!;
+  const allPositive = rows.every(row => row.pct > 0.005);
+  const allNegative = rows.every(row => row.pct < -0.005);
+  const mixed = rows.some(row => row.pct > 0.005) && rows.some(row => row.pct < -0.005);
+  const direction = allPositive ? "三大指数同涨" : allNegative ? "三大指数同跌" : mixed ? "三大指数表现分化" : "三大指数整体接近平盘";
+  return `${direction}，${strongest.name}相对更强，${weakest.name}相对更弱`;
+}
+
+export function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow[], stocks: InstrumentRow[] = [], broadEtfs: InstrumentRow[] = [], externalArticles: ExternalMarketArticle[] = []): MarketSection {
   if (!isWeekday(date)) return closedSection("us", "美股", CLOSED_TEXT.us);
   const dji = byCode(rows, "DJIA");
   const nasdaq = byCode(rows, "NDX");
   const spx = byCode(rows, "SPX");
   if ([dji, nasdaq, spx].some(isMissingQuote)) return closedSection("us", "美股", UNAVAILABLE_TEXT.us);
-  const nasdaqPct = Number(nasdaq.f3 || 0);
-  const djiPct = Number(dji.f3 || 0);
-  const structure = nasdaqPct > djiPct ? "纳指强于道指，成长风格相对更强" : "纳指与道指表现较接近，宽基结构相对均衡";
+  const structure = indexStructure([
+    { name: "道指", pct: Number(dji.f3 || 0) },
+    { name: "纳指", pct: Number(nasdaq.f3 || 0) },
+    { name: "标普500", pct: Number(spx.f3 || 0) },
+  ]);
   const { top, bottom } = topAndBottom(sectors);
+  const { top: stockTop, bottom: stockBottom } = topAndBottom(stocks, 4);
+  const sectorVolumeLeaders = sectors.filter(row => Number.isFinite(row.volumeRatio)).toSorted((a, b) => Number(b.volumeRatio || 0) - Number(a.volumeRatio || 0)).slice(0, 3);
+  const stockSummary = stocks.length ? `核心个股方面，${stockTop.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠前，${stockBottom.slice(0, 3).map(row => `${row.name} ${pct(row.pct)}`).join("、")}表现靠后。` : "核心个股样本未获取到稳定数据，本篇不使用个股表现解释指数结构。";
   return {
     key: "us",
     title: "美股",
@@ -392,22 +697,31 @@ function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow[]): Ma
     markdown: [
       "## 美股",
       "",
-      `美股最近一个完整常规收盘交易日，道指 ${pct(dji.f3)}，纳指 ${pct(nasdaq.f3)}，标普500 ${pct(spx.f3)}。`,
+      `按已获取的完整常规收盘口径，道指 ${pct(dji.f3)}，纳指 ${pct(nasdaq.f3)}，标普500 ${pct(spx.f3)}。`,
       "",
       `从三大指数的相对强弱看，${structure}。`,
+      "",
+      volumeActivityLine("主要宽基 ETF 成交活跃度", broadEtfs),
+      "",
+      instrumentLine("核心个股涨幅靠前", stockTop),
+      instrumentLine(laggingLabel("核心个股跌幅靠前", stockBottom), stockBottom),
+      stockSummary,
       "",
       "## 美股行业板块",
       "",
       sectorLine("表现靠前行业 ETF", top),
       sectorLine("表现靠后行业 ETF", bottom),
-      "行业板块采用 S&P 500 行业 ETF 作为近似口径，用于观察风格结构，不等同于完整成分股贡献。",
+      sectorVolumeLeaders.length ? volumeActivityLine("成交活跃度靠前的行业 ETF", sectorVolumeLeaders) : "行业 ETF 近 20 个交易日成交量均值不足，暂不判断行业 ETF 放量或缩量。",
+      "行业板块采用 S&P 500 行业 ETF 作为近似口径，用于观察风格结构，不等同于完整成分股贡献；成交量只能描述活跃度，不等同于真实资金流。",
+      "",
+      ...externalArticleLines(externalArticles),
     ].join("\n"),
   };
 }
 
-async function yahooSectorDaily(symbol: string, date: string): Promise<SectorRow | null> {
+async function yahooInstrumentDaily(symbol: string, name: string, date: string): Promise<InstrumentRow | null> {
   try {
-    const rows = (await yahooFinance.historical(symbol, { period1: offsetDateString(date, -21), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
+    const rows = (await yahooFinance.historical(symbol, { period1: offsetDateString(date, -45), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
     const points = rows
       .map(row => ({ close: Number(row.close), localDate: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : "" }))
       .filter(point => Number.isFinite(point.close) && point.close > 0 && point.localDate && point.localDate <= date);
@@ -415,10 +729,27 @@ async function yahooSectorDaily(symbol: string, date: string): Promise<SectorRow
     const prevClose = points.at(-2)!.close;
     const close = points.at(-1)!.close;
     if (!Number.isFinite(prevClose) || !Number.isFinite(close) || prevClose <= 0) return null;
-    return { symbol, name: US_SECTOR_ETFS[symbol] || symbol, close, pct: ((close - prevClose) / prevClose) * 100 };
+    const lastVolume = Number(rows.find(row => row.date instanceof Date && row.date.toISOString().slice(0, 10) === points.at(-1)!.localDate)?.volume || 0);
+    const historyVolumes = rows
+      .map(row => ({ volume: Number(row.volume || 0), localDate: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : "" }))
+      .filter(point => Number.isFinite(point.volume) && point.volume > 0 && point.localDate && point.localDate < points.at(-1)!.localDate)
+      .slice(-20)
+      .map(point => point.volume);
+    const avgVolume20 = historyVolumes.length >= 20 ? historyVolumes.reduce((sum, volume) => sum + volume, 0) / historyVolumes.length : undefined;
+    const volumeRatio = avgVolume20 && lastVolume > 0 ? lastVolume / avgVolume20 : undefined;
+    return { symbol, name, close, pct: ((close - prevClose) / prevClose) * 100, volume: lastVolume || undefined, avgVolume20, volumeRatio };
   } catch {
     return null;
   }
+}
+
+async function yahooSectorDaily(symbol: string, date: string): Promise<SectorRow | null> {
+  return yahooInstrumentDaily(symbol, US_SECTOR_ETFS[symbol] || symbol, date);
+}
+
+async function yahooInstruments(symbols: YahooSymbol[], date: string): Promise<InstrumentRow[]> {
+  const rows = await Promise.all(symbols.map(symbol => yahooInstrumentDaily(symbol.symbol, symbol.name, date)));
+  return rows.filter((row): row is InstrumentRow => Boolean(row));
 }
 
 async function usSectorEtfs(date: string): Promise<SectorRow[]> {
@@ -731,8 +1062,14 @@ export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<s
 
 export async function generateUsMarketDaily(date = bjtDateString()): Promise<string> {
   const rows = await quoteRowsWithFallback(date, [EASTMONEY_INDEX_SECS.dji, EASTMONEY_INDEX_SECS.nasdaq, EASTMONEY_INDEX_SECS.spx], YAHOO_SYMBOLS.us);
-  const sectors = isWeekday(date) ? await usSectorEtfs(date) : [];
-  const sections = [buildUsSection(rows, date, sectors)];
+  const dji = byCode(rows, "DJIA");
+  const nasdaq = byCode(rows, "NDX");
+  const spx = byCode(rows, "SPX");
+  const snapshot = { dji: Number(dji.f3 || 0), nasdaq: Number(nasdaq.f3 || 0), spx: Number(spx.f3 || 0) };
+  const [sectors, stocks, broadEtfs, externalArticles] = isWeekday(date)
+    ? await Promise.all([usSectorEtfs(date), yahooInstruments(US_CORE_STOCKS, date), yahooInstruments(US_BROAD_ETFS, date), yahooFinanceMarketArticles(date, snapshot)])
+    : [[], [], [], []];
+  const sections = [buildUsSection(rows, date, sectors, stocks, broadEtfs, externalArticles)];
   return `${[buildSummary(sections, "美股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
 
