@@ -11,6 +11,7 @@ import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_po
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
+import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -30,6 +31,76 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
+});
+
+test("Yahoo Finance article extraction prefers public articleBody text", () => {
+  const html = `<!doctype html><html><head><script type="application/ld+json">{"@type":"NewsArticle","articleBody":"Stocks closed mixed as technology shares lagged while industrial and consumer discretionary groups advanced. Analysts cited positioning around major index weights, but the article also noted that volume evidence was mixed across broad ETFs and did not by itself prove fund flows."}</script></head><body><article>fallback text</article></body></html>`;
+  const text = extractYahooFinanceArticleText(html, "https://finance.yahoo.com/example");
+  assert.match(text, /Stocks closed mixed/);
+  assert.match(text, /did not by itself prove fund flows/);
+});
+
+test("Yahoo Finance article evidence is rejected when index moves conflict with closing data", () => {
+  const conflicting = "The S&P 500 Index today is down -1.26%, the Dow Jones Industrial Average is down -0.30%, and the Nasdaq 100 Index is down -2.69%.";
+  assert.equal(articleConflictsWithIndexSnapshot(conflicting, { dji: 0.35, nasdaq: -0.43, spx: -0.1 }), true);
+
+  const compatible = "The S&P 500 Index closed down -0.10%, the Dow Jones Industrial Average gained +0.35%, and the Nasdaq 100 Index slipped -0.43%.";
+  assert.equal(articleConflictsWithIndexSnapshot(compatible, { dji: 0.35, nasdaq: -0.43, spx: -0.1 }), false);
+});
+
+test("US market section includes stock and volume evidence without treating volume as fund flow", () => {
+  const section = buildUsSection(
+    {
+      DJIA: { f2: 46000, f3: 0.35 },
+      NDX: { f2: 25000, f3: -0.43 },
+      SPX: { f2: 6600, f3: -0.1 },
+    },
+    "2099-01-06",
+    [
+      { symbol: "XLI", name: "工业", close: 100, pct: 1.16, volume: 130_000_000, avgVolume20: 100_000_000, volumeRatio: 1.3 },
+      { symbol: "XLE", name: "能源", close: 80, pct: -1.63, volume: 90_000_000, avgVolume20: 100_000_000, volumeRatio: 0.9 },
+    ],
+    [
+      { symbol: "NVDA", name: "英伟达(NVDA)", close: 180, pct: 2.4, volume: 240_000_000, avgVolume20: 200_000_000, volumeRatio: 1.2 },
+      { symbol: "TSLA", name: "特斯拉(TSLA)", close: 300, pct: -2.1, volume: 100_000_000, avgVolume20: 140_000_000, volumeRatio: 0.71 },
+    ],
+    [{ symbol: "QQQ", name: "QQQ", close: 560, pct: -0.4, volume: 65_000_000, avgVolume20: 50_000_000, volumeRatio: 1.3 }],
+    [
+      {
+        title: "Stock market today: Nasdaq slips as industrials rise",
+        url: "https://finance.yahoo.com/news/stock-market-today-example.html",
+        publishedAt: "2099-01-06T21:30:00.000Z",
+        excerpt: "Yahoo Finance article text says stocks closed mixed as industrial shares rose while technology shares lagged, and it frames the move as a market narrative rather than a complete causal explanation.",
+      },
+    ],
+  );
+
+  assert.match(section.markdown, /按已获取的完整常规收盘口径/);
+  assert.match(section.markdown, /核心个股涨幅靠前：英伟达\(NVDA\) \+2\.40%/);
+  assert.match(section.markdown, /核心个股跌幅靠前：特斯拉\(TSLA\) -2\.10%/);
+  assert.match(section.markdown, /主要宽基 ETF 成交活跃度：QQQ 当日成交量约 6500万股，约为近 20 个交易日均量的 1\.30 倍，成交活跃度偏高/);
+  assert.match(section.markdown, /成交量只能描述活跃度，不等同于真实资金流/);
+  assert.match(section.markdown, /外部财经文章正文线索/);
+  assert.match(section.markdown, /https:\/\/finance\.yahoo\.com\/news\/stock-market-today-example\.html/);
+  assert.match(section.markdown, /只作为市场叙事辅助证据/);
+  assert.doesNotMatch(section.markdown, /资金流入|资金流出|机构买入|机构卖出/);
+});
+
+test("US market section degrades when 20-day average volume is unavailable", () => {
+  const section = buildUsSection(
+    {
+      DJIA: { f2: 46000, f3: 0.35 },
+      NDX: { f2: 25000, f3: -0.43 },
+      SPX: { f2: 6600, f3: -0.1 },
+    },
+    "2099-01-06",
+    [{ symbol: "XLK", name: "科技", close: 100, pct: -0.62, volume: 50_000_000 }],
+    [],
+    [{ symbol: "SPY", name: "SPY", close: 660, pct: -0.1, volume: 80_000_000 }],
+  );
+
+  assert.match(section.markdown, /核心个股样本未获取到稳定数据/);
+  assert.match(section.markdown, /已获取当日成交量，但近 20 个交易日均量不足，暂不判断放量或缩量/);
 });
 
 test("daily digest source dedupes post-quantum executive order coverage", () => {
