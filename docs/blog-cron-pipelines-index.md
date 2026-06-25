@@ -15,12 +15,15 @@ Do **not** treat this file as the single source of truth for each pipeline's det
 - Skill: `skills/software-development/astro-paper-hn-cron-publishing/SKILL.md`
 - Extra doc: `docs/hn-cron-pipeline.md`
 - Key scripts:
-  - `scripts/hn_top10_source.py`
-  - `scripts/run_archive_from_stdin.py`
-  - `scripts/astro_paper_archive.py`
-- Cron jobs:
-  - upstream: `0373c42e95ea` — `hn-top10-local-markdown`
-  - downstream: `8640cfe88f41` — `hn-top10-astro-archive`
+  - `scripts/hn_top10_source.ts`
+  - `scripts/generate_scheduled_post.ts`
+  - `scripts/astro_paper_archive.ts`
+- Primary entrypoint:
+  - `.github/workflows/scheduled-posts.yml` with `task=hn-top10`
+- Schedule:
+  - `30 9 * * *` UTC / 17:30 Asia/Shanghai
+- Legacy context:
+  - older Hermes jobs `0373c42e95ea` / `8640cfe88f41` are historical two-step publishing context, not the current source-of-truth path.
 
 ### 2. Foreign Tech Podcast
 - Skill: `skills/software-development/astro-paper-foreign-tech-podcast-cron/SKILL.md`
@@ -68,15 +71,14 @@ Do **not** treat this file as the single source of truth for each pipeline's det
 Use this procedure when the goal is to stop all blog-oriented scheduled publishing and its automatic repair loop, while leaving unrelated automations untouched.
 
 ### Included in the pause set
+- GitHub Actions `Scheduled posts` schedules — current repo-owned daily publishing path for HN, podcast, market, GitHub Trending, and daily digests
 - `bc96c9bab5e7` — `daily-morning-market-blog`
-- `0373c42e95ea` — `hn-top10-local-markdown`
-- `8640cfe88f41` — `hn-top10-astro-archive`
 - `e226a7117f05` — `mdblist-weekly-astro-archive`
 - `9d09cf6e77f5` — `daily-blog-generation-check-and-repair`
+- legacy HN Hermes jobs `0373c42e95ea` / `8640cfe88f41` if they are found enabled in the scheduler
 
 ### Intentionally excluded from the pause set
 - `95d01fa1f5c7` — weather brief; not a blog pipeline
-- GitHub Actions `Scheduled posts` / `foreign-tech-podcast` — podcast publishing chain; keep running unless the user explicitly wants podcast publishing paused too
 - `404c8660ee38` — weekly recommendation upstream digest; pause only if the user wants the source brief itself stopped, not just the Astro publishing leg
 
 ### Operational rule

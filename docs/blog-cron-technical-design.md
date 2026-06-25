@@ -67,9 +67,9 @@ This split is intentional: content defects should be fixed in the generation/upg
 Core publishing logic belongs in the project repo so the system remains inspectable and maintainable as part of the delivery artifact.
 
 Known repo-owned implementation files include:
-- `scripts/hn_top10_source.py`
-- `scripts/run_archive_from_stdin.py`
-- `scripts/astro_paper_archive.py`
+- `scripts/hn_top10_source.ts`
+- `scripts/generate_scheduled_post.ts`
+- `scripts/astro_paper_archive.ts`
 - `scripts/run_morning_market_ai_pipeline.py`
 - `scripts/generate_morning_market_digest.py`
 - `scripts/upgrade_mdblist_weekly_article.py`
@@ -90,17 +90,19 @@ Design rules:
 Purpose:
 - publish a daily Chinese HN roundup into Astro.
 
-Jobs:
-- upstream: `0373c42e95ea` — `hn-top10-local-markdown`
-- downstream: `8640cfe88f41` — `hn-top10-astro-archive`
+Primary pipeline:
+- GitHub Actions workflow: `.github/workflows/scheduled-posts.yml`
+- scheduled task: `hn-top10` at `30 9 * * *` UTC (17:30 Asia/Shanghai)
+- manual dispatch input: `task=hn-top10`
 
 Implementation split:
-- source collection and source-markdown emission: `scripts/hn_top10_source.py`
-- wrapper/body normalization: `scripts/run_archive_from_stdin.py`
-- Astro archive write: `scripts/astro_paper_archive.py`
+- source collection and source-markdown emission: `scripts/hn_top10_source.ts`
+- orchestration/result JSON/artifacts: `scripts/generate_scheduled_post.ts`
+- Astro archive write: `scripts/astro_paper_archive.ts`
 
 Architecture note:
-- this is a two-step chain because the repo treats the intermediate markdown contract as a real interface, not an incidental by-product.
+- GitHub Actions `Scheduled posts` is the current source-of-truth publishing path for HN.
+- Older Hermes jobs `0373c42e95ea` / `8640cfe88f41` are legacy context and should not be treated as the active HN publishing source unless explicitly re-enabled.
 
 ### 2. Foreign Tech Podcast
 Purpose:
@@ -238,15 +240,14 @@ When the user asks to pause “all blog cron jobs”, default behavior in this r
 - keep unrelated non-blog jobs running unless explicitly included.
 
 This means the default pause set currently includes:
+- GitHub Actions `Scheduled posts` schedules — current repo-owned daily publishing path for HN, podcast, market, GitHub Trending, and daily digests
 - `bc96c9bab5e7` — `daily-morning-market-blog`
-- `0373c42e95ea` — `hn-top10-local-markdown`
-- `8640cfe88f41` — `hn-top10-astro-archive`
 - `e226a7117f05` — `mdblist-weekly-astro-archive`
 - `9d09cf6e77f5` — `daily-blog-generation-check-and-repair`
+- legacy HN Hermes jobs `0373c42e95ea` / `8640cfe88f41` if they are found enabled in the scheduler
 
 By default it excludes:
 - `95d01fa1f5c7` — weather brief
-- GitHub Actions `Scheduled posts` / `foreign-tech-podcast` — podcast publishing chain unless the user explicitly wants that blog class paused too
 - `404c8660ee38` — weekly recommendation upstream source unless the user wants the source-digest leg stopped in addition to the Astro publishing leg
 
 ## Verification workflow

@@ -10,7 +10,7 @@ on:
         description: "Post task to generate. Valid values are defined in scripts/blog_tasks.ts; use all or daily-digests for grouped runs."
         type: string
         required: true
-        default: all
+        default: hn-top10
       date:
         description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today or scheduled offset."
         required: false
@@ -49,7 +49,7 @@ on:
     - cron: "0 23 * * *"
 
 concurrency:
-  group: scheduled-posts-${{ github.ref }}-${{ github.event.inputs.task || github.event.schedule || 'all' }}
+  group: scheduled-posts-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -76,6 +76,7 @@ jobs:
           cache: "pnpm"
 
       - name: Use Python
+        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' }}
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -132,6 +133,30 @@ jobs:
             blog-generation-artifacts/
           if-no-files-found: ignore
 
+      - name: "🧾 Summarize generation result"
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -f scheduled-posts-result.json ]; then
+            echo "### Scheduled posts" >> "$GITHUB_STEP_SUMMARY"
+            echo "scheduled-posts-result.json was not produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const payload = JSON.parse(fs.readFileSync("scheduled-posts-result.json", "utf8"));
+          const lines = ["### Scheduled posts", "", `Archive date: ${payload.date || "unknown"}`, "", "| Task | Status | Path | Detail |", "| --- | --- | --- | --- |"];
+          for (const item of payload.results || []) {
+            const status = item.failed ? "failed" : item.skipped ? "skipped" : item.created ? "created" : "updated";
+            const detail = String(item.error || item.skip_reason || item.title || "")
+              .replaceAll("|", "\\|")
+              .replaceAll("\r", " ")
+              .replaceAll("\n", " ");
+            lines.push(`| ${item.task || "unknown"} | ${status} | ${item.path || "-"} | ${detail} |`);
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          NODE
+
       - name: "🔎 Verify generated post contract"
         env:
           PODCAST_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
@@ -161,4 +186,35 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/content/posts data
           git commit -m "feat(posts): archive scheduled posts"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          for attempt in 1 2 3; do
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            echo "push attempt ${attempt}/3 failed; retrying after remote refresh"
+            sleep $((attempt * 5))
+          done
+          echo "failed to push generated posts after 3 attempts" >&2
+          exit 1
+
+      - name: "🚨 Report generation failures"
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -f scheduled-posts-result.json ]; then
+            echo "scheduled-posts-result.json was not produced"
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const payload = JSON.parse(fs.readFileSync("scheduled-posts-result.json", "utf8"));
+          const failures = (payload.results || []).filter((item) => item.failed);
+          if (!failures.length) {
+            console.log("No task-level generation failures.");
+            process.exit(0);
+          }
+          console.error("Task-level generation failures:");
+          for (const item of failures) console.error(`- ${item.task}: ${item.error}`);
+          process.exit(1);
+          NODE

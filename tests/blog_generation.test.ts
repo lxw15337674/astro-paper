@@ -62,11 +62,20 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
   }
+  assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
+  assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
+  assert.match(workflow, /Report generation failures/);
+  assert.match(workflow, /Summarize generation result/);
+  assert.match(workflow, /default:\s*hn-top10/);
+  assert.doesNotMatch(workflow, /default:\s*all/);
   assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
   for (const task of ["ai-daily", "ai-weekly"]) {
     const prompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", `${task}.md`), "utf8");
     assert.match(prompt, /从零|入门教程|一文[读懂搞懂]/, `${task} prompt should mirror low-signal validator terms`);
   }
+  const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
+  assert.match(generator, /retrying with validation feedback/);
+  assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
 });
 
 test("Yahoo Finance article extraction prefers public articleBody text", () => {
@@ -561,7 +570,17 @@ test("AI weekly rejects low-signal AI content", () => {
 ### [10 个 AI 工具推荐](https://example.com/ai-tools)
 
 这是一篇工具榜单和提示词技巧文章，没有模型能力边界、工程成本、治理风险或生产采用条件。https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e https://example.com/f`;
-  assert.throws(() => archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body, force: true }), /low-signal language|at least three expected sections/);
+  assert.throws(() => archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body, force: true }), /ai weekly contains low-signal language|at least three expected sections/);
+});
+
+test("AI daily low-signal rejection names the actual task", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-ai-daily-bad-"));
+  const body = `## 今日模型与产品
+
+### [10 个 AI 工具推荐](https://example.com/ai-tools)
+
+这是一篇工具榜单和提示词技巧文章，没有模型能力边界、工程成本、治理风险或生产采用条件。https://example.com/ai-tools`;
+  assert.throws(() => archivePost({ task: "ai-daily", date: "2099-01-06", repo, body, force: true }), /ai daily contains low-signal language/);
 });
 
 test("tech business weekly rejects low-signal news content", () => {
@@ -629,6 +648,13 @@ test("daily digest verifier skips zero-item rows", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-daily-skipped-"));
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "tech-daily", path: "", skipped: true, skip_reason: "no high-quality daily items" }] }));
+  assert.equal(verifyResultJson(repo, resultJson), 0);
+});
+
+test("result verifier skips task-level failures with explicit error", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-task-failed-"));
+  const resultJson = path.join(repo, "result.json");
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "ai-daily", path: "", failed: true, error: "validator rejected low-signal language" }] }));
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 

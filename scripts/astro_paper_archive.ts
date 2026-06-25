@@ -227,10 +227,10 @@ function formatTechWeekly(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
-function rejectAiWeeklyNoise(markdown: string): void {
+function rejectAiNoise(markdown: string, label: string): void {
   const forbidden = [/融资/, /工具榜单/, /prompt\s*技巧/i, /提示词技巧/, /一文[读看搞]懂/, /从零(?:开始)?/, /入门教程/, /论文导读/, /赋能|颠覆|革命性|不容错过|值得关注/];
   for (const pattern of forbidden) {
-    if (pattern.test(markdown)) throw new Error(`ai weekly contains low-signal language: ${pattern.source}`);
+    if (pattern.test(markdown)) throw new Error(`${label} contains low-signal language: ${pattern.source}`);
   }
 }
 
@@ -250,7 +250,7 @@ function formatTechBusinessWeekly(text: string): string {
 
 function formatAiWeekly(text: string): string {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  rejectAiWeeklyNoise(normalized);
+  rejectAiNoise(normalized, "ai weekly");
   const requiredAny = [/^##\s+本周模型与产品\s*$/m, /^##\s+Agent 与工程化\s*$/m, /^##\s+AI Infra 与成本\s*$/m, /^##\s+安全、评测与治理\s*$/m, /^##\s+值得读的案例\/长文\s*$/m];
   const matched = requiredAny.filter(pattern => pattern.test(normalized)).length;
   if (matched < 3) throw new Error("ai weekly needs at least three expected sections");
@@ -283,7 +283,7 @@ function formatTechDaily(text: string): string {
 
 function formatAiDaily(text: string): string {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  rejectAiWeeklyNoise(normalized);
+  rejectAiNoise(normalized, "ai daily");
   rejectDuplicateLinksAndHeadings(normalized, "AI daily");
   const links = normalized.match(/https?:\/\/\S+/g) || [];
   if (links.length < 1) throw new Error(`AI daily needs source links, got ${links.length}`);
