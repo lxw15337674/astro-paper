@@ -302,6 +302,21 @@ function formatTechBusinessDaily(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
+function formatGitHubTrendingDaily(text: string): string {
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
+  for (const section of ["总结", "今日项目精选", "趋势观察", "数据边界"]) {
+    if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized)) throw new Error(`GitHub trending daily missing section: ${section}`);
+  }
+  rejectDuplicateLinksAndHeadings(normalized, "GitHub trending daily");
+  const itemLinks = normalized.match(/^###\s+\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)/gm) || [];
+  if (itemLinks.length < 5) throw new Error(`GitHub trending daily needs at least five linked project headings, got ${itemLinks.length}`);
+  if (!/GitHub Trending|Trending|README|项目自述|榜单|Stars|stars/.test(normalized)) throw new Error("GitHub trending daily lacks source-bound trend language");
+  for (const pattern of [/值得关注/, /不容错过/, /革命性/, /颠覆/, /赋能/, /投资建议/, /融资猜测/, /安全背书/, /待补充/, /示例/, /无法判断/, /本文将/]) {
+    if (pattern.test(normalized)) throw new Error(`GitHub trending daily contains forbidden language: ${pattern.source}`);
+  }
+  return `${normalized.trim()}\n`;
+}
+
 function taskInfo(task: string): { titlePrefix: string; tag: string; description: string; fileName: string } {
   const tasks: Record<string, { titlePrefix: string; tag: string; description: string; fileName: string }> = {
     "hn-top10": {
@@ -327,6 +342,12 @@ function taskInfo(task: string): { titlePrefix: string; tag: string; description
       tag: "美股市场日报",
       description: "每日美股市场日报，按完整常规收盘口径汇总主要指数与行业板块结构。",
       fileName: "美股市场日报-{date}.md",
+    },
+    "github-trending-daily": {
+      titlePrefix: "GitHub 项目日报",
+      tag: "GitHub项目日报",
+      description: "每日 GitHub Trending 项目中文整理，基于榜单元数据与 README 摘录提炼开源项目趋势。",
+      fileName: "GitHub项目日报-{date}.md",
     },
     "foreign-tech-podcast": {
       titlePrefix: "海外科技访谈播客笔记",
@@ -383,7 +404,7 @@ export function archivePost({ task, date, repo, body, force }: { task: string; d
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title: `${info.titlePrefix}｜${date}`, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: [TOTAL_TAG, info.tag] };
   }
-  const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
+  const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
   if (task === "foreign-tech-podcast") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
   const title = `${info.titlePrefix}｜${date}`;
   fs.mkdirSync(path.dirname(absPath), { recursive: true });

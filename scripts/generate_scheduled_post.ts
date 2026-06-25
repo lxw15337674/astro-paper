@@ -11,8 +11,9 @@ import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
 import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
+import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
 
-const TASKS = ["hn-top10", "asia-market-daily", "crypto-market-daily", "us-market-daily", "foreign-tech-podcast", "tech-weekly", "ai-weekly", "tech-business-weekly", "tech-daily", "ai-daily", "tech-business-daily"] as const;
+const TASKS = ["hn-top10", "asia-market-daily", "crypto-market-daily", "us-market-daily", "github-trending-daily", "foreign-tech-podcast", "tech-weekly", "ai-weekly", "tech-business-weekly", "tech-daily", "ai-daily", "tech-business-daily"] as const;
 type Task = (typeof TASKS)[number];
 
 const DAILY_DIGEST_TASKS = ["tech-daily", "ai-daily", "tech-business-daily"] as const satisfies readonly Task[];
@@ -27,6 +28,7 @@ const TASK_META: Record<Task, { titlePrefix: string; fileName: string; tags: str
   "asia-market-daily": { titlePrefix: "亚洲市场日报", fileName: "亚洲市场日报-{date}.md", tags: ["定时文章", "亚洲市场日报"] },
   "crypto-market-daily": { titlePrefix: "比特币日报", fileName: "比特币日报-{date}.md", tags: ["定时文章", "比特币日报"] },
   "us-market-daily": { titlePrefix: "美股市场日报", fileName: "美股市场日报-{date}.md", tags: ["定时文章", "美股市场日报"] },
+  "github-trending-daily": { titlePrefix: "GitHub 项目日报", fileName: "GitHub项目日报-{date}.md", tags: ["定时文章", "GitHub项目日报"] },
   "foreign-tech-podcast": { titlePrefix: "海外科技访谈播客笔记", fileName: "海外科技播客-{date}.md", tags: ["定时文章", "海外科技播客"] },
   "tech-weekly": { titlePrefix: "技术趋势与工程观察", fileName: "技术周刊-{date}.md", tags: ["定时文章", "技术周刊"] },
   "ai-weekly": { titlePrefix: "AI 周刊", fileName: "AI周刊-{date}.md", tags: ["定时文章", "AI周刊"] },
@@ -105,6 +107,7 @@ async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): P
   if (task === "asia-market-daily") return generateAsiaMarketDaily(date);
   if (task === "us-market-daily") return generateUsMarketDaily(date);
   if (task === "crypto-market-daily") return generateCryptoMarketDaily();
+  if (task === "github-trending-daily") return buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") });
   if (task === "foreign-tech-podcast") return buildForeignTechPodcastSource(date);
   if (task === "tech-weekly") return buildTechWeeklySource(date);
   if (task === "ai-weekly") return buildAiWeeklySource(date);

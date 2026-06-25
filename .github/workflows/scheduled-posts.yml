@@ -17,6 +17,7 @@ on:
           - asia-market-daily
           - crypto-market-daily
           - us-market-daily
+          - github-trending-daily
           - foreign-tech-podcast
           - daily-digests
           - tech-daily
@@ -57,6 +58,8 @@ on:
     - cron: "0 17 * * *"
     # 06:30 Asia/Shanghai next day: US market after regular close, archived to previous BJT date.
     - cron: "30 22 * * *"
+    # 07:00 Asia/Shanghai: GitHub Trending daily project note.
+    - cron: "0 23 * * *"
 
 concurrency:
   group: scheduled-posts-${{ github.ref }}-${{ github.event.inputs.task || github.event.schedule || 'all' }}
@@ -110,6 +113,7 @@ jobs:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
           AI_MODEL: ${{ github.event.inputs.ai_model || secrets.AI_MODEL }}
+          GITHUB_TOKEN: ${{ github.token }}
           PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
           PODCAST_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
           PODCAST_WHISPER_MODEL: ${{ github.event.inputs.podcast_whisper_model || 'tiny.en' }}
@@ -124,6 +128,7 @@ jobs:
               "0 14 * * *") task="asia-market-daily" ;;
               "0 17 * * *") task="crypto-market-daily"; date_offset="-1" ;;
               "30 22 * * *") task="us-market-daily"; date_offset="-1" ;;
+              "0 23 * * *") task="github-trending-daily" ;;
               *) task="all" ;;
             esac
           fi

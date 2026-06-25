@@ -50,6 +50,7 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
   if (expectedTask === "tech-daily" && !frontmatter.includes("技术工程日报")) throw new Error(`${file} frontmatter missing 技术工程日报 tag/title`);
   if (expectedTask === "ai-daily" && !frontmatter.includes("AI工程日报")) throw new Error(`${file} frontmatter missing AI工程日报 tag/title`);
   if (expectedTask === "tech-business-daily" && !frontmatter.includes("科技商业观察日报")) throw new Error(`${file} frontmatter missing 科技商业观察日报 tag/title`);
+  if (expectedTask === "github-trending-daily" && !frontmatter.includes("GitHub项目日报")) throw new Error(`${file} frontmatter missing GitHub项目日报 tag/title`);
   const marketLabels: Record<string, string> = {
     "asia-market-daily": "亚洲市场日报",
     "crypto-market-daily": "比特币日报",
@@ -213,6 +214,22 @@ function verifyTechBusinessDaily(relPath: string, body: string): void {
   }
 }
 
+function verifyGitHubTrendingDaily(relPath: string, body: string): void {
+  for (const section of ["总结", "今日项目精选", "趋势观察", "数据边界"]) {
+    if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(body)) throw new Error(`${relPath} missing GitHub trending section: ${section}`);
+  }
+  const links = body.match(/^###\s+\[[^\]]+\]\(https:\/\/github\.com\/[^)]+\)/gm) || [];
+  if (links.length < 5) throw new Error(`${relPath} GitHub trending daily needs at least five linked project headings, got ${links.length}`);
+  verifyNoDuplicateWeeklyLinksAndHeadings(relPath, body);
+  requireTermPatterns(relPath, body, [
+    { label: "GitHub trending evidence", pattern: /GitHub Trending|Trending|README|项目自述|榜单|Stars|stars/ },
+    { label: "open-source judgement", pattern: /项目|开源|开发者|工具|框架|基础设施|自动化|工程|适用|场景/ },
+  ]);
+  for (const pattern of [/值得关注/, /不容错过/, /革命性/, /颠覆/, /赋能/, /投资建议/, /融资猜测/, /安全背书/, /待补充/, /示例/, /无法判断/, /本文将/]) {
+    if (pattern.test(body)) throw new Error(`${relPath} contains GitHub trending forbidden pattern: ${pattern.source}`);
+  }
+}
+
 function verifyMarketSemantics(relPath: string, body: string, task: string): void {
   if (task === "foreign-tech-podcast") {
     verifyForeignTechPodcast(relPath, body);
@@ -240,6 +257,10 @@ function verifyMarketSemantics(relPath: string, body: string, task: string): voi
   }
   if (task === "tech-business-daily") {
     verifyTechBusinessDaily(relPath, body);
+    return;
+  }
+  if (task === "github-trending-daily") {
+    verifyGitHubTrendingDaily(relPath, body);
     return;
   }
   verifyNoPositiveDeclineLabel(relPath, body);
