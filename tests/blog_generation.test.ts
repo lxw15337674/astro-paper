@@ -61,6 +61,18 @@ test("AI writer rejects placeholder markdown", () => {
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
 });
 
+test("common article rules require knowledge and viewpoint extraction", () => {
+  const commonRules = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "_common-article-rules.md"), "utf8");
+  assert.match(commonRules, /提炼优先于描述/);
+  assert.match(commonRules, /可迁移的知识/);
+  assert.match(commonRules, /只回答“发生了什么”的段落不合格/);
+
+  const podcastPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "foreign-tech-podcast.md"), "utf8");
+  assert.match(podcastPrompt, /把 transcript 提炼成知识和观点/);
+  assert.match(podcastPrompt, /不能只描述“聊了什么”/);
+  assert.match(podcastPrompt, /可复用的判断框架/);
+});
+
 test("blog task registry covers prompts, fixtures, archive paths and schedules", () => {
   for (const task of TASKS) {
     const info = taskInfo(task);
