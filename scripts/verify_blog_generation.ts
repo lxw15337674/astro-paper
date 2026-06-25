@@ -293,7 +293,11 @@ export function verifyResultJson(repo: string, resultJson: string): number {
   let verified = 0;
   for (const item of payload.results) {
     if (!item || typeof item !== "object") throw new Error(`invalid result item: ${String(item)}`);
-    const row = item as { task?: string; path?: string; skipped?: boolean };
+    const row = item as { task?: string; path?: string; skipped?: boolean; failed?: boolean; error?: string };
+    if (row.failed) {
+      if (!row.task || !row.error) throw new Error(`failed result item is missing task or error: ${JSON.stringify(row)}`);
+      continue;
+    }
     if (row.skipped && !row.path) continue;
     verifyPostContract(repo, row.path || "", row.task || "");
     verified += 1;

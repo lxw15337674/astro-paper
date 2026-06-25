@@ -17,6 +17,8 @@ import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.t
 
 type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
+  failed?: boolean;
+  error?: string;
   generation?: {
     ai_model: string;
     source_artifact: string;
@@ -62,6 +64,23 @@ function skippedLowQuality(task: Task, date: string, reason: string): ResultItem
     push: "",
     tags: taskTags(task),
     skip_reason: reason,
+  };
+}
+
+function failedTask(task: Task, date: string, error: unknown): ResultItem {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    task,
+    path: "",
+    title: taskTitle(task, date),
+    created: false,
+    skipped: false,
+    failed: true,
+    error: message,
+    updated_at_bjt: "",
+    commit: "",
+    push: "",
+    tags: taskTags(task),
   };
 }
 
@@ -331,20 +350,34 @@ function assertMarkdownUsesOnlySourceLinks(markdown: string, source: string, tas
   if (unexpected) throw new Error(`${task} generated link outside selected source whitelist: ${unexpected}`);
 }
 
+function promptWithValidationFeedback(prompt: string, task: Task, previousError: string): string {
+  return `${prompt.trim()}
+
+---
+
+上一轮 ${task} 输出被发布质量检查拒绝，原因：${previousError}
+请重新生成完整 Markdown 正文，并严格避开上述失败原因；不要复述错误原因，不要输出解释，不要输出代码围栏。`;
+}
+
 async function renderLiveAiMarkdownWithSourceValidation(prompt: string, model: string, task: Task, artifactsDir: string, source: string): Promise<string> {
   const attempts = retryAttempts();
   let lastError = "";
+  let attemptPrompt = prompt;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     await sleep(retryDelayMs(attempt));
+    if (attempt > 1) writeArtifact(artifactsDir, task, `retry-prompt-attempt-${attempt}.md`, attemptPrompt);
     try {
-      const rawMarkdown = await callAi(prompt, model);
+      const rawMarkdown = await callAi(attemptPrompt, model);
       const markdown = normalizeMarkdownLinksFromSourceTitles(validateMarkdown(rawMarkdown), source, task);
       assertMarkdownUsesOnlySourceLinks(markdown, source, task);
       return markdown;
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       writeArtifact(artifactsDir, task, `ai-error-attempt-${attempt}.txt`, lastError);
-      if (attempt < attempts) writeStderr(`WARN: ${task} AI generation attempt ${attempt}/${attempts} failed; retrying: ${lastError}`);
+      if (attempt < attempts) {
+        attemptPrompt = promptWithValidationFeedback(prompt, task, lastError);
+        writeStderr(`WARN: ${task} AI generation attempt ${attempt}/${attempts} failed; retrying with validation feedback: ${lastError}`);
+      }
     }
   }
   throw new Error(`${task} AI generation failed after ${attempts} attempts: ${lastError}`);
@@ -448,24 +481,31 @@ async function main(): Promise<void> {
   if (!Number.isInteger(offset)) throw new Error(`invalid --date-offset: ${offsetArg || scheduled.dateOffset}`);
   const date = explicitDate || offsetBjtDate(offset);
   const tasks = tasksForInput(taskArg);
-  const results = [];
+  const results: ResultItem[] = [];
   for (const task of tasks as Task[]) {
-    results.push(
-      await generateTask({
-        task,
-        repo,
-        date,
-        force: args.force === true,
-        useAi: args.ai === true,
-        model: stringArg(args, "model"),
-        promptDir: stringArg(args, "prompt-dir"),
-        sourceFixtureDir: stringArg(args, "source-fixture-dir"),
-        mockResponseDir: stringArg(args, "mock-response-dir"),
-        artifactsDir: stringArg(args, "artifacts-dir"),
-      }),
-    );
+    try {
+      results.push(
+        await generateTask({
+          task,
+          repo,
+          date,
+          force: args.force === true,
+          useAi: args.ai === true,
+          model: stringArg(args, "model"),
+          promptDir: stringArg(args, "prompt-dir"),
+          sourceFixtureDir: stringArg(args, "source-fixture-dir"),
+          mockResponseDir: stringArg(args, "mock-response-dir"),
+          artifactsDir: stringArg(args, "artifacts-dir"),
+        }),
+      );
+    } catch (error) {
+      const failed = failedTask(task, date, error);
+      results.push(failed);
+      writeStderr(`ERROR: ${task} generation failed: ${failed.error}`);
+    }
   }
-  const output = `${JSON.stringify({ date, results }, null, 2)}\n`;
+  const failures = results.filter(result => result.failed);
+  const output = `${JSON.stringify({ date, results, failed: failures.length }, null, 2)}\n`;
   const resultJson = stringArg(args, "result-json");
   if (resultJson) {
     fs.writeFileSync(path.resolve(repo, resultJson), output, "utf8");
