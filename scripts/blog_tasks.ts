@@ -45,6 +45,12 @@ export const BLOG_TASKS = {
     description: "每日海外科技访谈播客中文长文笔记，整理技术、产品、产业与职业判断。",
     fileName: "海外科技播客-{date}.md",
   },
+  "apple-top-podcasts": {
+    titlePrefix: "Apple 热门播客笔记",
+    tag: "Apple热门播客",
+    description: "每日 Apple Podcasts 美国 Top Shows 前列播客中文长文笔记，按榜单顺序整理热门节目近期内容。",
+    fileName: "Apple热门播客-{date}.md",
+  },
   "tech-weekly": {
     titlePrefix: "技术趋势与工程观察",
     tag: "技术周刊",
@@ -93,6 +99,7 @@ export const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly"
 export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number }> = {
   "30 0 * * *": { task: "daily-digests" },
   "30 1 * * *": { task: "foreign-tech-podcast" },
+  "0 2 * * *": { task: "apple-top-podcasts" },
   "30 9 * * *": { task: "hn-top10" },
   "0 14 * * *": { task: "asia-market-daily" },
   "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },

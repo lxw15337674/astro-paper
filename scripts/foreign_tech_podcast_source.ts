@@ -10,6 +10,10 @@ type FeedSource = {
   show: string;
   source: string;
   url: string;
+  chartRank?: number;
+  appleId?: string;
+  appleUrl?: string;
+  genres?: string[];
 };
 
 type Episode = {
@@ -28,6 +32,10 @@ type Episode = {
   transcript?: string;
   canonicalId?: string;
   curated?: boolean;
+  chartRank?: number;
+  appleId?: string;
+  appleUrl?: string;
+  genres?: string[];
 };
 
 type CuratedEpisodeInput = {
@@ -51,6 +59,25 @@ type CuratedEpisodeInput = {
 type CuratedEpisodesFile = {
   episodes?: CuratedEpisodeInput[];
   dates?: Record<string, CuratedEpisodeInput[]>;
+};
+
+type AppleTopShow = {
+  id: string;
+  name: string;
+  artistName: string;
+  url: string;
+  genres: string[];
+  rank: number;
+};
+
+type AppleLookupResult = {
+  collectionId?: number;
+  collectionName?: string;
+  artistName?: string;
+  feedUrl?: string;
+  collectionViewUrl?: string;
+  primaryGenreName?: string;
+  genres?: string[];
 };
 
 export const FEEDS: FeedSource[] = [
@@ -108,7 +135,25 @@ function parseFeed(feed: FeedSource, xml: string): Episode[] {
       const link = tag(item, "link") || tag(item, "guid");
       const audioUrl = attr(item, "enclosure", "url");
       const guid = tag(item, "guid") || link || `${feed.show}:${title}`;
-      return { show: feed.show, source: feed.source, title, link, audioUrl, guid, pubDate, date, description };
+      const imageUrl = attr(item, "itunes:image", "href");
+      const duration = tag(item, "itunes:duration");
+      return {
+        show: feed.show,
+        source: feed.source,
+        title,
+        link,
+        audioUrl,
+        guid,
+        pubDate,
+        date,
+        description,
+        imageUrl,
+        duration,
+        chartRank: feed.chartRank,
+        appleId: feed.appleId,
+        appleUrl: feed.appleUrl,
+        genres: feed.genres,
+      };
     })
     .filter(episode => episode.title && episode.description && episode.date && episode.link && episode.audioUrl);
 }
@@ -267,6 +312,108 @@ async function fetchRssEpisodes(date: string): Promise<Episode[]> {
     if (scoreDelta) return scoreDelta;
     return b.date.localeCompare(a.date);
   });
+}
+
+
+function appleTopPodcastsCount(): number {
+  return envNumber("APPLE_TOP_PODCASTS_COUNT", 10);
+}
+
+function appleTopPodcastsMaxEpisodes(): number {
+  return envNumber("APPLE_TOP_PODCASTS_MAX_EPISODES", appleTopPodcastsCount());
+}
+
+function appleTopPodcastsMinEpisodes(): number {
+  return envNumber("APPLE_TOP_PODCASTS_MIN_EPISODES", Math.min(8, appleTopPodcastsMaxEpisodes()));
+}
+
+function appleStorefront(): string {
+  return (process.env.APPLE_PODCASTS_STOREFRONT || "us").toLowerCase();
+}
+
+async function fetchAppleTopShows(): Promise<AppleTopShow[]> {
+  const storefront = appleStorefront();
+  const count = appleTopPodcastsCount();
+  const url = `https://rss.applemarketingtools.com/api/v2/${storefront}/podcasts/top/${count}/podcasts.json`;
+  const text = await fetchText(url, { timeoutMs: 20_000, maxChars: 500_000, throwOnMaxChars: true });
+  const payload = JSON.parse(text) as { feed?: { results?: unknown[] } };
+  const results = payload.feed?.results || [];
+  return results
+    .map((item, index) => {
+      const row = item as { id?: unknown; name?: unknown; artistName?: unknown; url?: unknown; genres?: unknown[] };
+      const genres = (row.genres || [])
+        .map(genre => (typeof genre === "string" ? genre : (genre as { name?: unknown })?.name))
+        .filter((genre): genre is string => typeof genre === "string" && Boolean(genre));
+      return {
+        id: String(row.id || ""),
+        name: String(row.name || ""),
+        artistName: String(row.artistName || ""),
+        url: String(row.url || ""),
+        genres,
+        rank: index + 1,
+      };
+    })
+    .filter(show => show.id && show.name && show.url);
+}
+
+async function lookupApplePodcast(show: AppleTopShow): Promise<FeedSource | null> {
+  const storefront = appleStorefront();
+  const url = `https://itunes.apple.com/lookup?id=${encodeURIComponent(show.id)}&country=${encodeURIComponent(storefront)}&entity=podcast`;
+  const text = await fetchText(url, { timeoutMs: 20_000, maxChars: 300_000, throwOnMaxChars: true });
+  const payload = JSON.parse(text) as { results?: AppleLookupResult[] };
+  const result = (payload.results || []).find(item => item.feedUrl) || payload.results?.[0];
+  if (!result?.feedUrl) return null;
+  const genres = [...new Set([...(show.genres || []), ...(result.genres || []), result.primaryGenreName || ""].filter(Boolean))];
+  return {
+    show: result.collectionName || show.name,
+    source: result.artistName || show.artistName || show.name,
+    url: result.feedUrl,
+    chartRank: show.rank,
+    appleId: show.id,
+    appleUrl: result.collectionViewUrl || show.url,
+    genres,
+  };
+}
+
+function episodeAlreadySeen(seen: Map<string, unknown>, episode: Episode): boolean {
+  return podcastFingerprints(episode).some(fingerprint => seen.has(fingerprint));
+}
+
+async function fetchAppleTopPodcastEpisodes(date: string): Promise<Episode[]> {
+  const shows = await fetchAppleTopShows();
+  const seen = historicalPodcastFingerprints(podcastHistoryPostsDir(), date);
+  const selected: Episode[] = [];
+  let skippedDuplicates = 0;
+  for (const show of shows) {
+    if (selected.length >= appleTopPodcastsMaxEpisodes()) break;
+    try {
+      const feed = await lookupApplePodcast(show);
+      if (!feed) {
+        writeStderr(`WARN: Apple Top Shows #${show.rank} ${show.name}: lookup did not return feedUrl`);
+        continue;
+      }
+      const xml = await fetchText(feed.url, { timeoutMs: 25_000, maxChars: 8_000_000, throwOnMaxChars: true });
+      const candidates = parseFeed(feed, xml)
+        .filter(episode => {
+          const delta = daysBetween(date, episode.date);
+          return delta >= 0 && delta <= maxWindowDays();
+        })
+        .toSorted((a, b) => b.date.localeCompare(a.date));
+      const episode = candidates.find(candidate => !episodeAlreadySeen(seen, candidate));
+      if (!episode) {
+        skippedDuplicates += candidates.length ? 1 : 0;
+        writeStderr(`WARN: Apple Top Shows #${show.rank} ${feed.show}: no recent unarchived episode in ${maxWindowDays()}d window`);
+        continue;
+      }
+      for (const fingerprint of podcastFingerprints(episode)) seen.set(fingerprint, { ...episode, file: `candidate:${date}` });
+      selected.push(episode);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeStderr(`WARN: Apple Top Shows #${show.rank} ${show.name}: ${message}`);
+    }
+  }
+  if (skippedDuplicates) writeStderr(`skipped ${skippedDuplicates} Apple Top Shows duplicate/latest episode(s) already present in archive history`);
+  return selected;
 }
 
 async function fetchEpisodes(date: string): Promise<Episode[]> {
@@ -454,7 +601,7 @@ async function transcribeAudio(audioFile: string, outDir: string): Promise<strin
   throw new Error(`all transcription providers failed: ${errors.join("; ")}`);
 }
 
-async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
+async function enrichWithTranscripts(episodes: Episode[], options: { tolerateFailures?: boolean } = {}): Promise<Episode[]> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "foreign-tech-podcast-"));
   try {
     const enriched: Episode[] = [];
@@ -480,7 +627,7 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
         enriched.push({ ...episode, transcript });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (episode.curated) {
+        if (episode.curated || options.tolerateFailures) {
           writeStderr(`WARN: ${episode.title}: podcast audio transcription unavailable; skipping episode: ${message}`);
           continue;
         }
@@ -493,19 +640,21 @@ async function enrichWithTranscripts(episodes: Episode[]): Promise<Episode[]> {
   }
 }
 
-export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
-  const episodes = await enrichWithTranscripts(await fetchEpisodes(date));
-  if (episodes.length < minEpisodes()) throw new Error(`foreign tech podcast source found only ${episodes.length} usable episodes; need ${minEpisodes()}`);
+function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writingBoundaries: string[]): string {
   const lines = [
     "## 来源说明",
     "",
-    "以下证据来自海外科技访谈/深度讨论类播客 RSS/curated 条目及其可用 transcript。每个候选都必须有音频转写或仓库预置 transcript；没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
+    sourceIntro,
     "",
     "## 候选播客清单",
     "",
   ];
   for (const [index, episode] of episodes.entries()) {
     const metadata = [
+      episode.chartRank ? `- Apple Top Shows 排名：#${episode.chartRank}` : "",
+      episode.appleId ? `- Apple ID：${episode.appleId}` : "",
+      episode.appleUrl ? `- Apple 页面：${episode.appleUrl}` : "",
+      episode.genres?.length ? `- Apple 分类：${episode.genres.join(" / ")}` : "",
       `- 节目：${episode.show}`,
       `- 来源：${episode.source}`,
       episode.guest ? `- 嘉宾：${episode.guest}` : "- 嘉宾：未标明",
@@ -528,15 +677,39 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
       "",
     );
   }
-  lines.push(
-    "## 写作边界",
-    "",
-    "- 这是基于播客 transcript 的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
-    "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
-    "- 每条分析必须能回到 transcript 证据；不得仅凭标题、链接、图片或简短简介扩写。",
-    "- 不要生成金融建议、产品购买建议或夸张标题。",
-  );
+  lines.push("## 写作边界", "", ...writingBoundaries);
   return `${lines.join("\n").trim()}\n`;
+}
+
+export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
+  const episodes = await enrichWithTranscripts(await fetchEpisodes(date));
+  if (episodes.length < minEpisodes()) throw new Error(`foreign tech podcast source found only ${episodes.length} usable episodes; need ${minEpisodes()}`);
+  return podcastSourceMarkdown(
+    episodes,
+    "以下证据来自海外科技访谈/深度讨论类播客 RSS/curated 条目及其可用 transcript。每个候选都必须有音频转写或仓库预置 transcript；没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
+    [
+      "- 这是基于播客 transcript 的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
+      "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
+      "- 每条分析必须能回到 transcript 证据；不得仅凭标题、链接、图片或简短简介扩写。",
+      "- 不要生成金融建议、产品购买建议或夸张标题。",
+    ],
+  );
+}
+
+export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promise<string> {
+  const episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true });
+  if (episodes.length < appleTopPodcastsMinEpisodes()) throw new Error(`Apple Top Shows podcast source found only ${episodes.length} usable episodes; need ${appleTopPodcastsMinEpisodes()}`);
+  return podcastSourceMarkdown(
+    episodes,
+    `以下证据来自 Apple Podcasts ${appleStorefront().toUpperCase()} Top Shows 官方榜单、iTunes lookup 得到的 RSS feed、节目 RSS 元数据及其可用 transcript。候选按 Apple 榜单顺序保留；每个节目只选择近 ${maxWindowDays()} 天内第一个未归档且可转写的 episode。没有 RSS、近期音频或 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。`,
+    [
+      "- 这是基于 Apple Top Shows 热门节目近期 episode transcript 的中文长文笔记，不是榜单介绍或节目推荐。",
+      "- 需要按输入顺序逐条展开，不要额外生成总览或播客清单；不要把多个节目合并成一个主题。",
+      "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
+      "- 每条分析必须能回到 transcript 证据；不得仅凭榜单排名、标题、链接、图片或简短简介扩写。",
+      "- 不要生成金融建议、健康建议、产品购买建议或夸张标题。",
+    ],
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

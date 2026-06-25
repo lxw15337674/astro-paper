@@ -190,22 +190,30 @@ function rejectRepeatedPodcastContent(markdown: string): void {
   }
 }
 
-function formatForeignTechPodcast(text: string): string {
+function formatPodcastLongform(text: string, label: string, openingTitle: string): string {
   const normalized = normalizeMarkdown(text).replace(/\n---\n\n---\n/g, "\n\n---\n");
-  const required = ["《今日国外热门科技访谈播客》", "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
+  const required = [openingTitle, "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
   for (const marker of required) {
-    if (!normalized.includes(marker)) throw new Error(`foreign tech podcast missing required section: ${marker}`);
+    if (!normalized.includes(marker)) throw new Error(`${label} missing required section: ${marker}`);
   }
   for (const marker of ["## 今日总览", "## 今日播客清单"]) {
-    if (normalized.includes(marker)) throw new Error(`foreign tech podcast contains forbidden section: ${marker}`);
+    if (normalized.includes(marker)) throw new Error(`${label} contains forbidden section: ${marker}`);
   }
   rejectRepeatedPodcastContent(normalized);
   const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).length;
   const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
-  if (episodeCount < minEpisodes) throw new Error(`foreign tech podcast needs at least ${minEpisodes} episode sections, got ${episodeCount}`);
+  if (episodeCount < minEpisodes) throw new Error(`${label} needs at least ${minEpisodes} episode sections, got ${episodeCount}`);
   const minLength = Math.max(1200, minEpisodes * 1000);
-  if (normalized.length < minLength) throw new Error(`foreign tech podcast note is too short to be a long-form article (${normalized.length} < ${minLength})`);
+  if (normalized.length < minLength) throw new Error(`${label} note is too short to be a long-form article (${normalized.length} < ${minLength})`);
   return `${normalized.trim()}\n`;
+}
+
+function formatForeignTechPodcast(text: string): string {
+  return formatPodcastLongform(text, "foreign tech podcast", "《今日国外热门科技访谈播客》");
+}
+
+function formatAppleTopPodcasts(text: string): string {
+  return formatPodcastLongform(text, "Apple Top Shows podcast", "《今日 Apple Top Shows 热门播客》");
 }
 
 function rejectPureTutorialWeekly(markdown: string): void {
@@ -341,8 +349,8 @@ export function archivePost({ task, date, repo, body, force }: { task: string; d
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title: taskTitle(task, date), created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
-  const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
-  if (task === "foreign-tech-podcast") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
+  const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "apple-top-podcasts" ? { markdown: formatAppleTopPodcasts(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
+  if (task === "foreign-tech-podcast" || task === "apple-top-podcasts") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
   const title = taskTitle(task, date);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);

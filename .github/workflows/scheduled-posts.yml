@@ -25,7 +25,7 @@ on:
         required: false
         type: string
       podcast_max_episodes:
-        description: "Podcast episodes to transcribe for foreign-tech-podcast. Empty = 3. Use 1 for pipeline smoke test."
+        description: "Podcast episodes to transcribe. Empty = 3 for foreign-tech-podcast, 10 for apple-top-podcasts. Use 1 for pipeline smoke test."
         required: false
         type: string
       podcast_whisper_model:
@@ -37,6 +37,8 @@ on:
     - cron: "30 0 * * *"
     # 09:30 Asia/Shanghai: foreign tech podcast note.
     - cron: "30 1 * * *"
+    # 10:00 Asia/Shanghai: Apple Podcasts US Top Shows note.
+    - cron: "0 2 * * *"
     # 17:30 Asia/Shanghai: Hacker News Top 10 after the US morning discussion window has activity.
     - cron: "30 9 * * *"
     # 22:00 Asia/Shanghai: A股 + 港股 after local market close.
@@ -56,7 +58,7 @@ jobs:
   generate:
     name: Generate scheduled posts
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 180
 
     steps:
       - name: "☁️ Checkout repository"
@@ -76,7 +78,7 @@ jobs:
           cache: "pnpm"
 
       - name: Use Python
-        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' }}
+        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'apple-top-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '0 2 * * *' }}
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -85,7 +87,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: "🎙️ Install local Whisper dependencies"
-        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' }}
+        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'apple-top-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '0 2 * * *' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
@@ -106,6 +108,9 @@ jobs:
           PODCAST_TRANSCRIBE_PROVIDER: groq,local
           PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
           PODCAST_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
+          APPLE_TOP_PODCASTS_COUNT: 10
+          APPLE_TOP_PODCASTS_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '10' }}
+          APPLE_TOP_PODCASTS_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '8' }}
           PODCAST_WHISPER_MODEL: ${{ github.event.inputs.podcast_whisper_model || 'tiny.en' }}
         run: |
           set -euo pipefail

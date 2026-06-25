@@ -7,7 +7,7 @@ import { callBlogAi, envAiConfig } from "./blog_ai_client.ts";
 import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
-import { buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
+import { buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
 import { generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
@@ -97,6 +97,7 @@ const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
   "us-market-daily": date => generateUsMarketDaily(date),
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "foreign-tech-podcast": date => buildForeignTechPodcastSource(date),
+  "apple-top-podcasts": date => buildAppleTopPodcastsSource(date),
   "tech-weekly": date => buildTechWeeklySource(date),
   "ai-weekly": date => buildAiWeeklySource(date),
   "tech-business-weekly": date => buildTechBusinessWeeklySource(date),

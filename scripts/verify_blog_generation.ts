@@ -97,11 +97,12 @@ function verifySourceContract(repo: string, task: string, sourceArtifact: string
     requireTerms(relPath, source, ["HN 讨论", "原文"]);
     return;
   }
-  if (task === "foreign-tech-podcast") {
+  if (task === "foreign-tech-podcast" || task === "apple-top-podcasts") {
     requireTermPatterns(relPath, source, [
       { label: "podcast metadata", pattern: /节目|来源|音频|链接/ },
       { label: "transcript evidence", pattern: /transcript|转写|摘录|长文|内容/i },
     ]);
+    if (task === "apple-top-podcasts") requireTerms(relPath, source, ["Apple Top Shows", "Apple ID"]);
     return;
   }
   if (task === "github-trending-daily") {
