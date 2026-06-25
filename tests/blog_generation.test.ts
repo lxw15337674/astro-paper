@@ -669,37 +669,90 @@ test("foreign tech podcast rejects repeated summaries", () => {
   );
 });
 
-test("market verifier rejects semantic drift in generated posts", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-market-semantic-"));
-  const badPositiveDeclineBody = `## 总结
+test("result verifier checks source artifacts instead of generated prose style", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-source-contract-"));
+  const sourcePath = path.join(repo, "crypto-source.md");
+  fs.writeFileSync(
+    sourcePath,
+    `BTC source evidence.
 
-A股与港股市场可复核状态：A股可用宽基指数为上证指数 +1.78%、深证成指 +2.13%、创业板指 +2.52%；港股主要指数分别为恒生指数 -0.65%、国企指数 -0.77%、恒生科技指数 -1.19%。以上内容只描述已获取数据对应的市场状态与数据边界，不生成交易动作或资产配置结论。
+CoinGecko BTC 现货：62,521 美元；24h -2.19%；7d -5.09%。
+Deribit BTC-PERPETUAL 8h funding：-0.0010%；OI：6,159,000,000。
+Deribit BTC option book Put/Call：0.61；近端 ATM IV：65.20%；5% OTM Put IV：76.06%；5% OTM Call IV：56.08%。
+Alternative.me Fear & Greed：17（Extreme Fear）。
+`,
+  );
+  const body = `## 总结
 
-## A股
+整体看，当前证据只能说明 BTC 偏弱，不能据此扩展成更大的市场判断。
 
-A股最近一个交易日，上证指数收报 4163.10 点，+1.78%；深证成指收报 16372.50 点，+2.13%；创业板指收报 4359.39 点，+2.52%。成交额口径未获取到完整可比数据。
+## BTC 现货状态
 
-## A股行业板块
+**判断：** BTC 现货偏弱。
 
-涨幅靠前行业：钨 +9.80%、磷肥及磷化工 +8.97%、钛白粉 +8.82%、铅锌 +8.03%、钼 +7.89%。
-跌幅靠前行业：白银 +6.11%、钴 +6.18%、期货 +6.18%、磨具磨料 +6.22%、其他小金属 +6.43%。
+## 永续与杠杆结构
 
-## 港股
+**关键证据：** Deribit funding 接近中性。
 
-港股最近一个交易日，恒生指数收报 23768.52 点，-0.65%；国企指数收报 7914.74 点，-0.77%；恒生科技指数收报 4549.41 点，-1.19%。成交额口径未获取到完整可比数据。
+## 期权市场看空信号
+
+主要到期日中，ATM IV 期限结构为 65.20%、58.40%、52.10%。
+
+## 情绪与风险边界
+
+**克制收束：** Fear & Greed 处在 Extreme Fear。
 `;
-  const badMissingCoreBody = badPositiveDeclineBody
-    .replace(
-      "A股可用宽基指数为上证指数 +1.78%、深证成指 +2.13%、创业板指 +2.52%；港股主要指数分别为恒生指数 -0.65%、国企指数 -0.77%、恒生科技指数 -1.19%",
-      "A股可用宽基指数为上证指数 +1.78%、深证成指 +2.13%；港股主要指数分别为恒生指数 -0.65%、国企指数 -0.77%。未获取到完整数据的指数：创业板指、恒生科技指数",
-    )
-    .replace("跌幅靠前行业：白银 +6.11%", "涨幅相对靠后行业：白银 +6.11%");
-  const positiveDecline = archivePost({ task: "asia-market-daily", date: "2099-01-02", repo, body: badPositiveDeclineBody, force: true });
+  const result = archivePost({ task: "crypto-market-daily", date: "2099-01-02", repo, body, force: true });
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [positiveDecline] }));
-  assert.throws(() => verifyResultJson(repo, resultJson), /labels non-negative percentage list as decline/);
+  fs.writeFileSync(
+    resultJson,
+    JSON.stringify({
+      date: "2099-01-02",
+      results: [
+        {
+          ...result,
+          generation: {
+            ai_model: "mock",
+            source_artifact: sourcePath,
+            prompt_artifact: "",
+            ai_response_artifact: "",
+            mocked_ai: true,
+          },
+        },
+      ],
+    }),
+  );
 
-  const missingCore = archivePost({ task: "asia-market-daily", date: "2099-01-03", repo, body: badMissingCoreBody, force: true });
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-03", results: [missingCore] }));
-  assert.throws(() => verifyResultJson(repo, resultJson), /core Asia index missing-data language/);
+  assert.equal(verifyResultJson(repo, resultJson), 1);
+
+  const badSourcePath = path.join(repo, "bad-crypto-source.md");
+  fs.writeFileSync(
+    badSourcePath,
+    `BTC source evidence.
+
+CoinGecko BTC 现货：62,521 美元。
+Deribit BTC-PERPETUAL 8h funding：-0.0010%。
+Alternative.me Fear & Greed：17（Extreme Fear）。
+`,
+  );
+  fs.writeFileSync(
+    resultJson,
+    JSON.stringify({
+      date: "2099-01-02",
+      results: [
+        {
+          ...result,
+          generation: {
+            ai_model: "mock",
+            source_artifact: badSourcePath,
+            prompt_artifact: "",
+            ai_response_artifact: "",
+            mocked_ai: true,
+          },
+        },
+      ],
+    }),
+  );
+
+  assert.throws(() => verifyResultJson(repo, resultJson), /missing required source terms: Put\/Call, ATM IV, 5% OTM Put IV, 5% OTM Call IV/);
 });
