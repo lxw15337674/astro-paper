@@ -102,6 +102,21 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+async function sleep(ms: number): Promise<void> {
+  if (ms > 0) await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export class PodcastSourceInsufficientEpisodesError extends Error {
+  constructor(
+    readonly sourceName: string,
+    readonly usableEpisodes: number,
+    readonly requiredEpisodes: number,
+  ) {
+    super(`${sourceName} podcast source found only ${usableEpisodes} usable episodes; need ${requiredEpisodes}`);
+    this.name = "PodcastSourceInsufficientEpisodesError";
+  }
+}
+
 function decodeXml(text = ""): string {
   return text
     .replaceAll("<![CDATA[", "")
@@ -343,6 +358,10 @@ function appleTopPodcastsMinEpisodes(): number {
   return envNumber("APPLE_TOP_PODCASTS_MIN_EPISODES", Math.min(8, appleTopPodcastsMaxEpisodes()));
 }
 
+function appleTopPodcastsTranscribeDelayMs(): number {
+  return envNumber("APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS", envNumber("PODCAST_TRANSCRIBE_DELAY_MS", 0));
+}
+
 function appleStorefront(): string {
   return (process.env.APPLE_PODCASTS_STOREFRONT || "us").toLowerCase();
 }
@@ -561,31 +580,81 @@ function prepareGroqAudioChunks(audioFile: string, outDir: string): string[] {
   return chunks;
 }
 
+function groqRetryAttempts(): number {
+  return Math.max(1, envNumber("PODCAST_GROQ_RETRY_ATTEMPTS", 3));
+}
+
+function groqRetryDelayMs(attempt: number): number {
+  return envNumber("PODCAST_GROQ_RETRY_DELAY_MS", 30_000) * attempt;
+}
+
+function groqChunkDelayMs(): number {
+  return envNumber("PODCAST_GROQ_CHUNK_DELAY_MS", 0);
+}
+
+function retryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
+  return null;
+}
+
+function retryableGroqStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+class NonRetryableGroqError extends Error {}
+
 async function transcribeGroqChunk(chunkFile: string): Promise<string> {
   const key = groqApiKey();
   if (!key) throw new Error("GROQ_API_KEY is not configured");
   const timeoutMs = envNumber("PODCAST_GROQ_TIMEOUT_MS", 10 * 60 * 1000);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const form = new FormData();
-    form.append("file", new Blob([new Uint8Array(fs.readFileSync(chunkFile))], { type: "audio/mpeg" }), path.basename(chunkFile));
-    form.append("model", groqModel());
-    form.append("response_format", "json");
-    form.append("temperature", "0");
-    const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}` },
-      body: form,
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    if (!response.ok) throw new Error(`Groq transcription HTTP ${response.status}: ${text.slice(0, 1000)}`);
-    const payload = JSON.parse(text) as { text?: string };
-    return compact(payload.text || "");
-  } finally {
-    clearTimeout(timer);
+  let lastError = "";
+  for (let attempt = 1; attempt <= groqRetryAttempts(); attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const form = new FormData();
+      form.append("file", new Blob([new Uint8Array(fs.readFileSync(chunkFile))], { type: "audio/mpeg" }), path.basename(chunkFile));
+      form.append("model", groqModel());
+      form.append("response_format", "json");
+      form.append("temperature", "0");
+      const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}` },
+        body: form,
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        lastError = `Groq transcription HTTP ${response.status}: ${text.slice(0, 1000)}`;
+        if (attempt < groqRetryAttempts() && retryableGroqStatus(response.status)) {
+          const delayMs = retryAfterMs(response.headers.get("retry-after")) ?? groqRetryDelayMs(attempt);
+          writeStderr(`WARN: Groq transcription attempt ${attempt}/${groqRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new NonRetryableGroqError(lastError);
+      }
+      const payload = JSON.parse(text) as { text?: string };
+      return compact(payload.text || "");
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (error instanceof NonRetryableGroqError) throw error;
+      if (attempt < groqRetryAttempts()) {
+        const delayMs = groqRetryDelayMs(attempt);
+        writeStderr(`WARN: Groq transcription attempt ${attempt}/${groqRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw new Error(lastError);
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw new Error(lastError || "Groq transcription failed");
 }
 
 async function runGroqWhisper(audioFile: string, outDir: string): Promise<string> {
@@ -593,6 +662,7 @@ async function runGroqWhisper(audioFile: string, outDir: string): Promise<string
   const chunks = prepareGroqAudioChunks(audioFile, outDir);
   const parts: string[] = [];
   for (const [index, chunk] of chunks.entries()) {
+    if (index > 0) await sleep(groqChunkDelayMs());
     writeStderr(`Groq transcribing chunk ${index + 1}/${chunks.length}: ${path.basename(chunk)}`);
     parts.push(await transcribeGroqChunk(chunk));
   }
@@ -617,10 +687,11 @@ async function transcribeAudio(audioFile: string, outDir: string): Promise<strin
   throw new Error(`all transcription providers failed: ${errors.join("; ")}`);
 }
 
-async function enrichWithTranscripts(episodes: Episode[], options: { tolerateFailures?: boolean } = {}): Promise<Episode[]> {
+async function enrichWithTranscripts(episodes: Episode[], options: { tolerateFailures?: boolean; transcribeDelayMs?: number } = {}): Promise<Episode[]> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "foreign-tech-podcast-"));
   try {
     const enriched: Episode[] = [];
+    let attemptedTranscriptions = 0;
     for (const [index, episode] of episodes.entries()) {
       if (hasUsableTranscript(episode)) {
         enriched.push({ ...episode, transcript: normalizedTranscript(episode) });
@@ -634,6 +705,8 @@ async function enrichWithTranscripts(episodes: Episode[], options: { tolerateFai
         writeStderr(`skipping podcast because audio transcription is disabled and no transcript is available: ${episode.title}`);
         continue;
       }
+      if (attemptedTranscriptions > 0) await sleep(options.transcribeDelayMs ?? envNumber("PODCAST_TRANSCRIBE_DELAY_MS", 0));
+      attemptedTranscriptions += 1;
       writeStderr(`transcribing podcast ${index + 1}/${episodes.length}: ${episode.title}`);
       const rawAudio = path.join(tmp, `${index}.mp3`);
       const outDir = path.join(tmp, `transcript-${index}`);
@@ -713,8 +786,8 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
 }
 
 export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promise<string> {
-  const episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true });
-  if (episodes.length < appleTopPodcastsMinEpisodes()) throw new Error(`Apple Top Shows podcast source found only ${episodes.length} usable episodes; need ${appleTopPodcastsMinEpisodes()}`);
+  const episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true, transcribeDelayMs: appleTopPodcastsTranscribeDelayMs() });
+  if (episodes.length < appleTopPodcastsMinEpisodes()) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", episodes.length, appleTopPodcastsMinEpisodes());
   return podcastSourceMarkdown(
     episodes,
     `以下证据来自 Apple Podcasts ${appleStorefront().toUpperCase()} Top Shows 官方榜单、iTunes lookup 得到的 RSS feed、节目 RSS 元数据及其可用 transcript。候选按 Apple 榜单顺序保留；每个节目只选择近 ${maxWindowDays()} 天内第一个未归档且可转写的 episode。没有 RSS、近期音频或 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。`,

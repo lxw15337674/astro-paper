@@ -148,6 +148,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.equal(scheduledTaskInput("30 22 * * *").dateOffset, -1);
   assert.equal(scheduledTaskInput("30 0 * * *").task, "daily-digests");
   assert.equal(scheduledTaskInput("30 9 * * *").task, "hn-top10");
+  assert.equal(scheduledTaskInput("30 3 * * *").task, "apple-top-podcasts");
   assert.equal(scheduledTaskInput("unknown schedule").task, "all");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(schedule, /^\d+ \d+ \* \* \*$/);
@@ -162,6 +163,12 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 50/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '6' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
+  assert.match(workflow, /PODCAST_GROQ_RETRY_ATTEMPTS: 3/);
+  assert.match(workflow, /PODCAST_GROQ_RETRY_DELAY_MS: 30000/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);
@@ -176,6 +183,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
+  assert.match(generator, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT/);
 });
 
 test("RSS source builders do not truncate summary evidence with clipText", () => {
