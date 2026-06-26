@@ -181,10 +181,19 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     const prompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", `${task}.md`), "utf8");
     assert.match(prompt, /从零|入门教程|一文[读懂搞懂]/, `${task} prompt should mirror low-signal validator terms`);
   }
+  const itemSummaryPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-digest-item-summary.md"), "utf8");
+  const sectionPlannerPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-digest-section-planner.md"), "utf8");
+  const techDailyPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "tech-daily.md"), "utf8");
+  assert.match(itemSummaryPrompt, /一次只处理一条候选/);
+  assert.match(sectionPlannerPrompt, /动态规划《技术日报》的栏目/);
+  assert.match(techDailyPrompt, /不要固定套用 AI\/工程\/商业三段式/);
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
   assert.match(generator, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT/);
+  assert.match(generator, /buildCombinedTechDailySource/);
+  assert.match(generator, /daily-digest-item-summary\.md/);
+  assert.match(generator, /daily-digest-section-planner\.md/);
 });
 
 test("RSS source builders do not truncate summary evidence with clipText", () => {
@@ -694,8 +703,9 @@ Fear & Greed：17（Extreme Fear）。现货偏弱、情绪极恐、近端下行
   assert.match(techBusinessWeeklyMarkdown, /^## 政策、监管与安全/m);
   assert.match(techBusinessWeeklyMarkdown, /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察/);
   assert.doesNotMatch(techBusinessWeeklyMarkdown.split("---\n\n").at(-1) || "", /娱乐八卦|购物推荐|工具榜单|融资快讯|投资建议|买卖建议|股价预测|赋能|颠覆|革命性|不容错过|值得关注/);
-  assert.match(techDailyMarkdown, /title: "技术工程日报｜2099-01-06"/);
-  assert.match(techDailyMarkdown, /技术工程日报/);
+  assert.match(techDailyMarkdown, /title: "技术日报｜2099-01-06"/);
+  assert.match(techDailyMarkdown, /技术日报/);
+  assert.match(techDailyMarkdown, /今日总览/);
   assert.match(techDailyMarkdown, /工程影响|工程风险|架构|版本|安全|迁移/);
   assert.match(aiDailyMarkdown, /title: "AI 工程日报｜2099-01-06"/);
   assert.match(aiDailyMarkdown, /AI工程日报/);
@@ -786,9 +796,13 @@ test("daily digest verifier accepts one high-quality item", () => {
     task: "tech-daily",
     date: "2099-01-06",
     repo,
-    body: `# 技术工程日报｜2099-01-06
+    body: `# 技术日报｜2099-01-06
 
-## 今日工程快讯
+## 今日总览
+
+今天的技术日报只保留一条高质量工程事件，避免为了数量塞入低相关内容。
+
+## 平台工程
 
 ### [PostgreSQL release improves planner behavior](https://example.com/postgresql-planner)
 

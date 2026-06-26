@@ -70,10 +70,10 @@ export const BLOG_TASKS = {
     fileName: "科技商业观察-{date}.md",
   },
   "tech-daily": {
-    titlePrefix: "技术工程日报",
-    tag: "技术工程日报",
-    description: "每日技术工程深度整理，覆盖过去 24 小时的工程实践、开源项目、版本、安全、架构与工具链变化。",
-    fileName: "技术工程日报-{date}.md",
+    titlePrefix: "技术日报",
+    tag: "技术日报",
+    description: "每日技术综合整理，基于文章级 AI 摘要动态聚合过去 24 小时的 AI、工程、安全、平台与科技商业变化。",
+    fileName: "技术日报-{date}.md",
   },
   "ai-daily": {
     titlePrefix: "AI 工程日报",
@@ -93,7 +93,7 @@ export type Task = keyof typeof BLOG_TASKS;
 export type TaskInput = Task | "all" | "daily-digests";
 
 export const TASKS = Object.keys(BLOG_TASKS) as Task[];
-export const DAILY_DIGEST_TASKS = ["tech-daily", "ai-daily", "tech-business-daily"] as const satisfies readonly Task[];
+export const DAILY_DIGEST_TASKS = ["tech-daily"] as const satisfies readonly Task[];
 export const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly", ...DAILY_DIGEST_TASKS]);
 
 export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number }> = {
