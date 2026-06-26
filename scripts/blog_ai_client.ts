@@ -59,7 +59,7 @@ export async function callBlogAi({
     if (!content?.trim()) throw new Error(`AI response missing message content: ${raw}`);
     return content;
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") throw new Error(`AI request timed out after ${timeoutMs}ms`);
+    if (error instanceof Error && (error.name === "AbortError" || error.message === "This operation was aborted")) throw new Error(`AI request timed out after ${timeoutMs}ms`);
     if (error instanceof Error && /^(AI provider HTTP|AI response missing message content:)/.test(error.message)) throw error;
     if (error instanceof Error) throw new Error(`AI request failed: ${error.message}`);
     throw new Error(`AI request failed: ${String(error)}`);

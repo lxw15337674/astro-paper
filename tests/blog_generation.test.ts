@@ -128,7 +128,8 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   }
   assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
   assert.match(workflow, /github\.event\.inputs\.task == 'apple-top-podcasts'/);
-  assert.match(workflow, /AI_TIMEOUT_MS: 300000/);
+  assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
+  assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 50/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '6' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
@@ -165,6 +166,12 @@ test("Yahoo Finance article extraction prefers public articleBody text", () => {
   const text = extractYahooFinanceArticleText(html, "https://finance.yahoo.com/example");
   assert.match(text, /Stocks closed mixed/);
   assert.match(text, /did not by itself prove fund flows/);
+});
+
+test("market source uses the live EastMoney secid for Hang Seng Tech", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "scripts/market_daily_source.ts"), "utf8");
+  assert.match(source, /hstech: "124\.HSTECH"/);
+  assert.doesNotMatch(source, /hstech: "100\.HSTECH"/);
 });
 
 test("Yahoo Finance article evidence is rejected when index moves conflict with closing data", () => {

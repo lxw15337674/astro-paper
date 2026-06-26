@@ -17,7 +17,7 @@ const EASTMONEY_INDEX_SECS = {
   cyb: "0.399006",
   hsi: "100.HSI",
   hscei: "100.HSCEI",
-  hstech: "100.HSTECH",
+  hstech: "124.HSTECH",
 };
 
 const CLOSED_TEXT = {

@@ -110,7 +110,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PODCAST_TRANSCRIBE_PROVIDER: groq,local
-          AI_TIMEOUT_MS: 300000
+          AI_TIMEOUT_MS: 600000
+          PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000
           PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
           PODCAST_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '3' }}
           APPLE_TOP_PODCASTS_COUNT: 50
