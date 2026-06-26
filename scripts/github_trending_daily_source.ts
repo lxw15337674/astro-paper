@@ -103,6 +103,7 @@ export function sanitizeReadmeText(text: string): string {
       .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
       .replace(/https?:\/\/\S+/g, " ")
+      .replace(/\{\{\s*([^{}]+?)\s*\}\}/g, "$1")
       .replace(/&nbsp;/gi, " ")
       .replace(/&amp;/gi, "&")
       .replace(/&lt;/gi, "<")

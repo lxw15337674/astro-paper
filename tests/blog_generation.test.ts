@@ -55,6 +55,12 @@ test("blog source evidence keeps long text sentinels instead of truncating", () 
   assert.match(readme, /README TAIL SENTINEL/);
 });
 
+test("GitHub Trending README sanitizer removes template delimiters from evidence", () => {
+  const readme = sanitizeReadmeText("Run docker inspect trek --format '{{json .Mounts}}' before updating.");
+  assert.match(readme, /json \.Mounts/);
+  assert.doesNotMatch(readme, /\{\{[^}]+\}\}/);
+});
+
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.match(validateMarkdown("## 标题\n\n### [@ai-sdk/workflow-harness@1.0.0-beta.0](https://example.com)\n\n" + "这是一段完整中文正文。".repeat(30)), /@ai-sdk\/workflow-harness v1\.0\.0-beta\.0/);
