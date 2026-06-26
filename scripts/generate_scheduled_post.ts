@@ -360,6 +360,10 @@ function promptWithValidationFeedback(prompt: string, task: Task, previousError:
 请重新生成完整 Markdown 正文，并严格避开上述失败原因；不要复述错误原因，不要输出解释，不要输出代码围栏。`;
 }
 
+function shouldRetryWithValidationFeedback(error: string): boolean {
+  return !/^(AI request timed out after|AI request failed:)/.test(error);
+}
+
 async function renderLiveAiMarkdownWithSourceValidation(prompt: string, model: string, task: Task, artifactsDir: string, source: string): Promise<string> {
   const attempts = retryAttempts();
   let lastError = "";
@@ -376,7 +380,7 @@ async function renderLiveAiMarkdownWithSourceValidation(prompt: string, model: s
       lastError = error instanceof Error ? error.message : String(error);
       writeArtifact(artifactsDir, task, `ai-error-attempt-${attempt}.txt`, lastError);
       if (attempt < attempts) {
-        attemptPrompt = promptWithValidationFeedback(prompt, task, lastError);
+        attemptPrompt = shouldRetryWithValidationFeedback(lastError) ? promptWithValidationFeedback(prompt, task, lastError) : prompt;
         writeStderr(`WARN: ${task} AI generation attempt ${attempt}/${attempts} failed; retrying with validation feedback: ${lastError}`);
       }
     }

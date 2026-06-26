@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
+import { callBlogAi } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
@@ -55,10 +56,33 @@ test("blog source evidence keeps long text sentinels instead of truncating", () 
   assert.match(readme, /README TAIL SENTINEL/);
 });
 
+test("GitHub Trending README sanitizer removes template delimiters from evidence", () => {
+  const readme = sanitizeReadmeText("Run docker inspect trek --format '{{json .Mounts}}' before updating.");
+  assert.match(readme, /json \.Mounts/);
+  assert.doesNotMatch(readme, /\{\{[^}]+\}\}/);
+});
+
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.match(validateMarkdown("## 标题\n\n### [@ai-sdk/workflow-harness@1.0.0-beta.0](https://example.com)\n\n" + "这是一段完整中文正文。".repeat(30)), /@ai-sdk\/workflow-harness v1\.0\.0-beta\.0/);
   assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
+});
+
+test("AI client surfaces aborts as timeout errors", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const error = new Error("This operation was aborted");
+    error.name = "AbortError";
+    throw error;
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => callBlogAi({ prompt: "hello", apiKey: "test", baseUrl: "https://api.example.com/v1", model: "demo", timeoutMs: 25 }),
+      /AI request timed out after 25ms/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("common article rules require knowledge and viewpoint extraction", () => {
@@ -102,9 +126,12 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
   }
   assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
+  assert.match(workflow, /github\.event\.inputs\.task == 'apple-top-podcasts'/);
+  assert.match(workflow, /AI_TIMEOUT_MS: 300000/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);
+  assert.doesNotMatch(workflow, /Using Groq-only transcription for apple-top-podcasts/);
   assert.match(workflow, /default:\s*hn-top10/);
   assert.doesNotMatch(workflow, /default:\s*all/);
   assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
@@ -294,6 +321,54 @@ test("foreign tech podcast source supports curated episodes with transcripts", a
     restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     restoreEnv("PODCAST_TRANSCRIPT_CHARS", previousTranscriptChars);
+    fs.rmSync(curatedFile, { force: true });
+  }
+});
+
+test("foreign tech podcast source trims oversized transcripts for prompt stability", async () => {
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-trim-${Date.now()}-${Math.random()}.json`);
+  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
+  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  const previousPromptTranscriptChars = process.env.PODCAST_PROMPT_TRANSCRIPT_CHARS;
+  const transcript = `HEAD_SENTINEL ${"engineering signal ".repeat(2200)} TAIL_SENTINEL`;
+  writeCuratedPodcastFile(curatedFile, [
+    {
+      archiveDate: "2026-06-23",
+      title: "Operating AI Platforms Under Load",
+      show: "Latent Space",
+      source: "Curated Transcript",
+      guest: "Platform Lead",
+      date: "2026-06-23",
+      link: "https://example.com/podcast/platform-load",
+      description: "Curated episode with a very long transcript.",
+      transcript,
+    },
+  ]);
+  process.env.PODCAST_DISABLE_RSS = "true";
+  process.env.PODCAST_MIN_EPISODES = "1";
+  process.env.PODCAST_MAX_EPISODES = "1";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
+  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
+  process.env.PODCAST_PROMPT_TRANSCRIPT_CHARS = "4000";
+  try {
+    const source = await buildForeignTechPodcastSource("2026-06-23");
+    assert.match(source, /HEAD_SENTINEL/);
+    assert.match(source, /TAIL_SENTINEL/);
+    assert.match(source, /\[transcript clipped for prompt\]/);
+    assert.ok(source.length < transcript.length);
+  } finally {
+    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
+    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    restoreEnv("PODCAST_PROMPT_TRANSCRIPT_CHARS", previousPromptTranscriptChars);
     fs.rmSync(curatedFile, { force: true });
   }
 });

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { bjtDateString, compact, ensureDir, fetchText, parseArgs, repoRoot, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, clipText, compact, ensureDir, fetchText, parseArgs, repoRoot, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
 import { historicalPodcastFingerprints, podcastFingerprints } from "./foreign_tech_podcast_dedupe.ts";
 
 type FeedSource = {
@@ -238,6 +238,7 @@ function normalizedTranscript(episode: Episode): string {
 function hasUsableTranscript(episode: Episode): boolean {
   return normalizedTranscript(episode).length >= minTranscriptChars();
 }
+
 function rssDisabled(): boolean {
   return ["1", "true", "yes"].includes((process.env.PODCAST_DISABLE_RSS || "").toLowerCase());
 }
@@ -246,6 +247,21 @@ function audioTranscribeEnabled(): boolean {
   return !["0", "false", "no"].includes((process.env.PODCAST_AUDIO_TRANSCRIBE || "true").toLowerCase());
 }
 
+function promptTranscriptChars(): number {
+  return envNumber("PODCAST_PROMPT_TRANSCRIPT_CHARS", 12_000);
+}
+
+function transcriptForPrompt(episode: Episode): string {
+  const transcript = normalizedTranscript(episode);
+  const maxChars = promptTranscriptChars();
+  if (transcript.length <= maxChars) return transcript;
+  const marker = " [transcript clipped for prompt] ";
+  const available = maxChars - marker.length;
+  if (available < 2_000) return clipText(transcript, maxChars);
+  const headChars = Math.min(Math.max(Math.floor(available * 0.65), 1_000), available - 1_000);
+  const tailChars = available - headChars;
+  return `${clipText(transcript, headChars)}${marker}${transcript.slice(-tailChars).trimStart()}`.trim();
+}
 
 function curatedEpisodesFile(): string {
   return process.env.PODCAST_CURATED_EPISODES_FILE || path.join(repoRoot(), "data/foreign-tech-podcast/curated-episodes.json");
@@ -673,7 +689,7 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
       "",
       "#### Transcript",
       "",
-      String(episode.transcript || ""),
+      transcriptForPrompt(episode),
       "",
     );
   }

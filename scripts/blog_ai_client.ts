@@ -4,6 +4,11 @@ export const DEFAULT_AI_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_AI_MODEL = "gpt-4o-mini";
 export const DEFAULT_MAX_TOKENS = 4096;
 
+function envDurationMs(name: string, fallback: number): number {
+  const value = Number(process.env[name] || "");
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 export function chatCompletionsUrl(baseUrl: string): string {
   const cleaned = baseUrl.replace(/\/+$/, "");
   return cleaned.endsWith("/chat/completions") ? cleaned : `${cleaned}/chat/completions`;
@@ -14,7 +19,7 @@ export async function callBlogAi({
   apiKey,
   baseUrl,
   model,
-  timeoutMs = 120_000,
+  timeoutMs = envDurationMs("AI_TIMEOUT_MS", 120_000),
   maxTokens = DEFAULT_MAX_TOKENS,
 }: {
   prompt: string;
@@ -53,6 +58,11 @@ export async function callBlogAi({
     const content = data.choices?.[0]?.message?.content;
     if (!content?.trim()) throw new Error(`AI response missing message content: ${raw}`);
     return content;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw new Error(`AI request timed out after ${timeoutMs}ms`);
+    if (error instanceof Error && /^(AI provider HTTP|AI response missing message content:)/.test(error.message)) throw error;
+    if (error instanceof Error) throw new Error(`AI request failed: ${error.message}`);
+    throw new Error(`AI request failed: ${String(error)}`);
   } finally {
     clearTimeout(timer);
   }
