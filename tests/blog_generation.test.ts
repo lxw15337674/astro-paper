@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
-import { callBlogAi } from "../scripts/blog_ai_client.ts";
+import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant } from "../scripts/blog_common.ts";
@@ -85,6 +85,37 @@ test("AI client surfaces aborts as timeout errors", async () => {
   }
 });
 
+test("AI client fails over to deepseek when primary request fails", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input, init) => {
+    calls.push(String(input));
+    const body = JSON.parse(String(init?.body || "{}")) as { model?: string };
+    if (body.model === "primary-model") {
+      return new Response(JSON.stringify({ error: { message: "upstream overloaded" } }), { status: 503 });
+    }
+    return new Response(JSON.stringify({ choices: [{ message: { content: "## 标题\n\n" + "有效正文".repeat(80) } }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const result = await callBlogAiWithFailover({
+      prompt: "hello",
+      primaryConfig: { apiKey: "primary-key", baseUrl: "https://primary.example.com/v1", model: "primary-model" },
+      fallbackConfig: { apiKey: "fallback-key", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash" },
+      timeoutMs: 25,
+    });
+    assert.equal(result.usedFallback, true);
+    assert.equal(result.config.model, "deepseek-v4-flash");
+    assert.equal(result.config.baseUrl, "https://api.deepseek.com");
+    assert.match(result.content, /^## 标题/);
+    assert.deepEqual(calls, [
+      "https://primary.example.com/v1/chat/completions",
+      "https://api.deepseek.com/chat/completions",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("common article rules require knowledge and viewpoint extraction", () => {
   const commonRules = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "_common-article-rules.md"), "utf8");
   assert.match(commonRules, /提炼优先于描述/);
@@ -128,6 +159,9 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
   assert.match(workflow, /github\.event\.inputs\.task == 'apple-top-podcasts'/);
   assert.match(workflow, /AI_TIMEOUT_MS: 300000/);
+  assert.match(workflow, /AI_FALLBACK_API_KEY:/);
+  assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
+  assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);

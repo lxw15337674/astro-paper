@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { avoidCloudflareEmailObfuscation, parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
-import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, DEFAULT_MAX_TOKENS, callBlogAi, chatCompletionsUrl } from "./blog_ai_client.ts";
+import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, DEFAULT_MAX_TOKENS, callBlogAiWithFailover, chatCompletionsUrl, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
 
 export { chatCompletionsUrl };
 
@@ -45,20 +45,23 @@ export async function main(): Promise<void> {
   const mockDir = stringArg(args, "mock-response-dir");
   if (mockDir) mockFile = path.join(path.resolve(mockDir), `${task}.md`);
 
-  const rawMarkdown = mockFile
-    ? fs.readFileSync(path.resolve(mockFile), "utf8")
-    : await callBlogAi({
-        prompt,
+  let rawMarkdown = mockFile ? fs.readFileSync(path.resolve(mockFile), "utf8") : "";
+  if (!mockFile) {
+    const result = await callBlogAiWithFailover({
+      prompt,
+      primaryConfig: envAiConfig({
         apiKey: stringArg(args, "api-key", process.env.AI_API_KEY || ""),
         baseUrl: stringArg(args, "base-url", process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL),
         model: stringArg(args, "model", process.env.AI_MODEL || DEFAULT_AI_MODEL),
-        timeoutMs: Number(stringArg(args, "timeout", "120")) * 1000,
-        maxTokens: Number(stringArg(args, "max-tokens", String(DEFAULT_MAX_TOKENS))),
-      });
-  if (!mockFile) {
-    if (!stringArg(args, "api-key", process.env.AI_API_KEY || "")) throw new Error("AI_API_KEY is required for live AI blog generation");
-    if (!stringArg(args, "base-url", process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL)) throw new Error("AI_BASE_URL is required for live AI blog generation");
-    if (!stringArg(args, "model", process.env.AI_MODEL || DEFAULT_AI_MODEL)) throw new Error("AI_MODEL is required for live AI blog generation");
+      }),
+      fallbackConfig: envFallbackAiConfig(),
+      timeoutMs: Number(stringArg(args, "timeout", "120")) * 1000,
+      maxTokens: Number(stringArg(args, "max-tokens", String(DEFAULT_MAX_TOKENS))),
+    });
+    rawMarkdown = result.content;
+    if (result.usedFallback) {
+      writeStderr(`WARN: primary AI request failed; using fallback model ${result.config.model} via ${result.config.baseUrl}`);
+    }
   }
   writeStdout(validateMarkdown(rawMarkdown));
 }
