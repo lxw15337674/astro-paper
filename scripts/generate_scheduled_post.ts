@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
-import { callBlogAi, envAiConfig } from "./blog_ai_client.ts";
+import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
 import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
@@ -21,6 +21,8 @@ type ResultItem = ReturnType<typeof archivePost> & {
   error?: string;
   generation?: {
     ai_model: string;
+    ai_base_url: string;
+    ai_fallback_used: boolean;
     source_artifact: string;
     prompt_artifact: string;
     ai_response_artifact: string;
@@ -130,9 +132,16 @@ function writeArtifact(artifactsDir: string, task: string, name: string, content
   return file;
 }
 
-async function callAi(prompt: string, model: string): Promise<string> {
-  const config = envAiConfig({ model });
-  return callBlogAi({ prompt, ...config });
+async function callAi(prompt: string, model: string): Promise<AiCallResult> {
+  const result = await callBlogAiWithFailover({
+    prompt,
+    primaryConfig: envAiConfig({ model }),
+    fallbackConfig: envFallbackAiConfig(),
+  });
+  if (result.usedFallback) {
+    writeStderr(`WARN: primary AI request failed; using fallback model ${result.config.model} via ${result.config.baseUrl}`);
+  }
+  return result;
 }
 
 function retryAttempts(): number {
@@ -218,9 +227,9 @@ async function selectTechBusinessSource({
   writeArtifact(artifactsDir, "tech-business-weekly", "selector-source.raw.md", source);
   writeArtifact(artifactsDir, "tech-business-weekly", "selector-prompt.md", selectorPrompt);
   const response = await callAi(selectorPrompt, model);
-  writeArtifact(artifactsDir, "tech-business-weekly", "selector-response.json", response);
+  writeArtifact(artifactsDir, "tech-business-weekly", "selector-response.json", response.content);
   const maxId = (source.match(/^##\s+\d+\.\s+/gm) || []).length;
-  const ids = parseSelectedIds(response, maxId);
+  const ids = parseSelectedIds(response.content, maxId);
   writeArtifact(artifactsDir, "tech-business-weekly", "selector-selected-ids.json", JSON.stringify({ selected: ids }, null, 2));
   const selectedSource = filterNumberedSource(source, ids);
   writeArtifact(artifactsDir, "tech-business-weekly", "source.selected.md", selectedSource);
@@ -275,9 +284,9 @@ async function classifyDailyDigestSources({
   writeArtifact(artifactsDir, "daily-digests", "classifier-source.raw.md", source);
   writeArtifact(artifactsDir, "daily-digests", "classifier-prompt.md", classifierPrompt);
   const response = await callAi(classifierPrompt, model);
-  writeArtifact(artifactsDir, "daily-digests", "classifier-response.json", response);
+  writeArtifact(artifactsDir, "daily-digests", "classifier-response.json", response.content);
   const maxId = countNumberedBlocks(source);
-  const assignments = parseDailyAssignments(response, maxId);
+  const assignments = parseDailyAssignments(response.content, maxId);
   writeArtifact(artifactsDir, "daily-digests", "classifier-assignments.json", JSON.stringify(assignments, null, 2));
   const result: Record<string, string> = {};
   for (const task of DAILY_DIGEST_TASKS) {
@@ -375,7 +384,13 @@ function shouldRetryWithValidationFeedback(error: string): boolean {
   return !/^(AI request timed out after|AI request failed:)/.test(error);
 }
 
-async function renderLiveAiMarkdownWithSourceValidation(prompt: string, model: string, task: Task, artifactsDir: string, source: string): Promise<string> {
+async function renderLiveAiMarkdownWithSourceValidation(
+  prompt: string,
+  model: string,
+  task: Task,
+  artifactsDir: string,
+  source: string,
+): Promise<{ markdown: string; ai: AiCallResult }> {
   const attempts = retryAttempts();
   let lastError = "";
   let attemptPrompt = prompt;
@@ -383,10 +398,10 @@ async function renderLiveAiMarkdownWithSourceValidation(prompt: string, model: s
     await sleep(retryDelayMs(attempt));
     if (attempt > 1) writeArtifact(artifactsDir, task, `retry-prompt-attempt-${attempt}.md`, attemptPrompt);
     try {
-      const rawMarkdown = await callAi(attemptPrompt, model);
-      const markdown = normalizeMarkdownLinksFromSourceTitles(validateMarkdown(rawMarkdown), source, task);
+      const ai = await callAi(attemptPrompt, model);
+      const markdown = normalizeMarkdownLinksFromSourceTitles(validateMarkdown(ai.content), source, task);
       assertMarkdownUsesOnlySourceLinks(markdown, source, task);
-      return markdown;
+      return { markdown, ai };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       writeArtifact(artifactsDir, task, `ai-error-attempt-${attempt}.txt`, lastError);
@@ -423,12 +438,23 @@ async function renderWithAi({
   const prompt = renderPrompt({ task, date, sourceText: source, promptDir: resolvedPromptDir });
   const promptArtifact = writeArtifact(artifactsDir, task, "prompt.md", prompt);
   const mockFile = mockResponseDir ? path.join(mockResponseDir, `${task}.md`) : "";
-  const markdown = mockFile ? validateMarkdown(fs.readFileSync(mockFile, "utf8")) : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, artifactsDir, source);
-  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", markdown);
+  const rendered = mockFile
+    ? {
+        markdown: validateMarkdown(fs.readFileSync(mockFile, "utf8")),
+        ai: {
+          content: "",
+          config: envAiConfig({ model }),
+          usedFallback: false,
+        },
+      }
+    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, artifactsDir, source);
+  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", rendered.markdown);
   return {
-    markdown,
+    markdown: rendered.markdown,
     metadata: {
-      ai_model: model || process.env.AI_MODEL || "",
+      ai_model: rendered.ai.config.model,
+      ai_base_url: rendered.ai.config.baseUrl,
+      ai_fallback_used: rendered.ai.usedFallback,
       source_artifact: sourceArtifact,
       prompt_artifact: promptArtifact,
       ai_response_artifact: responseArtifact,
