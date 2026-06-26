@@ -7,7 +7,7 @@ import { callBlogAi, envAiConfig } from "./blog_ai_client.ts";
 import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
-import { buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
+import { PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
 import { generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
@@ -65,6 +65,17 @@ function skippedLowQuality(task: Task, date: string, reason: string): ResultItem
     tags: taskTags(task),
     skip_reason: reason,
   };
+}
+
+
+function envFlag(name: string, fallback = false): boolean {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  return !["0", "false", "no", "off"].includes(raw.toLowerCase());
+}
+
+function shouldSkipInsufficientAppleTopPodcasts(error: unknown, task: Task): error is PodcastSourceInsufficientEpisodesError {
+  return task === "apple-top-podcasts" && error instanceof PodcastSourceInsufficientEpisodesError && envFlag("APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT", false);
 }
 
 function failedTask(task: Task, date: string, error: unknown): ResultItem {
@@ -504,6 +515,12 @@ async function main(): Promise<void> {
         }),
       );
     } catch (error) {
+      if (shouldSkipInsufficientAppleTopPodcasts(error, task)) {
+        const skipped = skippedLowQuality(task, date, error.message);
+        results.push(skipped);
+        writeStderr(`WARN: ${task} skipped: ${error.message}`);
+        continue;
+      }
       const failed = failedTask(task, date, error);
       results.push(failed);
       writeStderr(`ERROR: ${task} generation failed: ${failed.error}`);
