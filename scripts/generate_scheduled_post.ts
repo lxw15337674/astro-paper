@@ -542,9 +542,10 @@ async function main(): Promise<void> {
       );
     } catch (error) {
       if (shouldSkipInsufficientAppleTopPodcasts(error, task)) {
-        const skipped = skippedLowQuality(task, date, error.message);
+        const message = error instanceof Error ? error.message : String(error);
+        const skipped = skippedLowQuality(task, date, message);
         results.push(skipped);
-        writeStderr(`WARN: ${task} skipped: ${error.message}`);
+        writeStderr(`WARN: ${task} skipped: ${message}`);
         continue;
       }
       const failed = failedTask(task, date, error);
