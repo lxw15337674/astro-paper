@@ -101,7 +101,7 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "30 1 * * *": { task: "foreign-tech-podcast" },
   "30 3 * * *": { task: "apple-top-podcasts" },
   "30 9 * * *": { task: "hn-top10" },
-  "0 14 * * *": { task: "asia-market-daily" },
+  "0 10 * * 1-5": { task: "asia-market-daily" },
   "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },
   "30 22 * * *": { task: "us-market-daily", dateOffset: -1 },
   "0 23 * * *": { task: "github-trending-daily" },

@@ -41,8 +41,8 @@ on:
     - cron: "30 3 * * *"
     # 17:30 Asia/Shanghai: Hacker News Top 10 after the US morning discussion window has activity.
     - cron: "30 9 * * *"
-    # 22:00 Asia/Shanghai: A股 + 港股 after local market close.
-    - cron: "0 14 * * *"
+    # 18:00 Asia/Shanghai on weekdays: A股 + 港股 after local market close.
+    - cron: "0 10 * * 1-5"
     # 01:00 Asia/Shanghai next day: digital assets snapshot for previous BJT date.
     - cron: "0 17 * * *"
     # 06:30 Asia/Shanghai next day: US market after regular close, archived to previous BJT date.
