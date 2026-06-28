@@ -180,11 +180,15 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 50/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '6' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '3' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '3' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
-  assert.match(workflow, /PODCAST_GROQ_RETRY_ATTEMPTS: 3/);
-  assert.match(workflow, /PODCAST_GROQ_RETRY_DELAY_MS: 30000/);
+  assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 120000/);
+  assert.match(workflow, /PODCAST_GROQ_TIMEOUT_MS: 180000/);
+  assert.match(workflow, /PODCAST_GROQ_RETRY_ATTEMPTS: 1/);
+  assert.match(workflow, /PODCAST_GROQ_RETRY_DELAY_MS: 10000/);
+  assert.match(workflow, /PODCAST_WHISPER_TIMEOUT_MS: 180000/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);
