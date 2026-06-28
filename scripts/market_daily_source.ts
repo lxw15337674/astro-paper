@@ -111,6 +111,16 @@ type YahooChartPayload = {
 
 type YahooSymbol = { symbol: string; code: string; name: string; sina?: string; sinaMarket?: "cn" | "hk" };
 
+export class MarketSourceUnavailableError extends Error {
+  constructor(
+    readonly task: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MarketSourceUnavailableError";
+  }
+}
+
 const YAHOO_SYMBOLS = {
   aShare: [
     { symbol: "000001.SS", code: "000001", name: "上证指数", sina: "sh000001", sinaMarket: "cn" },
@@ -1086,6 +1096,9 @@ export async function generateUsMarketDaily(date = bjtDateString()): Promise<str
     ? await Promise.all([usSectorEtfs(date), yahooInstruments(US_CORE_STOCKS, date), yahooInstruments(US_BROAD_ETFS, date), yahooFinanceMarketArticles(date, snapshot)])
     : [[], [], [], []];
   const sections = [buildUsSection(rows, date, sectors, stocks, broadEtfs, externalArticles)];
+  if (!sections[0].open) {
+    throw new MarketSourceUnavailableError("us-market-daily", sections[0].summary || "美股市场未产生或未获取到完整常规收盘数据");
+  }
   return `${[buildSummary(sections, "美股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
 

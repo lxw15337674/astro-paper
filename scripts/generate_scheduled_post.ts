@@ -8,7 +8,7 @@ import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, r
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
-import { generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
+import { MarketSourceUnavailableError, generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
 import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
@@ -76,8 +76,11 @@ function envFlag(name: string, fallback = false): boolean {
   return !["0", "false", "no", "off"].includes(raw.toLowerCase());
 }
 
-function shouldSkipInsufficientAppleTopPodcasts(error: unknown, task: Task): error is PodcastSourceInsufficientEpisodesError {
-  return task === "apple-top-podcasts" && error instanceof PodcastSourceInsufficientEpisodesError && envFlag("APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT", false);
+function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
+  if (error instanceof MarketSourceUnavailableError && error.task === task) return true;
+  if (!(error instanceof PodcastSourceInsufficientEpisodesError)) return false;
+  if (task === "foreign-tech-podcast") return true;
+  return task === "apple-top-podcasts" && envFlag("APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT", false);
 }
 
 function failedTask(task: Task, date: string, error: unknown): ResultItem {
@@ -765,7 +768,7 @@ async function main(): Promise<void> {
         }),
       );
     } catch (error) {
-      if (shouldSkipInsufficientAppleTopPodcasts(error, task)) {
+      if (shouldSkipSourceUnavailable(error, task)) {
         const message = error instanceof Error ? error.message : String(error);
         const skipped = skippedLowQuality(task, date, message);
         results.push(skipped);

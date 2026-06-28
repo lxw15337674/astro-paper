@@ -8,8 +8,8 @@ import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
-import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
-import { bjtArchiveInstant } from "../scripts/blog_common.ts";
+import { FEEDS, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
+import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
@@ -85,6 +85,20 @@ test("AI client surfaces aborts as timeout errors", async () => {
   }
 });
 
+test("fetchText surfaces aborts as source-specific timeout errors", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const error = new Error("This operation was aborted");
+    error.name = "AbortError";
+    throw error;
+  }) as typeof fetch;
+  try {
+    await assert.rejects(() => fetchText("https://example.com/feed.xml", { timeoutMs: 25 }), /request timed out after 25ms for https:\/\/example\.com\/feed\.xml/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("AI client fails over to deepseek when primary request fails", async () => {
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
@@ -151,7 +165,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.equal(scheduledTaskInput("30 3 * * *").task, "apple-top-podcasts");
   assert.equal(scheduledTaskInput("unknown schedule").task, "all");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
-    assert.match(schedule, /^\d+ \d+ \* \* \*$/);
+    assert.match(schedule, /^\d+ \d+ \* \* (?:\*|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)$/);
   }
   const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/scheduled-posts.yml"), "utf8");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
@@ -286,6 +300,25 @@ test("US market section degrades when 20-day average volume is unavailable", () 
 
   assert.match(section.markdown, /核心个股样本未获取到稳定数据/);
   assert.match(section.markdown, /已获取当日成交量，但近 20 个交易日均量不足，暂不判断放量或缩量/);
+});
+
+test("US market verifier accepts explicit no-complete-regular-close source boundary", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-us-market-boundary-"));
+  const sourcePath = path.join(repo, "us-source.md");
+  fs.writeFileSync(
+    sourcePath,
+    `## 美股
+
+美股当日未产生完整常规收盘数据，本节不做涨跌与板块强弱判断。
+
+数据边界：本篇不生成道指、纳指、标普500或行业 ETF 强弱结论。
+`,
+  );
+  const body = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/us-market-daily.md"), "utf8");
+  const result = archivePost({ task: "us-market-daily", date: "2099-01-02", repo, body, force: true });
+  const resultJson = path.join(repo, "result.json");
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [{ ...result, generation: { source_artifact: sourcePath } }] }));
+  assert.equal(verifyResultJson(repo, resultJson), 1);
 });
 
 test("daily digest source dedupes post-quantum executive order coverage", () => {
@@ -428,6 +461,83 @@ test("foreign tech podcast source trims oversized transcripts for prompt stabili
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     restoreEnv("PODCAST_PROMPT_TRANSCRIPT_CHARS", previousPromptTranscriptChars);
     fs.rmSync(curatedFile, { force: true });
+  }
+});
+
+test("foreign tech podcast skips a failed episode when enough transcript evidence remains", async () => {
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-audio-fail-${Date.now()}-${Math.random()}.json`);
+  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
+  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  const originalFetch = globalThis.fetch;
+  writeCuratedPodcastFile(curatedFile, [
+    {
+      archiveDate: "2026-06-23",
+      title: "Reliable Agent Review Loops",
+      show: "Curated Show",
+      source: "Curated Transcript",
+      date: "2026-06-23",
+      link: "https://example.com/podcast/review-loops",
+      description: "Curated episode with transcript.",
+      transcript: "This transcript discusses AI engineering review gates, rollback paths, observability, release safety, ownership queues, security boundaries, and production incident response in enough detail to support a useful technical podcast note.",
+    },
+    {
+      archiveDate: "2026-06-23",
+      title: "Blocked Audio Episode",
+      show: "Blocked Show",
+      source: "Blocked Feed",
+      date: "2026-06-23",
+      link: "https://example.com/podcast/blocked",
+      audioUrl: "https://example.com/audio/blocked.mp3",
+      description: "Episode with inaccessible audio.",
+    },
+  ]);
+  process.env.PODCAST_DISABLE_RSS = "true";
+  process.env.PODCAST_MIN_EPISODES = "1";
+  process.env.PODCAST_MAX_EPISODES = "2";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "true";
+  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
+  globalThis.fetch = (async () => new Response("forbidden", { status: 403 })) as typeof fetch;
+  try {
+    const source = await buildForeignTechPodcastSource("2026-06-23");
+    assert.match(source, /Reliable Agent Review Loops/);
+    assert.doesNotMatch(source, /Blocked Audio Episode/);
+  } finally {
+    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
+    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    globalThis.fetch = originalFetch;
+    fs.rmSync(curatedFile, { force: true });
+  }
+});
+
+test("Apple Top podcast source converts top-level source aborts into insufficient evidence", async () => {
+  const previousMinEpisodes = process.env.APPLE_TOP_PODCASTS_MIN_EPISODES;
+  const originalFetch = globalThis.fetch;
+  process.env.APPLE_TOP_PODCASTS_MIN_EPISODES = "2";
+  globalThis.fetch = (async () => {
+    const error = new Error("This operation was aborted");
+    error.name = "AbortError";
+    throw error;
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => buildAppleTopPodcastsSource("2026-06-23"),
+      (error: unknown) =>
+        error instanceof PodcastSourceInsufficientEpisodesError &&
+        /Apple Top Shows podcast source found only 0 usable episodes; need 2/.test(error.message) &&
+        /request timed out after 20000ms/.test(error.message),
+    );
+  } finally {
+    restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
+    globalThis.fetch = originalFetch;
   }
 });
 

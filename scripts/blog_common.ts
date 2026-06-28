@@ -142,6 +142,11 @@ export async function fetchText(
       return text.slice(0, maxChars);
     }
     return text;
+  } catch (error) {
+    if (error instanceof Error && (error.name === "AbortError" || /operation was aborted/i.test(error.message))) {
+      throw new Error(`request timed out after ${timeoutMs}ms for ${url}`);
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }

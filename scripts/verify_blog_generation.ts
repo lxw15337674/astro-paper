@@ -66,12 +66,17 @@ function verifyNumberedSourceBlocks(relPath: string, source: string, minBlocks: 
   if (blocks.length < minBlocks) throw new Error(`${relPath} source has too few numbered items: ${blocks.length} < ${minBlocks}`);
 }
 
+function hasNoCompleteUsRegularCloseData(source: string): boolean {
+  return /美股当日未(?:产生|获取到)完整常规收盘数据/.test(source);
+}
+
 function verifySourceContract(repo: string, task: string, sourceArtifact: string): void {
   if (!sourceArtifact) throw new Error(`${task || "unknown task"} generated without source artifact`);
   const sourcePath = resolveArtifactPath(repo, sourceArtifact);
   if (!fs.existsSync(sourcePath)) throw new Error(`source artifact does not exist: ${sourceArtifact}`);
   const source = fs.readFileSync(sourcePath, "utf8");
   const relPath = path.relative(repo, sourcePath) || sourceArtifact;
+  if (task === "us-market-daily" && hasNoCompleteUsRegularCloseData(source)) return;
   if (source.trim().length < 80) throw new Error(`${relPath} source is too short to support generation`);
   for (const pattern of SOURCE_TECHNICAL_ERROR_PATTERNS) {
     if (pattern.test(source)) throw new Error(`${relPath} source contains technical error pattern: ${pattern.source}`);

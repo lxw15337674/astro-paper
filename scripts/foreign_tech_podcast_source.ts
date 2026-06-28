@@ -111,8 +111,9 @@ export class PodcastSourceInsufficientEpisodesError extends Error {
     readonly sourceName: string,
     readonly usableEpisodes: number,
     readonly requiredEpisodes: number,
+    detail = "",
   ) {
-    super(`${sourceName} podcast source found only ${usableEpisodes} usable episodes; need ${requiredEpisodes}`);
+    super(`${sourceName} podcast source found only ${usableEpisodes} usable episodes; need ${requiredEpisodes}${detail ? ` (${detail})` : ""}`);
     this.name = "PodcastSourceInsufficientEpisodesError";
   }
 }
@@ -771,8 +772,8 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
 }
 
 export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
-  const episodes = await enrichWithTranscripts(await fetchEpisodes(date));
-  if (episodes.length < minEpisodes()) throw new Error(`foreign tech podcast source found only ${episodes.length} usable episodes; need ${minEpisodes()}`);
+  const episodes = await enrichWithTranscripts(await fetchEpisodes(date), { tolerateFailures: true });
+  if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("foreign tech podcast", episodes.length, minEpisodes());
   return podcastSourceMarkdown(
     episodes,
     "以下证据来自海外科技访谈/深度讨论类播客 RSS/curated 条目及其可用 transcript。每个候选都必须有音频转写或仓库预置 transcript；没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
@@ -786,7 +787,13 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
 }
 
 export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promise<string> {
-  const episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true, transcribeDelayMs: appleTopPodcastsTranscribeDelayMs() });
+  let episodes: Episode[];
+  try {
+    episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true, transcribeDelayMs: appleTopPodcastsTranscribeDelayMs() });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", 0, appleTopPodcastsMinEpisodes(), `source unavailable: ${message}`);
+  }
   if (episodes.length < appleTopPodcastsMinEpisodes()) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", episodes.length, appleTopPodcastsMinEpisodes());
   return podcastSourceMarkdown(
     episodes,
