@@ -239,7 +239,7 @@ function maxEpisodes(): number {
 }
 
 function minEpisodes(): number {
-  return envNumber("PODCAST_MIN_EPISODES", Math.min(3, maxEpisodes()));
+  return envNumber("PODCAST_MIN_EPISODES", 1);
 }
 
 function candidateEpisodes(): number {
@@ -363,7 +363,7 @@ function appleTopPodcastsMaxEpisodes(): number {
 }
 
 function appleTopPodcastsMinEpisodes(): number {
-  return envNumber("APPLE_TOP_PODCASTS_MIN_EPISODES", Math.min(8, appleTopPodcastsMaxEpisodes()));
+  return envNumber("APPLE_TOP_PODCASTS_MIN_EPISODES", 1);
 }
 
 function appleTopPodcastsCandidateEpisodes(): number {

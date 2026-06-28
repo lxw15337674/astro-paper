@@ -185,10 +185,10 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 50/);
   assert.match(workflow, /PODCAST_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
-  assert.match(workflow, /PODCAST_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
+  assert.match(workflow, /PODCAST_MIN_EPISODES: 1/);
   assert.match(workflow, /PODCAST_CANDIDATE_EPISODES: 8/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: 1/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);

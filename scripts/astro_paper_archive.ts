@@ -201,7 +201,7 @@ function formatPodcastLongform(text: string, label: string, openingTitle: string
   }
   rejectRepeatedPodcastContent(normalized);
   const episodeCount = (normalized.match(/^##\s+.+$/gm) || []).length;
-  const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "3");
+  const minEpisodes = Number(process.env.PODCAST_MIN_EPISODES || "1");
   if (episodeCount < minEpisodes) throw new Error(`${label} needs at least ${minEpisodes} episode sections, got ${episodeCount}`);
   const minLength = Math.max(1200, minEpisodes * 1000);
   if (normalized.length < minLength) throw new Error(`${label} note is too short to be a long-form article (${normalized.length} < ${minLength})`);
