@@ -175,6 +175,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /github\.event\.inputs\.task == 'apple-top-podcasts'/);
   assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
   assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
+  assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
