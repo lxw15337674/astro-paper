@@ -477,31 +477,47 @@ async function fetchEpisodes(date: string): Promise<Episode[]> {
 
 async function downloadAudio(url: string, file: string): Promise<void> {
   const maxBytes = envNumber("PODCAST_AUDIO_MAX_MB", 300) * 1024 * 1024;
-  const response = await fetch(url, {
-    redirect: "follow",
-    headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36" },
-  });
-  if (!response.ok) throw new Error(`audio download HTTP ${response.status}`);
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("audio response missing body");
-  ensureDir(path.dirname(file));
-  const out = fs.createWriteStream(file);
-  let total = 0;
+  const timeoutMs = envNumber("PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS", 10 * 60 * 1000);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) throw new Error(`audio exceeds ${Math.round(maxBytes / 1024 / 1024)}MB limit`);
-      out.write(value);
+    const response = await fetch(url, {
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`audio download HTTP ${response.status}`);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("audio response missing body");
+    ensureDir(path.dirname(file));
+    const out = fs.createWriteStream(file);
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) throw new Error(`audio exceeds ${Math.round(maxBytes / 1024 / 1024)}MB limit`);
+        out.write(value);
+      }
+    } finally {
+      out.end();
     }
+    await new Promise<void>((resolve, reject) => {
+      out.on("finish", resolve);
+      out.on("error", reject);
+    });
+  } catch (error) {
+    if (timedOut || (error instanceof Error && error.name === "AbortError")) throw new Error(`audio download timed out after ${timeoutMs}ms`);
+    throw error;
   } finally {
-    out.end();
+    clearTimeout(timer);
   }
-  await new Promise<void>((resolve, reject) => {
-    out.on("finish", resolve);
-    out.on("error", reject);
-  });
 }
 
 function splitExtraArgs(value = ""): string[] {

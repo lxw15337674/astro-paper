@@ -541,6 +541,79 @@ test("Apple Top podcast source converts top-level source aborts into insufficien
   }
 });
 
+test("foreign tech podcast skips audio downloads that exceed the per-episode timeout", async () => {
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-audio-timeout-${Date.now()}-${Math.random()}.json`);
+  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
+  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  const previousDownloadTimeout = process.env.PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS;
+  const originalFetch = globalThis.fetch;
+  writeCuratedPodcastFile(curatedFile, [
+    {
+      archiveDate: "2026-06-23",
+      title: "Reliable Agent Review Loops",
+      show: "Curated Show",
+      source: "Curated Transcript",
+      date: "2026-06-23",
+      link: "https://example.com/podcast/review-loops",
+      description: "Curated episode with transcript.",
+      transcript: "This transcript discusses AI engineering review gates, rollback paths, observability, release safety, ownership queues, security boundaries, and production incident response in enough detail to support a useful technical podcast note.",
+    },
+    {
+      archiveDate: "2026-06-23",
+      title: "Never Ending Audio Episode",
+      show: "Slow Show",
+      source: "Slow Feed",
+      date: "2026-06-23",
+      link: "https://example.com/podcast/slow",
+      audioUrl: "https://example.com/audio/slow.mp3",
+      description: "Episode with a hanging audio download.",
+    },
+  ]);
+  process.env.PODCAST_DISABLE_RSS = "true";
+  process.env.PODCAST_MIN_EPISODES = "1";
+  process.env.PODCAST_MAX_EPISODES = "2";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "true";
+  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
+  process.env.PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS = "10";
+  globalThis.fetch = (async (_url, init) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error("audio download missing abort signal"));
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        () => {
+          const error = new Error("This operation was aborted");
+          error.name = "AbortError";
+          reject(error);
+        },
+        { once: true },
+      );
+    })) as typeof fetch;
+  try {
+    const source = await buildForeignTechPodcastSource("2026-06-23");
+    assert.match(source, /Reliable Agent Review Loops/);
+    assert.doesNotMatch(source, /Never Ending Audio Episode/);
+  } finally {
+    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
+    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    restoreEnv("PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS", previousDownloadTimeout);
+    globalThis.fetch = originalFetch;
+    fs.rmSync(curatedFile, { force: true });
+  }
+});
+
 test("foreign tech podcast source rejects curated metadata-only episodes", async () => {
   const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-metadata-${Date.now()}-${Math.random()}.json`);
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
