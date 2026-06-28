@@ -28,10 +28,6 @@ on:
         description: "Maximum podcast episodes to transcribe. Empty = 1 so each podcast article focuses on one episode."
         required: false
         type: string
-      podcast_whisper_model:
-        description: "Fallback local Whisper model for podcast transcription. Empty = tiny.en."
-        required: false
-        type: string
   schedule:
     # 08:30 Asia/Shanghai every day: classify one global source pool and generate tech/AI/business daily digests.
     - cron: "30 0 * * *"
@@ -77,12 +73,6 @@ jobs:
           node-version: "24"
           cache: "pnpm"
 
-      - name: Use Python
-        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'apple-top-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '30 3 * * *' }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
       - name: "📦 Install dependencies"
         run: pnpm install --frozen-lockfile
 
@@ -91,12 +81,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-
-      - name: "🎙️ Install local Whisper dependencies"
-        if: ${{ github.event.inputs.task == 'foreign-tech-podcast' || github.event.inputs.task == 'apple-top-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '30 3 * * *' }}
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade openai-whisper
 
       - name: "📝 Generate posts"
         env:
@@ -118,9 +102,11 @@ jobs:
           PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000
           PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '1' }}
           PODCAST_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '1' }}
+          PODCAST_CANDIDATE_EPISODES: 8
           APPLE_TOP_PODCASTS_COUNT: 50
           APPLE_TOP_PODCASTS_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '1' }}
           APPLE_TOP_PODCASTS_MIN_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '1' }}
+          APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10
           APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true
           APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000
           PODCAST_FFMPEG_TIMEOUT_MS: 120000
@@ -128,8 +114,6 @@ jobs:
           PODCAST_GROQ_TIMEOUT_MS: 90000
           PODCAST_GROQ_RETRY_ATTEMPTS: 1
           PODCAST_GROQ_RETRY_DELAY_MS: 10000
-          PODCAST_WHISPER_MODEL: ${{ github.event.inputs.podcast_whisper_model || 'tiny.en' }}
-          PODCAST_WHISPER_TIMEOUT_MS: 180000
         run: |
           set -euo pipefail
           args=(--ai --artifacts-dir blog-generation-artifacts)

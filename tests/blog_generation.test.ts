@@ -177,21 +177,25 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
   assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
   assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: groq/);
+  assert.doesNotMatch(workflow, /openai-whisper/);
+  assert.doesNotMatch(workflow, /Install local Whisper dependencies/);
+  assert.doesNotMatch(workflow, /podcast_whisper_model/);
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 50/);
   assert.match(workflow, /PODCAST_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
   assert.match(workflow, /PODCAST_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
+  assert.match(workflow, /PODCAST_CANDIDATE_EPISODES: 8/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
   assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 120000/);
   assert.match(workflow, /PODCAST_GROQ_TIMEOUT_MS: 90000/);
   assert.match(workflow, /PODCAST_GROQ_RETRY_ATTEMPTS: 1/);
   assert.match(workflow, /PODCAST_GROQ_RETRY_DELAY_MS: 10000/);
-  assert.match(workflow, /PODCAST_WHISPER_TIMEOUT_MS: 180000/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);
@@ -546,6 +550,65 @@ test("Apple Top podcast source converts top-level source aborts into insufficien
   } finally {
     restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("Apple Top podcast tries extra candidates but keeps one episode article", async () => {
+  const previousMinEpisodes = process.env.APPLE_TOP_PODCASTS_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.APPLE_TOP_PODCASTS_MAX_EPISODES;
+  const previousCandidateEpisodes = process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
+  const originalFetch = globalThis.fetch;
+  const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), "apple-top-history-"));
+  process.env.APPLE_TOP_PODCASTS_MIN_EPISODES = "1";
+  process.env.APPLE_TOP_PODCASTS_MAX_EPISODES = "1";
+  process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES = "2";
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
+  process.env.PODCAST_HISTORY_POSTS_DIR = historyDir;
+  globalThis.fetch = (async input => {
+    const url = String(input);
+    if (url.includes("applemarketingtools.com")) {
+      return new Response(
+        JSON.stringify({
+          feed: {
+            results: [
+              { id: "bad-show", name: "Bad Show", artistName: "Bad Host", url: "https://podcasts.apple.com/bad", genres: ["Technology"] },
+              { id: "good-show", name: "Good Show", artistName: "Good Host", url: "https://podcasts.apple.com/good", genres: ["Technology"] },
+            ],
+          },
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("id=bad-show")) return new Response(JSON.stringify({ results: [{ collectionName: "Bad Show", artistName: "Bad Host", feedUrl: "https://feeds.example.com/bad.xml" }] }), { status: 200 });
+    if (url.includes("id=good-show")) return new Response(JSON.stringify({ results: [{ collectionName: "Good Show", artistName: "Good Host", feedUrl: "https://feeds.example.com/good.xml" }] }), { status: 200 });
+    if (url === "https://feeds.example.com/bad.xml") {
+      return new Response("<rss><channel><item><title>Old Episode</title><description>Old item</description><link>https://example.com/old</link><pubDate>Mon, 01 Jun 2020 00:00:00 GMT</pubDate><enclosure url=\"https://example.com/old.mp3\" /></item></channel></rss>", { status: 200 });
+    }
+    if (url === "https://feeds.example.com/good.xml") {
+      return new Response("<rss><channel><item><title>Useful Apple Episode</title><description>Useful recent item with enough metadata for the source.</description><link>https://example.com/useful</link><pubDate>Tue, 23 Jun 2026 00:00:00 GMT</pubDate><podcast:transcript url=\"https://example.com/useful-transcript.txt\" type=\"text/plain\" /></item></channel></rss>", { status: 200 });
+    }
+    if (url === "https://example.com/useful-transcript.txt") {
+      return new Response("This transcript explains agentic software engineering, production review loops, release safety, observability, regression testing, ownership boundaries, and operational tradeoffs in enough detail to support one focused Apple podcast article.", { status: 200 });
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  }) as typeof fetch;
+  try {
+    const source = await buildAppleTopPodcastsSource("2026-06-23");
+    assert.match(source, /Useful Apple Episode/);
+    assert.doesNotMatch(source, /Old Episode/);
+  } finally {
+    restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("APPLE_TOP_PODCASTS_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", previousCandidateEpisodes);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_HISTORY_POSTS_DIR", previousHistoryPostsDir);
+    globalThis.fetch = originalFetch;
+    fs.rmSync(historyDir, { recursive: true, force: true });
   }
 });
 

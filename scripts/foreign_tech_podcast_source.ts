@@ -22,6 +22,7 @@ type Episode = {
   title: string;
   link: string;
   audioUrl: string;
+  transcriptUrl?: string;
   guid: string;
   pubDate: string;
   date: string;
@@ -150,6 +151,7 @@ function parseFeed(feed: FeedSource, xml: string): Episode[] {
       const description = stripHtml(tag(item, "content:encoded") || tag(item, "description") || tag(item, "itunes:summary"));
       const link = tag(item, "link") || tag(item, "guid");
       const audioUrl = attr(item, "enclosure", "url");
+      const transcriptUrl = attr(item, "podcast:transcript", "url") || attr(item, "transcript", "url");
       const guid = tag(item, "guid") || link || `${feed.show}:${title}`;
       const imageUrl = attr(item, "itunes:image", "href");
       const duration = tag(item, "itunes:duration");
@@ -159,6 +161,7 @@ function parseFeed(feed: FeedSource, xml: string): Episode[] {
         title,
         link,
         audioUrl,
+        transcriptUrl,
         guid,
         pubDate,
         date,
@@ -171,7 +174,7 @@ function parseFeed(feed: FeedSource, xml: string): Episode[] {
         genres: feed.genres,
       };
     })
-    .filter(episode => episode.title && episode.description && episode.date && episode.link && episode.audioUrl);
+    .filter(episode => episode.title && episode.description && episode.date && episode.link && (episode.audioUrl || episode.transcriptUrl));
 }
 
 function parseDate(date: string): Date {
@@ -237,6 +240,10 @@ function maxEpisodes(): number {
 
 function minEpisodes(): number {
   return envNumber("PODCAST_MIN_EPISODES", Math.min(3, maxEpisodes()));
+}
+
+function candidateEpisodes(): number {
+  return Math.max(maxEpisodes(), minEpisodes(), envNumber("PODCAST_CANDIDATE_EPISODES", Math.max(maxEpisodes() * 5, minEpisodes())));
 }
 
 function maxWindowDays(): number {
@@ -359,6 +366,14 @@ function appleTopPodcastsMinEpisodes(): number {
   return envNumber("APPLE_TOP_PODCASTS_MIN_EPISODES", Math.min(8, appleTopPodcastsMaxEpisodes()));
 }
 
+function appleTopPodcastsCandidateEpisodes(): number {
+  return Math.max(
+    appleTopPodcastsMaxEpisodes(),
+    appleTopPodcastsMinEpisodes(),
+    envNumber("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", Math.max(appleTopPodcastsMaxEpisodes() * 10, appleTopPodcastsMinEpisodes())),
+  );
+}
+
 function appleTopPodcastsTranscribeDelayMs(): number {
   return envNumber("APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS", envNumber("PODCAST_TRANSCRIBE_DELAY_MS", 0));
 }
@@ -421,7 +436,7 @@ async function fetchAppleTopPodcastEpisodes(date: string): Promise<Episode[]> {
   const selected: Episode[] = [];
   let skippedDuplicates = 0;
   for (const show of shows) {
-    if (selected.length >= appleTopPodcastsMaxEpisodes()) break;
+    if (selected.length >= appleTopPodcastsCandidateEpisodes()) break;
     try {
       const feed = await lookupApplePodcast(show);
       if (!feed) {
@@ -471,7 +486,7 @@ async function fetchEpisodes(date: string): Promise<Episode[]> {
   }
   if (skipped) writeStderr(`skipped ${skipped} duplicate podcast episode(s) already present in archive history`);
   const curatedCount = unique.filter(episode => episode.curated).length;
-  const limit = Math.max(maxEpisodes(), curatedCount);
+  const limit = Math.max(candidateEpisodes(), curatedCount);
   return unique.slice(0, limit);
 }
 
@@ -714,6 +729,19 @@ async function enrichWithTranscripts(episodes: Episode[], options: { tolerateFai
         enriched.push({ ...episode, transcript: normalizedTranscript(episode) });
         continue;
       }
+      if (episode.transcriptUrl) {
+        try {
+          const transcript = compact(await fetchText(episode.transcriptUrl, { timeoutMs: 30_000, maxChars: 1_500_000, throwOnMaxChars: true }));
+          if (transcript.length >= minTranscriptChars()) {
+            enriched.push({ ...episode, transcript });
+            continue;
+          }
+          writeStderr(`WARN: ${episode.title}: podcast transcript URL returned too little text (${transcript.length} chars)`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          writeStderr(`WARN: ${episode.title}: podcast transcript URL unavailable; trying audio if available: ${message}`);
+        }
+      }
       if (!episode.audioUrl) {
         writeStderr(`skipping podcast without transcript or audio: ${episode.title}`);
         continue;
@@ -769,7 +797,8 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
       episode.imageUrl ? `- 图片：${episode.imageUrl}` : "",
       episode.duration ? `- 时长：${episode.duration}` : "",
       episode.canonicalId ? `- canonicalId：${episode.canonicalId}` : "",
-      episode.audioUrl ? `- 音频：${episode.audioUrl}` : "- 音频：未提供；使用仓库预置 transcript",
+      episode.audioUrl ? `- 音频：${episode.audioUrl}` : "- 音频：未提供；使用 transcript",
+      episode.transcriptUrl ? `- Transcript：${episode.transcriptUrl}` : "",
       `- Show notes：${episode.description}`,
     ].filter(Boolean);
     lines.push(
@@ -788,7 +817,7 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
 }
 
 export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
-  const episodes = await enrichWithTranscripts(await fetchEpisodes(date), { tolerateFailures: true });
+  const episodes = (await enrichWithTranscripts(await fetchEpisodes(date), { tolerateFailures: true })).slice(0, maxEpisodes());
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("foreign tech podcast", episodes.length, minEpisodes());
   return podcastSourceMarkdown(
     episodes,
@@ -810,6 +839,7 @@ export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promi
     const message = error instanceof Error ? error.message : String(error);
     throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", 0, appleTopPodcastsMinEpisodes(), `source unavailable: ${message}`);
   }
+  episodes = episodes.slice(0, appleTopPodcastsMaxEpisodes());
   if (episodes.length < appleTopPodcastsMinEpisodes()) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", episodes.length, appleTopPodcastsMinEpisodes());
   return podcastSourceMarkdown(
     episodes,
