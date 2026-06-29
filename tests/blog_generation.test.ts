@@ -185,6 +185,9 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14/);
   assert.match(podcastSource, /function runGeminiTranscription/);
   assert.match(podcastSource, /inline_data/);
+  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_BASE_URL: https:\/\/right\.codes\/gemini/);
+  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_MODEL: gemini-3\.5-flash/);
+  assert.match(podcastSource, /export async function buildForeignTechPodcastArticle/);
   assert.match(podcastSource, /\"whisper-cpp,local\"/);
   assert.match(podcastSource, /function runWhisperCpp/);
   assert.match(podcastSource, /prepareWhisperCppAudioChunks/);
@@ -237,6 +240,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
   assert.match(generator, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT/);
   assert.match(generator, /buildAppleTopPodcastArticleSources/);
+  assert.match(generator, /buildForeignTechPodcastArticle/);
   assert.match(generator, /buildCombinedTechDailySource/);
   assert.match(generator, /daily-digest-item-summary\.md/);
   assert.match(generator, /daily-digest-section-planner\.md/);
