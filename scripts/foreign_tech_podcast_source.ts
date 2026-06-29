@@ -569,18 +569,13 @@ function runLocalWhisper(audioFile: string, outDir: string): string {
   const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
-  const txtFiles = fs
-    .readdirSync(outDir)
-    .filter(file => file.endsWith(".txt"))
-    .map(file => path.join(outDir, file))
-    .toSorted((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  const transcript = compact(txtFiles.map(file => fs.readFileSync(file, "utf8")).join("\n"));
+  const transcript = readTranscriptTxtFiles(outDir);
   if (transcript.length < minTranscriptChars()) throw new Error(`local whisper transcript too short (${transcript.length} chars)`);
   return transcript;
 }
 
 function transcriptionProviders(): string[] {
-  const raw = process.env.PODCAST_TRANSCRIBE_PROVIDER || process.env.PODCAST_TRANSCRIBE_PROVIDERS || "groq,local";
+  const raw = process.env.PODCAST_TRANSCRIBE_PROVIDER || process.env.PODCAST_TRANSCRIBE_PROVIDERS || "whisper-cpp,local";
   return raw
     .split(/[,>]/)
     .map(provider => provider.trim().toLowerCase())
@@ -600,6 +595,77 @@ function runFfmpeg(args: string[], timeoutMs: number): void {
   const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
+}
+
+function whisperCppModelPath(): string {
+  const explicit = process.env.PODCAST_WHISPER_CPP_MODEL_PATH || process.env.PODCAST_WHISPER_MODEL_PATH;
+  if (explicit) return explicit;
+  const model = process.env.PODCAST_WHISPER_CPP_MODEL || "small.en";
+  return path.join(repoRoot(), ".cache", "whisper.cpp", "models", `ggml-${model}.bin`);
+}
+
+function prepareWhisperCppAudioChunks(audioFile: string, outDir: string): string[] {
+  ensureDir(outDir);
+  const segmentSeconds = envNumber("PODCAST_WHISPER_CPP_SEGMENT_SECONDS", 20 * 60);
+  if (segmentSeconds <= 0) return [audioFile];
+  const bitrate = process.env.PODCAST_WHISPER_CPP_AUDIO_BITRATE || "64k";
+  const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
+  runFfmpeg(["-y", "-i", audioFile, "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate, "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1", path.join(outDir, "chunk-%03d.mp3")], timeoutMs);
+  const chunks = fs
+    .readdirSync(outDir)
+    .filter(file => file.endsWith(".mp3"))
+    .map(file => path.join(outDir, file))
+    .toSorted();
+  if (!chunks.length) throw new Error("ffmpeg produced no whisper.cpp audio chunks");
+  return chunks;
+}
+
+function readTranscriptTxtFiles(outDir: string): string {
+  const txtFiles = fs
+    .readdirSync(outDir)
+    .filter(file => file.endsWith(".txt"))
+    .map(file => path.join(outDir, file))
+    .toSorted((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
+  return compact(txtFiles.map(file => fs.readFileSync(file, "utf8")).join("\n"));
+}
+
+function runWhisperCpp(audioFile: string, outDir: string): string {
+  const bin = process.env.PODCAST_WHISPER_CPP_BIN || "whisper-cli";
+  const modelPath = whisperCppModelPath();
+  const timeoutMs = envNumber("PODCAST_WHISPER_CPP_TIMEOUT_MS", 45 * 60 * 1000);
+  const threads = process.env.PODCAST_WHISPER_CPP_THREADS;
+  ensureDir(outDir);
+  if (!fs.existsSync(modelPath)) throw new Error(`whisper.cpp model not found: ${modelPath}`);
+  const chunks = prepareWhisperCppAudioChunks(audioFile, path.join(outDir, "chunks"));
+  const parts: string[] = [];
+  for (const [index, chunk] of chunks.entries()) {
+    const chunkOutDir = path.join(outDir, `chunk-${String(index + 1).padStart(3, "0")}`);
+    ensureDir(chunkOutDir);
+    const outputBase = path.join(chunkOutDir, "transcript");
+    const args = [
+      "--model",
+      modelPath,
+      "--file",
+      chunk,
+      "--language",
+      "en",
+      "--output-txt",
+      "--output-file",
+      outputBase,
+      "--no-prints",
+      "--no-timestamps",
+      ...(threads ? ["--threads", threads] : []),
+      ...splitExtraArgs(process.env.PODCAST_WHISPER_CPP_EXTRA_ARGS || ""),
+    ];
+    writeStderr(`whisper.cpp transcribing chunk ${index + 1}/${chunks.length}: ${path.basename(chunk)}`);
+    const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
+    parts.push(readTranscriptTxtFiles(chunkOutDir));
+  }
+  const transcript = compact(parts.join("\n"));
+  if (transcript.length < minTranscriptChars()) throw new Error(`whisper.cpp transcript too short (${transcript.length} chars)`);
+  return transcript;
 }
 
 function prepareGroqAudioChunks(audioFile: string, outDir: string): string[] {
@@ -716,6 +782,7 @@ async function transcribeAudio(audioFile: string, outDir: string): Promise<strin
   for (const provider of transcriptionProviders()) {
     try {
       if (provider === "groq") return await runGroqWhisper(audioFile, path.join(outDir, "groq"));
+      if (["whisper-cpp", "whisper.cpp", "cpp"].includes(provider)) return runWhisperCpp(audioFile, path.join(outDir, "whisper-cpp"));
       if (["local", "local-whisper", "whisper"].includes(provider)) return runLocalWhisper(audioFile, path.join(outDir, "local"));
       errors.push(`${provider}: unsupported transcription provider`);
     } catch (error) {

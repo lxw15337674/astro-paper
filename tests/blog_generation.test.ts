@@ -168,6 +168,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     assert.match(schedule, /^\d+ \d+ \* \* (?:\*|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)$/);
   }
   const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/scheduled-posts.yml"), "utf8");
+  const podcastSource = fs.readFileSync(path.join(process.cwd(), "scripts/foreign_tech_podcast_source.ts"), "utf8");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
   }
@@ -176,12 +177,21 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
   assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
   assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
-  assert.match(workflow, /uses: actions\/setup-python@v6/);
-  assert.match(workflow, /python -m pip install "openai-whisper==20250625"/);
-  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: local/);
-  assert.match(workflow, /PODCAST_WHISPER_MODEL: base\.en/);
+  assert.match(workflow, /uses: actions\/cache@v4/);
+  assert.match(workflow, /WHISPER_CPP_VERSION: v1\.9\.1/);
+  assert.match(workflow, /whisper-bin-ubuntu-x64\.tar\.gz/);
+  assert.match(workflow, /ggml-\$WHISPER_CPP_MODEL\.bin/);
+  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: whisper-cpp/);
+  assert.match(workflow, /PODCAST_WHISPER_CPP_MODEL: small\.en/);
+  assert.match(workflow, /PODCAST_WHISPER_CPP_SEGMENT_SECONDS: 1200/);
+  assert.match(workflow, /PODCAST_WHISPER_CPP_TIMEOUT_MS: 2700000/);
+  assert.match(podcastSource, /\"whisper-cpp,local\"/);
+  assert.match(podcastSource, /function runWhisperCpp/);
+  assert.match(podcastSource, /prepareWhisperCppAudioChunks/);
   assert.doesNotMatch(workflow, /GROQ_API_KEY/);
   assert.doesNotMatch(workflow, /PODCAST_GROQ_/);
+  assert.doesNotMatch(workflow, /openai-whisper/);
+  assert.doesNotMatch(workflow, /uses: actions\/setup-python@v6/);
   assert.doesNotMatch(workflow, /podcast_whisper_model/);
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
