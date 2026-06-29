@@ -71,6 +71,14 @@ type AppleTopShow = {
   rank: number;
 };
 
+export type AppleTopPodcastArticleSource = {
+  rank: number;
+  show: string;
+  appleId: string;
+  episodeTitle: string;
+  source: string;
+};
+
 type AppleLookupResult = {
   collectionId?: number;
   collectionName?: string;
@@ -831,7 +839,7 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
   );
 }
 
-export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promise<string> {
+async function buildAppleTopPodcastEpisodesWithTranscripts(date: string): Promise<Episode[]> {
   let episodes: Episode[];
   try {
     episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true, transcribeDelayMs: appleTopPodcastsTranscribeDelayMs() });
@@ -841,6 +849,10 @@ export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promi
   }
   episodes = episodes.slice(0, appleTopPodcastsMaxEpisodes());
   if (episodes.length < appleTopPodcastsMinEpisodes()) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", episodes.length, appleTopPodcastsMinEpisodes());
+  return episodes;
+}
+
+function appleTopPodcastSourceMarkdown(episodes: Episode[]): string {
   return podcastSourceMarkdown(
     episodes,
     `以下证据来自 Apple Podcasts ${appleStorefront().toUpperCase()} Top Shows 官方榜单、iTunes lookup 得到的 RSS feed、节目 RSS 元数据及其可用 transcript。候选按 Apple 榜单顺序保留；每个节目只选择近 ${maxWindowDays()} 天内第一个未归档且可转写的 episode。没有 RSS、近期音频或 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。`,
@@ -852,6 +864,21 @@ export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promi
       "- 不要生成金融建议、健康建议、产品购买建议或夸张标题。",
     ],
   );
+}
+
+export async function buildAppleTopPodcastArticleSources(date = bjtDateString()): Promise<AppleTopPodcastArticleSource[]> {
+  const episodes = await buildAppleTopPodcastEpisodesWithTranscripts(date);
+  return episodes.map((episode, index) => ({
+    rank: episode.chartRank || index + 1,
+    show: episode.show,
+    appleId: episode.appleId || "",
+    episodeTitle: episode.title,
+    source: appleTopPodcastSourceMarkdown([episode]),
+  }));
+}
+
+export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promise<string> {
+  return appleTopPodcastSourceMarkdown(await buildAppleTopPodcastEpisodesWithTranscripts(date));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

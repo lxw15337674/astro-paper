@@ -8,7 +8,7 @@ import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
-import { FEEDS, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
+import { FEEDS, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastArticleSources, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
@@ -183,11 +183,11 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 50/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 10/);
   assert.match(workflow, /PODCAST_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
   assert.match(workflow, /PODCAST_MIN_EPISODES: 1/);
   assert.match(workflow, /PODCAST_CANDIDATE_EPISODES: 8/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
+  assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '10' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_MIN_EPISODES: 1/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
@@ -217,6 +217,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
   assert.match(generator, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT/);
+  assert.match(generator, /buildAppleTopPodcastArticleSources/);
   assert.match(generator, /buildCombinedTechDailySource/);
   assert.match(generator, /daily-digest-item-summary\.md/);
   assert.match(generator, /daily-digest-section-planner\.md/);
@@ -600,6 +601,73 @@ test("Apple Top podcast tries extra candidates but keeps one episode article", a
     const source = await buildAppleTopPodcastsSource("2026-06-23");
     assert.match(source, /Useful Apple Episode/);
     assert.doesNotMatch(source, /Old Episode/);
+  } finally {
+    restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
+    restoreEnv("APPLE_TOP_PODCASTS_MAX_EPISODES", previousMaxEpisodes);
+    restoreEnv("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", previousCandidateEpisodes);
+    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
+    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
+    restoreEnv("PODCAST_HISTORY_POSTS_DIR", previousHistoryPostsDir);
+    globalThis.fetch = originalFetch;
+    fs.rmSync(historyDir, { recursive: true, force: true });
+  }
+});
+
+test("Apple Top podcast article sources split top shows into one source per article", async () => {
+  const previousMinEpisodes = process.env.APPLE_TOP_PODCASTS_MIN_EPISODES;
+  const previousMaxEpisodes = process.env.APPLE_TOP_PODCASTS_MAX_EPISODES;
+  const previousCandidateEpisodes = process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES;
+  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
+  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
+  const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
+  const originalFetch = globalThis.fetch;
+  const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), "apple-top-split-history-"));
+  process.env.APPLE_TOP_PODCASTS_MIN_EPISODES = "2";
+  process.env.APPLE_TOP_PODCASTS_MAX_EPISODES = "2";
+  process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES = "2";
+  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
+  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
+  process.env.PODCAST_HISTORY_POSTS_DIR = historyDir;
+  globalThis.fetch = (async input => {
+    const url = String(input);
+    if (url.includes("applemarketingtools.com")) {
+      return new Response(
+        JSON.stringify({
+          feed: {
+            results: [
+              { id: "first-show", name: "First Show", artistName: "First Host", url: "https://podcasts.apple.com/first", genres: ["Technology"] },
+              { id: "second-show", name: "Second Show", artistName: "Second Host", url: "https://podcasts.apple.com/second", genres: ["Business"] },
+            ],
+          },
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("id=first-show")) return new Response(JSON.stringify({ results: [{ collectionName: "First Show", artistName: "First Host", feedUrl: "https://feeds.example.com/first.xml" }] }), { status: 200 });
+    if (url.includes("id=second-show")) return new Response(JSON.stringify({ results: [{ collectionName: "Second Show", artistName: "Second Host", feedUrl: "https://feeds.example.com/second.xml" }] }), { status: 200 });
+    if (url === "https://feeds.example.com/first.xml") {
+      return new Response("<rss><channel><item><title>First Episode</title><description>First recent item with enough metadata for source building.</description><link>https://example.com/first</link><pubDate>Tue, 23 Jun 2026 00:00:00 GMT</pubDate><podcast:transcript url=\"https://example.com/first.txt\" type=\"text/plain\" /></item></channel></rss>", { status: 200 });
+    }
+    if (url === "https://feeds.example.com/second.xml") {
+      return new Response("<rss><channel><item><title>Second Episode</title><description>Second recent item with enough metadata for source building.</description><link>https://example.com/second</link><pubDate>Tue, 23 Jun 2026 00:00:00 GMT</pubDate><podcast:transcript url=\"https://example.com/second.txt\" type=\"text/plain\" /></item></channel></rss>", { status: 200 });
+    }
+    if (url === "https://example.com/first.txt") {
+      return new Response("First transcript covers software teams, review loops, release safety, product tradeoffs, observability, incident response, customer feedback, and operational ownership in enough detail for a focused article.", { status: 200 });
+    }
+    if (url === "https://example.com/second.txt") {
+      return new Response("Second transcript covers creator economics, platform ranking incentives, monetization pressure, audience trust, production cadence, market structure, and distribution tradeoffs in enough detail for a focused article.", { status: 200 });
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  }) as typeof fetch;
+  try {
+    const articles = await buildAppleTopPodcastArticleSources("2026-06-23");
+    assert.equal(articles.length, 2);
+    assert.equal(articles[0].rank, 1);
+    assert.equal(articles[1].rank, 2);
+    assert.match(articles[0].source, /First Episode/);
+    assert.doesNotMatch(articles[0].source, /Second Episode/);
+    assert.match(articles[1].source, /Second Episode/);
+    assert.doesNotMatch(articles[1].source, /First Episode/);
   } finally {
     restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
     restoreEnv("APPLE_TOP_PODCASTS_MAX_EPISODES", previousMaxEpisodes);

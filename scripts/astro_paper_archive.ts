@@ -350,18 +350,34 @@ function formatGitHubTrendingDaily(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
-export function archivePost({ task, date, repo, body, force }: { task: string; date: string; repo: string; body: string; force: boolean }): ArchiveResult {
+export function archivePost({
+  task,
+  date,
+  repo,
+  body,
+  force,
+  fileNameSuffix = "",
+  titleSuffix = "",
+}: {
+  task: string;
+  date: string;
+  repo: string;
+  body: string;
+  force: boolean;
+  fileNameSuffix?: string;
+  titleSuffix?: string;
+}): ArchiveResult {
   if (!isTask(task)) throw new Error(`unsupported task: ${task}`);
   const info = taskInfo(task);
-  const relPath = taskPostRelPath(task, date);
+  const relPath = fileNameSuffix ? taskPostRelPath(task, `${date}-${fileNameSuffix}`) : taskPostRelPath(task, date);
+  const title = titleSuffix ? `${taskTitle(task, date)}｜${titleSuffix}` : taskTitle(task, date);
   const absPath = path.join(repo, relPath);
   if (!force && fs.existsSync(absPath)) {
-    return { task, path: relPath, title: taskTitle(task, date), created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
+    return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
   const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "apple-top-podcasts" ? { markdown: formatAppleTopPodcasts(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
   if (task === "foreign-tech-podcast" || task === "apple-top-podcasts") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
   if (task === "crypto-market-daily") assertPlainCryptoDaily(formatted.markdown);
-  const title = taskTitle(task, date);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
   fs.writeFileSync(

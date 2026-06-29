@@ -7,7 +7,7 @@ import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiCo
 import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
-import { PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
+import { type AppleTopPodcastArticleSource, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastArticleSources, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
 import { MarketSourceUnavailableError, generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
@@ -34,17 +34,26 @@ function offsetBjtDate(days: number): string {
   return bjtDateString(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
 }
 
-function targetPath(task: Task, repo: string, date: string): string {
-  return path.join(repo, taskPostRelPath(task, date));
+function titleForVariant(task: Task, date: string, titleSuffix = ""): string {
+  return titleSuffix ? `${taskTitle(task, date)}｜${titleSuffix}` : taskTitle(task, date);
+}
+
+function variantPostRelPath(task: Task, date: string, fileNameSuffix = ""): string {
+  return fileNameSuffix ? taskPostRelPath(task, `${date}-${fileNameSuffix}`) : taskPostRelPath(task, date);
 }
 
 function skippedExisting(task: Task, repo: string, date: string): ResultItem | null {
-  const postPath = targetPath(task, repo, date);
+  return skippedExistingVariant(task, repo, date);
+}
+
+function skippedExistingVariant(task: Task, repo: string, date: string, fileNameSuffix = "", titleSuffix = ""): ResultItem | null {
+  const relPath = variantPostRelPath(task, date, fileNameSuffix);
+  const postPath = path.join(repo, relPath);
   if (!fs.existsSync(postPath)) return null;
   return {
     task,
-    path: path.relative(repo, postPath),
-    title: taskTitle(task, date),
+    path: relPath,
+    title: titleForVariant(task, date, titleSuffix),
     created: false,
     skipped: true,
     updated_at_bjt: "",
@@ -52,6 +61,25 @@ function skippedExisting(task: Task, repo: string, date: string): ResultItem | n
     push: "",
     tags: taskTags(task),
   };
+}
+
+function slugForFile(text: string): string {
+  const slug = text
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72);
+  return slug || "podcast";
+}
+
+function appleTopPodcastFileNameSuffix(article: AppleTopPodcastArticleSource): string {
+  return `${String(article.rank).padStart(2, "0")}-${slugForFile(article.show)}`;
+}
+
+function appleTopPodcastTitleSuffix(article: AppleTopPodcastArticleSource): string {
+  return `#${String(article.rank).padStart(2, "0")} ${article.show}`;
 }
 
 function skippedLowQuality(task: Task, date: string, reason: string): ResultItem {
@@ -612,13 +640,14 @@ async function renderLiveAiMarkdownWithSourceValidation(
   task: Task,
   artifactsDir: string,
   source: string,
+  artifactKey: string = task,
 ): Promise<{ markdown: string; ai: AiCallResult }> {
   const attempts = retryAttempts();
   let lastError = "";
   let attemptPrompt = prompt;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     await sleep(retryDelayMs(attempt));
-    if (attempt > 1) writeArtifact(artifactsDir, task, `retry-prompt-attempt-${attempt}.md`, attemptPrompt);
+    if (attempt > 1) writeArtifact(artifactsDir, artifactKey, `retry-prompt-attempt-${attempt}.md`, attemptPrompt);
     try {
       const ai = await callAi(attemptPrompt, model);
       const markdown = normalizeMarkdownLinksFromSourceTitles(validateMarkdown(ai.content), source, task);
@@ -626,14 +655,14 @@ async function renderLiveAiMarkdownWithSourceValidation(
       return { markdown, ai };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
-      writeArtifact(artifactsDir, task, `ai-error-attempt-${attempt}.txt`, lastError);
+      writeArtifact(artifactsDir, artifactKey, `ai-error-attempt-${attempt}.txt`, lastError);
       if (attempt < attempts) {
         attemptPrompt = shouldRetryWithValidationFeedback(lastError) ? promptWithValidationFeedback(prompt, task, lastError) : prompt;
-        writeStderr(`WARN: ${task} AI generation attempt ${attempt}/${attempts} failed; retrying with validation feedback: ${lastError}`);
+        writeStderr(`WARN: ${artifactKey} AI generation attempt ${attempt}/${attempts} failed; retrying with validation feedback: ${lastError}`);
       }
     }
   }
-  throw new Error(`${task} AI generation failed after ${attempts} attempts: ${lastError}`);
+  throw new Error(`${artifactKey} AI generation failed after ${attempts} attempts: ${lastError}`);
 }
 
 async function renderWithAi({
@@ -645,6 +674,7 @@ async function renderWithAi({
   promptDir,
   mockResponseDir,
   artifactsDir,
+  artifactKey = task,
 }: {
   task: Task;
   date: string;
@@ -654,11 +684,12 @@ async function renderWithAi({
   promptDir: string;
   mockResponseDir: string;
   artifactsDir: string;
+  artifactKey?: string;
 }): Promise<{ markdown: string; metadata: NonNullable<ResultItem["generation"]> }> {
-  const sourceArtifact = writeArtifact(artifactsDir, task, "source.md", source);
+  const sourceArtifact = writeArtifact(artifactsDir, artifactKey, "source.md", source);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const prompt = renderPrompt({ task, date, sourceText: source, promptDir: resolvedPromptDir });
-  const promptArtifact = writeArtifact(artifactsDir, task, "prompt.md", prompt);
+  const promptArtifact = writeArtifact(artifactsDir, artifactKey, "prompt.md", prompt);
   const mockFile = mockResponseDir ? path.join(mockResponseDir, `${task}.md`) : "";
   const rendered = mockFile
     ? {
@@ -669,8 +700,8 @@ async function renderWithAi({
           usedFallback: false,
         },
       }
-    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, artifactsDir, source);
-  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", rendered.markdown);
+    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, artifactsDir, source, artifactKey);
+  const responseArtifact = writeArtifact(artifactsDir, artifactKey, "ai-response.md", rendered.markdown);
   return {
     markdown: rendered.markdown,
     metadata: {
@@ -685,18 +716,7 @@ async function renderWithAi({
   };
 }
 
-async function generateTask({
-  task,
-  repo,
-  date,
-  force,
-  useAi,
-  model,
-  promptDir,
-  sourceFixtureDir,
-  mockResponseDir,
-  artifactsDir,
-}: {
+type GenerateTaskOptions = {
   task: Task;
   repo: string;
   date: string;
@@ -707,10 +727,61 @@ async function generateTask({
   sourceFixtureDir: string;
   mockResponseDir: string;
   artifactsDir: string;
-}): Promise<ResultItem> {
+};
+
+async function generateAppleTopPodcastArticles({
+  task,
+  repo,
+  date,
+  force,
+  useAi,
+  model,
+  promptDir,
+  mockResponseDir,
+  artifactsDir,
+}: GenerateTaskOptions): Promise<ResultItem[]> {
+  const articles = await buildAppleTopPodcastArticleSources(date);
+  const results: ResultItem[] = [];
+  for (const article of articles) {
+    const fileNameSuffix = appleTopPodcastFileNameSuffix(article);
+    const titleSuffix = appleTopPodcastTitleSuffix(article);
+    if (!force) {
+      const skipped = skippedExistingVariant(task, repo, date, fileNameSuffix, titleSuffix);
+      if (skipped) {
+        results.push(skipped);
+        continue;
+      }
+    }
+    const artifactKey = `${task}-${fileNameSuffix}`;
+    try {
+      let body = article.source;
+      let generation: ResultItem["generation"];
+      if (useAi) {
+        const rendered = await renderWithAi({ task, date, source: article.source, repo, model, promptDir, mockResponseDir, artifactsDir, artifactKey });
+        body = rendered.markdown;
+        generation = rendered.metadata;
+      }
+      const result: ResultItem = archivePost({ task, date, repo, body, force, fileNameSuffix, titleSuffix });
+      if (generation) result.generation = generation;
+      results.push(result);
+    } catch (error) {
+      const failed = failedTask(task, date, error);
+      failed.path = variantPostRelPath(task, date, fileNameSuffix);
+      failed.title = titleForVariant(task, date, titleSuffix);
+      results.push(failed);
+      writeStderr(`ERROR: ${artifactKey} generation failed: ${failed.error}`);
+    }
+  }
+  if (!results.length) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", 0, 1);
+  return results;
+}
+
+async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
+  const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
+  if (task === "apple-top-podcasts" && !sourceFixtureDir) return generateAppleTopPodcastArticles(options);
   if (!force) {
     const skipped = skippedExisting(task, repo, date);
-    if (skipped) return skipped;
+    if (skipped) return [skipped];
   }
   let source = await sourceForTask(task, date, sourceFixtureDir);
   if (useAi && task === "tech-business-weekly" && !mockResponseDir) {
@@ -719,12 +790,12 @@ async function generateTask({
   if (useAi && task === "tech-daily" && !mockResponseDir) {
     source = await buildCombinedTechDailySource({ source, date, repo, model, promptDir, artifactsDir });
     const itemCount = countNumberedBlocks(source);
-    if (itemCount < 1) return skippedLowQuality(task, date, "tech-daily has no high-quality daily items");
+    if (itemCount < 1) return [skippedLowQuality(task, date, "tech-daily has no high-quality daily items")];
   }
   if (useAi && (task === "ai-daily" || task === "tech-business-daily") && !mockResponseDir) {
     source = await classifiedDailySourceForTask({ task, source, date, repo, model, promptDir, artifactsDir });
     const itemCount = countNumberedBlocks(source);
-    if (itemCount < 1) return skippedLowQuality(task, date, `${task} has no high-quality daily items`);
+    if (itemCount < 1) return [skippedLowQuality(task, date, `${task} has no high-quality daily items`)];
   }
   let body = source;
   let generation: ResultItem["generation"];
@@ -735,7 +806,7 @@ async function generateTask({
   }
   const result: ResultItem = archivePost({ task, date, repo, body, force });
   if (generation) result.generation = generation;
-  return result;
+  return [result];
 }
 
 async function main(): Promise<void> {
@@ -754,7 +825,7 @@ async function main(): Promise<void> {
   for (const task of tasks as Task[]) {
     try {
       results.push(
-        await generateTask({
+        ...(await generateTask({
           task,
           repo,
           date,
@@ -765,7 +836,7 @@ async function main(): Promise<void> {
           sourceFixtureDir: stringArg(args, "source-fixture-dir"),
           mockResponseDir: stringArg(args, "mock-response-dir"),
           artifactsDir: stringArg(args, "artifacts-dir"),
-        }),
+        })),
       );
     } catch (error) {
       if (shouldSkipSourceUnavailable(error, task)) {
