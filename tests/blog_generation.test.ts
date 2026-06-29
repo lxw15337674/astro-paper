@@ -176,9 +176,12 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
   assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
   assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
-  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: groq/);
-  assert.doesNotMatch(workflow, /openai-whisper/);
-  assert.doesNotMatch(workflow, /Install local Whisper dependencies/);
+  assert.match(workflow, /uses: actions\/setup-python@v6/);
+  assert.match(workflow, /python -m pip install "openai-whisper==20250625"/);
+  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: local/);
+  assert.match(workflow, /PODCAST_WHISPER_MODEL: base\.en/);
+  assert.doesNotMatch(workflow, /GROQ_API_KEY/);
+  assert.doesNotMatch(workflow, /PODCAST_GROQ_/);
   assert.doesNotMatch(workflow, /podcast_whisper_model/);
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
@@ -193,9 +196,6 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
   assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 120000/);
-  assert.match(workflow, /PODCAST_GROQ_TIMEOUT_MS: 90000/);
-  assert.match(workflow, /PODCAST_GROQ_RETRY_ATTEMPTS: 1/);
-  assert.match(workflow, /PODCAST_GROQ_RETRY_DELAY_MS: 10000/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);
