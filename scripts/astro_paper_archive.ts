@@ -151,7 +151,7 @@ function reorderMarketSummaryFirst(markdown: string): string {
     .filter(Boolean);
   const frontMatter = blocks.filter(block => !block.startsWith("## "));
   const headingBlocks = blocks.filter(block => block.startsWith("## "));
-  const summaryIndex = headingBlocks.findIndex(block => /^##\s+总结(?:\s|$)/m.test(block));
+  const summaryIndex = headingBlocks.findIndex(block => /^##\s+(?:总结|一句话结论)(?:\s|$)/m.test(block));
   if (summaryIndex < 0) throw new Error("market daily missing top-level summary section");
   const [summary] = headingBlocks.splice(summaryIndex, 1);
   return [...frontMatter, summary, ...headingBlocks].join("\n\n").trim();
@@ -168,8 +168,17 @@ function formatMarketDaily(text: string): string {
   const normalized = normalizeMarkdown(text);
   rejectMarketGuidance(normalized);
   const ordered = reorderMarketSummaryFirst(normalized);
-  if (!ordered.startsWith("## 总结")) throw new Error("market daily summary must be the first section");
+  if (!/^##\s+(?:总结|一句话结论)(?:\s|$)/.test(ordered)) throw new Error("market daily summary must be the first section");
   return `${ordered}\n`;
+}
+
+function assertPlainCryptoDaily(markdown: string): void {
+  for (const section of ["一句话结论", "今天价格怎么走", "市场情绪冷不冷", "短线风险在哪里"]) {
+    if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(markdown)) throw new Error(`crypto market daily missing plain-reader section: ${section}`);
+  }
+  for (const pattern of [/数据边界/, /^##\s+(?:BTC 现货状态|永续与杠杆结构|期权与保护需求|情绪与风险边界)\s*$/m]) {
+    if (pattern.test(markdown)) throw new Error(`crypto market daily contains legacy technical output: ${pattern.source}`);
+  }
 }
 
 function normalizedPodcastBlocks(markdown: string): string[] {
@@ -351,6 +360,7 @@ export function archivePost({ task, date, repo, body, force }: { task: string; d
   }
   const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "foreign-tech-podcast" ? { markdown: formatForeignTechPodcast(body), ogImage: "" } : task === "apple-top-podcasts" ? { markdown: formatAppleTopPodcasts(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
   if (task === "foreign-tech-podcast" || task === "apple-top-podcasts") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
+  if (task === "crypto-market-daily") assertPlainCryptoDaily(formatted.markdown);
   const title = taskTitle(task, date);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);

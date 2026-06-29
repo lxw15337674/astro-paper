@@ -24,7 +24,7 @@ export const BLOG_TASKS = {
   "crypto-market-daily": {
     titlePrefix: "比特币日报",
     tag: "比特币日报",
-    description: "每日比特币市场日报，汇总 BTC 现货、永续、期权保护结构、情绪与风险边界。",
+    description: "每日比特币走势速读，汇总 BTC 价格、情绪与短线风险。",
     fileName: "比特币日报-{date}.md",
   },
   "us-market-daily": {
