@@ -99,6 +99,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           PODCAST_TRANSCRIBE_PROVIDER: gemini
           PODCAST_GEMINI_MODEL: gemini-flash-latest
+          PODCAST_GEMINI_ARTICLE_BASE_URL: https://right.codes/gemini
+          PODCAST_GEMINI_ARTICLE_MODEL: gemini-3.5-flash
+          PODCAST_GEMINI_ARTICLE_API_KEY: ${{ secrets.PODCAST_GEMINI_ARTICLE_API_KEY }}
           PODCAST_GEMINI_SEGMENT_SECONDS: 1200
           PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14
           PODCAST_GEMINI_TIMEOUT_MS: 600000

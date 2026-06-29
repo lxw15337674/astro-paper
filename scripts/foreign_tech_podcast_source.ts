@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { bjtDateString, clipText, compact, ensureDir, fetchText, parseArgs, repoRoot, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
 import { historicalPodcastFingerprints, podcastFingerprints } from "./foreign_tech_podcast_dedupe.ts";
+import { renderPrompt } from "./ai_blog_writer.ts";
 
 type FeedSource = {
   show: string;
@@ -598,6 +599,22 @@ function geminiModel(): string {
   return process.env.PODCAST_GEMINI_MODEL || "gemini-flash-latest";
 }
 
+function geminiBaseUrl(): string {
+  return (process.env.PODCAST_GEMINI_BASE_URL || "https://generativelanguage.googleapis.com").replace(/\/+$/, "");
+}
+
+export function geminiArticleBaseUrl(): string {
+  return (process.env.PODCAST_GEMINI_ARTICLE_BASE_URL || "").replace(/\/+$/, "") || geminiBaseUrl();
+}
+
+function geminiArticleApiKey(): string {
+  return process.env.PODCAST_GEMINI_ARTICLE_API_KEY || geminiApiKey();
+}
+
+export function geminiArticleModel(): string {
+  return process.env.PODCAST_GEMINI_ARTICLE_MODEL || geminiModel();
+}
+
 function runFfmpeg(args: string[], timeoutMs: number): void {
   const bin = process.env.PODCAST_FFMPEG_BIN || "ffmpeg";
   const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
@@ -830,7 +847,7 @@ async function transcribeGeminiChunk(chunkFile: string, index: number, total: nu
   const key = geminiApiKey();
   if (!key) throw new Error("GEMINI_API_KEY is not configured");
   const timeoutMs = envNumber("PODCAST_GEMINI_TIMEOUT_MS", 10 * 60 * 1000);
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel())}:generateContent`;
+  const endpoint = `${geminiBaseUrl()}/v1beta/models/${encodeURIComponent(geminiModel())}:generateContent`;
   const payload = {
     contents: [
       {
@@ -1038,6 +1055,150 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
       "- 不要生成金融建议、产品购买建议或夸张标题。",
     ],
   );
+}
+
+type GeminiAudioPart = { inline_data: { mime_type: string; data: string } };
+
+const FOREIGN_PODCAST_AUDIO_INTRO =
+  "以下是海外科技访谈/深度讨论类播客节目，每期的完整音频已作为内联附件随本请求一起提供。请直接依据音频内容写作；音频即本期 transcript 来源，元数据仅作补充。AI 只能依据音频与元数据写作；不得编造嘉宾、观点或未提供的事实。";
+
+const FOREIGN_PODCAST_WRITING_BOUNDARIES = [
+  "- 这是基于播客音频的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
+  "- 若音频或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
+  "- 每条分析必须能回到音频证据；不得仅凭标题、链接、图片或简短简介扩写。",
+  "- 不要生成金融建议、产品购买建议或夸张标题。",
+];
+
+async function prepareEpisodeAudioParts(episode: Episode, tmpDir: string, index: number): Promise<GeminiAudioPart[]> {
+  if (!episode.audioUrl) throw new Error(`${episode.title}: missing audio URL for multimodal article generation`);
+  const rawAudio = path.join(tmpDir, `${index}.mp3`);
+  await downloadAudio(episode.audioUrl, rawAudio);
+  const chunks = prepareGeminiAudioChunks(rawAudio, path.join(tmpDir, `chunks-${index}`));
+  const mimeType = process.env.PODCAST_GEMINI_AUDIO_MIME_TYPE || "audio/mp3";
+  return chunks.map(chunk => ({ inline_data: { mime_type: mimeType, data: fs.readFileSync(chunk).toString("base64") } }));
+}
+
+function episodeAudioMetadataBlock(episode: Episode, index: number): string {
+  const metadata = [
+    episode.chartRank ? `- Apple Top Shows 排名：#${episode.chartRank}` : "",
+    `- 节目：${episode.show}`,
+    `- 来源：${episode.source}`,
+    episode.guest ? `- 嘉宾：${episode.guest}` : "- 嘉宾：未标明",
+    `- 发布日期：${episode.date}`,
+    `- 链接：${episode.link}`,
+    episode.imageUrl ? `- 图片：${episode.imageUrl}` : "",
+    episode.duration ? `- 时长：${episode.duration}` : "",
+    episode.audioUrl ? `- 音频：${episode.audioUrl}` : "",
+    `- Show notes：${episode.description}`,
+  ].filter(Boolean);
+  return [
+    `### ${index + 1}. ${episode.title}`,
+    "",
+    ...metadata,
+    "",
+    "#### 音频",
+    "",
+    "本期完整音频已作为内联附件随本请求一起提供；请直接依据音频内容写作。",
+  ].join("\n");
+}
+
+async function generateGeminiArticle(prompt: string, audioParts: GeminiAudioPart[]): Promise<string> {
+  const key = geminiArticleApiKey();
+  if (!key) throw new Error("PODCAST_GEMINI_ARTICLE_API_KEY (or GEMINI_API_KEY) is not configured");
+  const timeoutMs = envNumber("PODCAST_GEMINI_TIMEOUT_MS", 10 * 60 * 1000);
+  const endpoint = `${geminiArticleBaseUrl()}/v1beta/models/${encodeURIComponent(geminiArticleModel())}:generateContent`;
+  const payload = {
+    contents: [{ parts: [{ text: prompt }, ...audioParts] }],
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: envNumber("PODCAST_GEMINI_ARTICLE_MAX_OUTPUT_TOKENS", 16384),
+      thinkingConfig: { thinkingBudget: envNumber("PODCAST_GEMINI_ARTICLE_THINKING_BUDGET", 0) },
+    },
+  };
+  let lastError = "";
+  for (let attempt = 1; attempt <= geminiRetryAttempts(); attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-goog-api-key": key,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        lastError = `Gemini article HTTP ${response.status}: ${text.slice(0, 1000)}`;
+        if (attempt < geminiRetryAttempts() && retryableGeminiStatus(response.status)) {
+          const delayMs = retryAfterMs(response.headers.get("retry-after")) ?? geminiRetryDelayMs(attempt);
+          writeStderr(`WARN: Gemini article attempt ${attempt}/${geminiRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new NonRetryableGeminiError(lastError);
+      }
+      const json = JSON.parse(text) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; error?: { message?: string } };
+      const article = (json.candidates || [])
+        .flatMap(candidate => candidate.content?.parts || [])
+        .filter(part => part?.thought !== true)
+        .map(part => part.text || "")
+        .join("")
+        .trim();
+      if (!article && json.error?.message) throw new NonRetryableGeminiError(json.error.message);
+      if (!article) throw new NonRetryableGeminiError("Gemini article response contained no text");
+      return article;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (error instanceof NonRetryableGeminiError) throw error;
+      if (attempt < geminiRetryAttempts()) {
+        const delayMs = geminiRetryDelayMs(attempt);
+        writeStderr(`WARN: Gemini article attempt ${attempt}/${geminiRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw new Error(lastError);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error(lastError || "Gemini article generation failed");
+}
+
+export async function buildForeignTechPodcastArticle(date = bjtDateString(), options: { promptDir?: string } = {}): Promise<string> {
+  const promptDir = options.promptDir || path.join(repoRoot(), "prompts", "blog");
+  const episodes = (await fetchEpisodes(date)).filter(episode => episode.audioUrl).slice(0, maxEpisodes());
+  if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("foreign tech podcast", episodes.length, minEpisodes());
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "foreign-tech-podcast-article-"));
+  try {
+    const audioParts: GeminiAudioPart[] = [];
+    const metaBlocks: string[] = [];
+    for (const [index, episode] of episodes.entries()) {
+      writeStderr(`preparing audio for multimodal article ${index + 1}/${episodes.length}: ${episode.title}`);
+      audioParts.push(...(await prepareEpisodeAudioParts(episode, tmp, index)));
+      metaBlocks.push(episodeAudioMetadataBlock(episode, index));
+    }
+    const sourceText = [
+      "## 来源说明",
+      "",
+      FOREIGN_PODCAST_AUDIO_INTRO,
+      "",
+      "## 候选播客清单",
+      "",
+      metaBlocks.join("\n\n"),
+      "",
+      "## 写作边界",
+      "",
+      ...FOREIGN_PODCAST_WRITING_BOUNDARIES,
+    ].join("\n");
+    const prompt = renderPrompt({ task: "foreign-tech-podcast", date, sourceText, promptDir });
+    writeStderr(`generating foreign tech podcast article via ${geminiArticleModel()} (${audioParts.length} audio chunk(s))`);
+    return await generateGeminiArticle(prompt, audioParts);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 async function buildAppleTopPodcastEpisodesWithTranscripts(date: string): Promise<Episode[]> {

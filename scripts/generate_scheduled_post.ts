@@ -7,7 +7,7 @@ import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiCo
 import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
-import { type AppleTopPodcastArticleSource, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastArticleSources, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "./foreign_tech_podcast_source.ts";
+import { type AppleTopPodcastArticleSource, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastArticleSources, buildAppleTopPodcastsSource, buildForeignTechPodcastArticle, buildForeignTechPodcastSource, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
 import { MarketSourceUnavailableError, generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
@@ -776,9 +776,32 @@ async function generateAppleTopPodcastArticles({
   return results;
 }
 
+async function generateForeignTechPodcastArticle({ task, repo, date, force, promptDir, artifactsDir }: GenerateTaskOptions): Promise<ResultItem[]> {
+  if (!force) {
+    const skipped = skippedExisting(task, repo, date);
+    if (skipped) return [skipped];
+  }
+  const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
+  const article = await buildForeignTechPodcastArticle(date, { promptDir: resolvedPromptDir });
+  const markdown = validateMarkdown(article);
+  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", markdown);
+  const result: ResultItem = archivePost({ task, date, repo, body: markdown, force });
+  result.generation = {
+    ai_model: geminiArticleModel(),
+    ai_base_url: geminiArticleBaseUrl(),
+    ai_fallback_used: false,
+    source_artifact: "",
+    prompt_artifact: "",
+    ai_response_artifact: responseArtifact,
+    mocked_ai: false,
+  };
+  return [result];
+}
+
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
   const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
   if (task === "apple-top-podcasts" && !sourceFixtureDir) return generateAppleTopPodcastArticles(options);
+  if (task === "foreign-tech-podcast" && useAi && !sourceFixtureDir && !mockResponseDir) return generateForeignTechPodcastArticle(options);
   if (!force) {
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];
