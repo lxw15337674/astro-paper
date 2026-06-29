@@ -213,6 +213,10 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(itemSummaryPrompt, /一次只处理一条候选/);
   assert.match(sectionPlannerPrompt, /动态规划《技术日报》的栏目/);
   assert.match(techDailyPrompt, /不要固定套用 AI\/工程\/商业三段式/);
+  const appleTopPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog/apple-top-podcasts.md"), "utf8");
+  assert.match(appleTopPrompt, /### 内容总结/);
+  assert.match(appleTopPrompt, /### 详细内容/);
+  assert.match(appleTopPrompt, /不要输出 `### Highlights`/);
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
@@ -966,8 +970,32 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
 
 这期还谈到产品布局和值得关注的设计工作流，这些是产品访谈里的正常语义，不应被市场日报的投顾口吻过滤误伤。
 `;
+  const applePodcastBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/apple-top-podcasts.md"), "utf8");
   const us = archivePost({ task: "us-market-daily", date: "2099-01-02", repo, body: usBody, force: true });
   const podcast = archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: podcastBody, force: true });
+  const applePodcast = archivePost({ task: "apple-top-podcasts", date: "2099-01-02", repo, body: applePodcastBody, force: true });
+  assert.throws(
+    () =>
+      archivePost({
+        task: "apple-top-podcasts",
+        date: "2099-01-03",
+        repo,
+        body: applePodcastBody.replace("### 内容总结", "### 一句话总结"),
+        force: true,
+      }),
+    /Apple Top Shows podcast contains forbidden section: ### 一句话总结/,
+  );
+  assert.throws(
+    () =>
+      archivePost({
+        task: "apple-top-podcasts",
+        date: "2099-01-03",
+        repo,
+        body: applePodcastBody.replace("### 详细内容", "### Highlights\n\n- 旧格式 bullet。\n\n### 详细内容"),
+        force: true,
+      }),
+    /Apple Top Shows podcast contains forbidden section: ### Highlights/,
+  );
   const techWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-weekly.md"), "utf8");
   const techWeekly = archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body: techWeeklyBody, force: true });
   const aiWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/ai-weekly.md"), "utf8");
@@ -984,6 +1012,7 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   const cryptoMarkdown = fs.readFileSync(path.join(repo, crypto.path), "utf8");
   const usMarkdown = fs.readFileSync(path.join(repo, us.path), "utf8");
   const podcastMarkdown = fs.readFileSync(path.join(repo, podcast.path), "utf8");
+  const applePodcastMarkdown = fs.readFileSync(path.join(repo, applePodcast.path), "utf8");
   const techWeeklyMarkdown = fs.readFileSync(path.join(repo, techWeekly.path), "utf8");
   const aiWeeklyMarkdown = fs.readFileSync(path.join(repo, aiWeekly.path), "utf8");
   const techBusinessWeeklyMarkdown = fs.readFileSync(path.join(repo, techBusinessWeekly.path), "utf8");
@@ -1008,6 +1037,10 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);
   assert.match(podcastMarkdown, /### 长文笔记/);
+  assert.match(applePodcastMarkdown, /title: "Apple 热门播客笔记｜2099-01-02"/);
+  assert.match(applePodcastMarkdown, /### 内容总结/);
+  assert.match(applePodcastMarkdown, /### 详细内容/);
+  assert.doesNotMatch(applePodcastMarkdown, /### 一句话总结|### Highlights|### 长文笔记/);
   assert.match(techWeeklyMarkdown, /title: "技术趋势与工程观察｜2099-01-03"/);
   assert.match(techWeeklyMarkdown, /技术周刊/);
   assert.match(techWeeklyMarkdown, /^## 工程观察/m);

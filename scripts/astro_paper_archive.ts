@@ -199,13 +199,21 @@ function rejectRepeatedPodcastContent(markdown: string): void {
   }
 }
 
-function formatPodcastLongform(text: string, label: string, openingTitle: string): string {
+function formatPodcastLongform(
+  text: string,
+  label: string,
+  openingTitle: string,
+  options: { summaryHeading?: string; detailHeading?: string; requireHighlights?: boolean; forbiddenMarkers?: string[] } = {},
+): string {
   const normalized = normalizeMarkdown(text).replace(/\n---\n\n---\n/g, "\n\n---\n");
-  const required = [openingTitle, "### 中文主题", "### 基本信息", "### 一句话总结", "### Highlights", "### 长文笔记"];
+  const summaryHeading = options.summaryHeading || "### 一句话总结";
+  const detailHeading = options.detailHeading || "### 长文笔记";
+  const required = [openingTitle, "### 中文主题", "### 基本信息", summaryHeading, detailHeading];
+  if (options.requireHighlights !== false) required.splice(4, 0, "### Highlights");
   for (const marker of required) {
     if (!normalized.includes(marker)) throw new Error(`${label} missing required section: ${marker}`);
   }
-  for (const marker of ["## 今日总览", "## 今日播客清单"]) {
+  for (const marker of ["## 今日总览", "## 今日播客清单", ...(options.forbiddenMarkers || [])]) {
     if (normalized.includes(marker)) throw new Error(`${label} contains forbidden section: ${marker}`);
   }
   rejectRepeatedPodcastContent(normalized);
@@ -222,7 +230,12 @@ function formatForeignTechPodcast(text: string): string {
 }
 
 function formatAppleTopPodcasts(text: string): string {
-  return formatPodcastLongform(text, "Apple Top Shows podcast", "《今日 Apple Top Shows 热门播客》");
+  return formatPodcastLongform(text, "Apple Top Shows podcast", "《今日 Apple Top Shows 热门播客》", {
+    summaryHeading: "### 内容总结",
+    detailHeading: "### 详细内容",
+    requireHighlights: false,
+    forbiddenMarkers: ["### 一句话总结", "### Highlights", "### 长文笔记"],
+  });
 }
 
 function rejectPureTutorialWeekly(markdown: string): void {
