@@ -133,8 +133,13 @@ jobs:
           AI_FALLBACK_API_KEY: ${{ secrets.AI_FALLBACK_API_KEY }}
           AI_FALLBACK_BASE_URL: ${{ secrets.AI_FALLBACK_BASE_URL || 'https://api.deepseek.com' }}
           AI_FALLBACK_MODEL: ${{ secrets.AI_FALLBACK_MODEL || 'deepseek-v4-flash' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
-          PODCAST_TRANSCRIBE_PROVIDER: whisper-cpp
+          PODCAST_TRANSCRIBE_PROVIDER: gemini,whisper-cpp
+          PODCAST_GEMINI_MODEL: gemini-flash-latest
+          PODCAST_GEMINI_SEGMENT_SECONDS: 1200
+          PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14
+          PODCAST_GEMINI_TIMEOUT_MS: 600000
           PODCAST_WHISPER_CPP_MODEL: small.en
           PODCAST_WHISPER_CPP_SEGMENT_SECONDS: 1200
           PODCAST_WHISPER_CPP_TIMEOUT_MS: 2700000

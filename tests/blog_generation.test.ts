@@ -181,7 +181,13 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /WHISPER_CPP_VERSION: v1\.9\.1/);
   assert.match(workflow, /whisper-bin-ubuntu-x64\.tar\.gz/);
   assert.match(workflow, /ggml-\$WHISPER_CPP_MODEL\.bin/);
-  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: whisper-cpp/);
+  assert.match(workflow, /GEMINI_API_KEY: \$\{\{ secrets\.GEMINI_API_KEY \}\}/);
+  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: gemini,whisper-cpp/);
+  assert.match(workflow, /PODCAST_GEMINI_MODEL: gemini-flash-latest/);
+  assert.match(workflow, /PODCAST_GEMINI_SEGMENT_SECONDS: 1200/);
+  assert.match(workflow, /PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14/);
+  assert.match(podcastSource, /function runGeminiTranscription/);
+  assert.match(podcastSource, /inline_data/);
   assert.match(workflow, /PODCAST_WHISPER_CPP_MODEL: small\.en/);
   assert.match(workflow, /PODCAST_WHISPER_CPP_SEGMENT_SECONDS: 1200/);
   assert.match(workflow, /PODCAST_WHISPER_CPP_TIMEOUT_MS: 2700000/);

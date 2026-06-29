@@ -590,6 +590,14 @@ function groqModel(): string {
   return process.env.PODCAST_GROQ_MODEL || "whisper-large-v3-turbo";
 }
 
+function geminiApiKey(): string {
+  return process.env.GEMINI_API_KEY || process.env.PODCAST_GEMINI_API_KEY || "";
+}
+
+function geminiModel(): string {
+  return process.env.PODCAST_GEMINI_MODEL || "gemini-flash-latest";
+}
+
 function runFfmpeg(args: string[], timeoutMs: number): void {
   const bin = process.env.PODCAST_FFMPEG_BIN || "ffmpeg";
   const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
@@ -777,10 +785,136 @@ async function runGroqWhisper(audioFile: string, outDir: string): Promise<string
   return transcript;
 }
 
+function prepareGeminiAudioChunks(audioFile: string, outDir: string): string[] {
+  ensureDir(outDir);
+  const segmentSeconds = envNumber("PODCAST_GEMINI_SEGMENT_SECONDS", 20 * 60);
+  const bitrate = process.env.PODCAST_GEMINI_AUDIO_BITRATE || "64k";
+  const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
+  runFfmpeg(["-y", "-i", audioFile, "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate, "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1", path.join(outDir, "chunk-%03d.mp3")], timeoutMs);
+  const maxBytes = envNumber("PODCAST_GEMINI_MAX_INLINE_CHUNK_MB", 14) * 1024 * 1024;
+  const chunks = fs
+    .readdirSync(outDir)
+    .filter(file => file.endsWith(".mp3"))
+    .map(file => path.join(outDir, file))
+    .toSorted();
+  if (!chunks.length) throw new Error("ffmpeg produced no Gemini audio chunks");
+  const oversized = chunks.find(file => fs.statSync(file).size > maxBytes);
+  if (oversized) throw new Error(`Gemini audio chunk exceeds ${Math.round(maxBytes / 1024 / 1024)}MB inline limit: ${path.basename(oversized)}`);
+  return chunks;
+}
+
+function geminiRetryAttempts(): number {
+  return Math.max(1, envNumber("PODCAST_GEMINI_RETRY_ATTEMPTS", 3));
+}
+
+function geminiRetryDelayMs(attempt: number): number {
+  return envNumber("PODCAST_GEMINI_RETRY_DELAY_MS", 30_000) * attempt;
+}
+
+function geminiChunkDelayMs(): number {
+  return envNumber("PODCAST_GEMINI_CHUNK_DELAY_MS", 0);
+}
+
+function retryableGeminiStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+class NonRetryableGeminiError extends Error {}
+
+function geminiTranscriptionPrompt(index: number, total: number): string {
+  const position = total > 1 ? ` This is chunk ${index + 1} of ${total}; transcribe only this chunk.` : "";
+  return `Transcribe the speech in this podcast audio exactly. Preserve paragraph breaks when natural, omit timestamps unless spoken, and return only the transcript text.${position}`;
+}
+
+async function transcribeGeminiChunk(chunkFile: string, index: number, total: number): Promise<string> {
+  const key = geminiApiKey();
+  if (!key) throw new Error("GEMINI_API_KEY is not configured");
+  const timeoutMs = envNumber("PODCAST_GEMINI_TIMEOUT_MS", 10 * 60 * 1000);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel())}:generateContent`;
+  const payload = {
+    contents: [
+      {
+        parts: [
+          { text: geminiTranscriptionPrompt(index, total) },
+          {
+            inline_data: {
+              mime_type: process.env.PODCAST_GEMINI_AUDIO_MIME_TYPE || "audio/mp3",
+              data: fs.readFileSync(chunkFile).toString("base64"),
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: envNumber("PODCAST_GEMINI_MAX_OUTPUT_TOKENS", 8192),
+    },
+  };
+  let lastError = "";
+  for (let attempt = 1; attempt <= geminiRetryAttempts(); attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-goog-api-key": key,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        lastError = `Gemini transcription HTTP ${response.status}: ${text.slice(0, 1000)}`;
+        if (attempt < geminiRetryAttempts() && retryableGeminiStatus(response.status)) {
+          const delayMs = retryAfterMs(response.headers.get("retry-after")) ?? geminiRetryDelayMs(attempt);
+          writeStderr(`WARN: Gemini transcription attempt ${attempt}/${geminiRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
+          await sleep(delayMs);
+          continue;
+        }
+        throw new NonRetryableGeminiError(lastError);
+      }
+      const json = JSON.parse(text) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; error?: { message?: string } };
+      const transcript = compact((json.candidates || []).flatMap(candidate => candidate.content?.parts?.map(part => part.text || "") || []).join("\n"));
+      if (!transcript && json.error?.message) throw new NonRetryableGeminiError(json.error.message);
+      return transcript;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (error instanceof NonRetryableGeminiError) throw error;
+      if (attempt < geminiRetryAttempts()) {
+        const delayMs = geminiRetryDelayMs(attempt);
+        writeStderr(`WARN: Gemini transcription attempt ${attempt}/${geminiRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
+        await sleep(delayMs);
+        continue;
+      }
+      throw new Error(lastError);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error(lastError || "Gemini transcription failed");
+}
+
+async function runGeminiTranscription(audioFile: string, outDir: string): Promise<string> {
+  if (!geminiApiKey()) throw new Error("GEMINI_API_KEY is not configured");
+  const chunks = prepareGeminiAudioChunks(audioFile, outDir);
+  const parts: string[] = [];
+  for (const [index, chunk] of chunks.entries()) {
+    if (index > 0) await sleep(geminiChunkDelayMs());
+    writeStderr(`Gemini transcribing chunk ${index + 1}/${chunks.length}: ${path.basename(chunk)}`);
+    parts.push(await transcribeGeminiChunk(chunk, index, chunks.length));
+  }
+  const transcript = compact(parts.join("\n"));
+  if (transcript.length < minTranscriptChars()) throw new Error(`Gemini transcript too short (${transcript.length} chars)`);
+  return transcript;
+}
+
 async function transcribeAudio(audioFile: string, outDir: string): Promise<string> {
   const errors: string[] = [];
   for (const provider of transcriptionProviders()) {
     try {
+      if (provider === "gemini") return await runGeminiTranscription(audioFile, path.join(outDir, "gemini"));
       if (provider === "groq") return await runGroqWhisper(audioFile, path.join(outDir, "groq"));
       if (["whisper-cpp", "whisper.cpp", "cpp"].includes(provider)) return runWhisperCpp(audioFile, path.join(outDir, "whisper-cpp"));
       if (["local", "local-whisper", "whisper"].includes(provider)) return runLocalWhisper(audioFile, path.join(outDir, "local"));
