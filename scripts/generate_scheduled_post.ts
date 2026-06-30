@@ -16,7 +16,7 @@ import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts"
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
 
-type ResultItem = ReturnType<typeof archivePost> & {
+export type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
   failed?: boolean;
   error?: string;
@@ -92,6 +92,49 @@ function skippedLowQuality(task: Task, date: string, reason: string): ResultItem
     tags: taskTags(task),
     skip_reason: reason,
   };
+}
+
+function envPositiveInt(name: string, fallback: number): number {
+  const value = Number(process.env[name] || "");
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function dailyPodcastMinEpisodes(): number {
+  return envPositiveInt("PODCAST_MIN_EPISODES", 1);
+}
+
+function usablePodcastArticleCount(results: ResultItem[]): number {
+  return results.filter(result => !result.failed && Boolean(result.path) && !result.skip_reason).length;
+}
+
+function skippedPodcastEpisode(result: ResultItem): ResultItem {
+  const target = result.path ? ` (${result.path})` : "";
+  return {
+    ...result,
+    path: "",
+    created: false,
+    skipped: true,
+    failed: undefined,
+    error: undefined,
+    skip_reason: `episode generation skipped${target}: ${result.error || "unknown error"}`,
+  };
+}
+
+export function settleDailyPodcastArticleResults(results: ResultItem[], date: string, minEpisodes = dailyPodcastMinEpisodes()): ResultItem[] {
+  const usableCount = usablePodcastArticleCount(results);
+  const settled = results.map(result => {
+    if (!result.failed) return result;
+    return skippedPodcastEpisode(result);
+  });
+  if (usableCount >= minEpisodes) return settled;
+  return [
+    ...settled,
+    failedTask(
+      "daily-podcasts",
+      date,
+      new PodcastSourceInsufficientEpisodesError("daily podcasts", usableCount, minEpisodes),
+    ),
+  ];
 }
 
 
@@ -758,7 +801,7 @@ async function generateDailyPodcastArticles({ task, repo, date, force, promptDir
     }
   }
   if (!results.length) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", 0, 1);
-  return results;
+  return settleDailyPodcastArticleResults(results, date);
 }
 
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {

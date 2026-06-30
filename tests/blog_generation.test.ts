@@ -16,6 +16,7 @@ import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
 import { parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
+import { type ResultItem, settleDailyPodcastArticleResults } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -408,6 +409,61 @@ function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
 }
+
+function podcastResult(overrides: Partial<ResultItem>): ResultItem {
+  return {
+    task: "daily-podcasts",
+    path: "",
+    title: "每日播客笔记｜2099-01-02",
+    created: false,
+    skipped: false,
+    updated_at_bjt: "",
+    commit: "",
+    push: "",
+    tags: ["播客", "定时文章"],
+    ...overrides,
+  };
+}
+
+test("daily podcasts skip single episode failures when enough articles succeed", () => {
+  const results = settleDailyPodcastArticleResults(
+    [
+      podcastResult({ path: "src/content/posts/zh-cn/每日播客-2099-01-02-01-good.md", created: true }),
+      podcastResult({
+        path: "src/content/posts/zh-cn/每日播客-2099-01-02-02-blocked.md",
+        failed: true,
+        error: "audio download HTTP 403",
+      }),
+    ],
+    "2099-01-02",
+    1,
+  );
+
+  assert.equal(results.some(result => result.failed), false);
+  assert.equal(results[1].skipped, true);
+  assert.equal(results[1].path, "");
+  assert.match(results[1].skip_reason || "", /audio download HTTP 403/);
+  assert.match(results[1].skip_reason || "", /每日播客-2099-01-02-02-blocked\.md/);
+});
+
+test("daily podcasts fail only when successful articles fall below the minimum", () => {
+  const results = settleDailyPodcastArticleResults(
+    [
+      podcastResult({
+        path: "src/content/posts/zh-cn/每日播客-2099-01-02-01-blocked.md",
+        failed: true,
+        error: "audio download HTTP 403",
+      }),
+    ],
+    "2099-01-02",
+    1,
+  );
+
+  assert.equal(results[0].skipped, true);
+  const failures = results.filter(result => result.failed);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].error || "", /found only 0 usable episodes; need 1/);
+});
 
 test("foreign tech podcast source trims oversized transcripts for prompt stability", async () => {
   const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-trim-${Date.now()}-${Math.random()}.json`);
