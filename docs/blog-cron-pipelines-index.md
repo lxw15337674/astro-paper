@@ -30,8 +30,8 @@ Do **not** treat this file as the single source of truth for each pipeline's det
 - Primary entrypoint:
   - `.github/workflows/scheduled-posts.yml` with `task=daily-podcasts`
 - Key scripts/data:
-  - `scripts/foreign_tech_podcast_source.ts` (merged foreign + Apple Top Shows pool, one multimodal article per episode)
-  - `data/foreign-tech-podcast/curated-episodes.json`
+  - `scripts/foreign_tech_podcast_source.ts` (merged foreign RSS + Apple Top Shows pool, one multimodal article per episode)
+  - `scripts/podcast_ledger.ts` + `data/daily-podcasts/summarized.json` (fingerprint dedup of already-summarized episodes)
   - `prompts/blog/daily-podcasts.md`
   - `scripts/astro_paper_archive.ts`
   - `scripts/verify_blog_generation.ts`

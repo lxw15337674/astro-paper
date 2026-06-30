@@ -400,7 +400,7 @@ test("foreign tech podcast source includes technical interview feeds", () => {
   assert.equal(feeds.has("Gradient Dissent"), false);
 });
 
-function writeCuratedPodcastFile(file: string, episodes: unknown[]): void {
+function writeTestPodcastEpisodesFile(file: string, episodes: unknown[]): void {
   fs.writeFileSync(file, JSON.stringify({ episodes }, null, 2));
 }
 
@@ -409,67 +409,17 @@ function restoreEnv(name: string, value: string | undefined): void {
   else process.env[name] = value;
 }
 
-test("foreign tech podcast source supports curated episodes with transcripts", async () => {
-  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-${Date.now()}-${Math.random()}.json`);
-  const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
-  const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
-  const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
-  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
-  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
-  const previousTranscriptChars = process.env.PODCAST_TRANSCRIPT_CHARS;
-  writeCuratedPodcastFile(curatedFile, [
-    {
-      archiveDate: "2026-06-23",
-      title: "Building Reliable AI Developer Platforms",
-      show: "Latent Space",
-      source: "Curated Transcript",
-      guest: "Platform Lead",
-      date: "2026-06-23",
-      link: "https://example.com/podcast/dev-platforms",
-      description: "Curated episode with stored transcript evidence.",
-      transcript: "The guest explains how AI coding agents change developer platforms. Teams need eval suites, review gates, rollback paths, permission boundaries, observability, and release safety because generated pull requests can arrive continuously. The discussion compares ad hoc demos with production workflows and argues that infrastructure teams must redesign queues, ownership, and verification before agents can safely land code.",
-    },
-  ]);
-  process.env.PODCAST_DISABLE_RSS = "true";
-  process.env.PODCAST_MIN_EPISODES = "1";
-  process.env.PODCAST_MAX_EPISODES = "1";
-  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
-  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
-  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
-  process.env.PODCAST_TRANSCRIPT_CHARS = "10";
-  try {
-    const source = await buildForeignTechPodcastSource("2026-06-23");
-    assert.match(source, /Building Reliable AI Developer Platforms/);
-    assert.match(source, /Platform Lead/);
-    assert.match(source, /AI coding agents change developer platforms/);
-    assert.match(source, /generated pull requests can arrive continuously/);
-    assert.match(source, /#### Transcript/);
-    assert.doesNotMatch(source, /#### Transcript excerpt/);
-    assert.doesNotMatch(source, /未提供 transcript/);
-  } finally {
-    restoreEnv("PODCAST_DISABLE_RSS", previousDisableRss);
-    restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
-    restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
-    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
-    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
-    restoreEnv("PODCAST_TRANSCRIPT_CHARS", previousTranscriptChars);
-    fs.rmSync(curatedFile, { force: true });
-  }
-});
-
 test("foreign tech podcast source trims oversized transcripts for prompt stability", async () => {
   const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-trim-${Date.now()}-${Math.random()}.json`);
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousCuratedFile = process.env.PODCAST_TEST_EPISODES_FILE;
   const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
   const previousPromptTranscriptChars = process.env.PODCAST_PROMPT_TRANSCRIPT_CHARS;
   const transcript = `HEAD_SENTINEL ${"engineering signal ".repeat(2200)} TAIL_SENTINEL`;
-  writeCuratedPodcastFile(curatedFile, [
+  writeTestPodcastEpisodesFile(curatedFile, [
     {
       archiveDate: "2026-06-23",
       title: "Operating AI Platforms Under Load",
@@ -486,7 +436,7 @@ test("foreign tech podcast source trims oversized transcripts for prompt stabili
   process.env.PODCAST_MIN_EPISODES = "1";
   process.env.PODCAST_MAX_EPISODES = "1";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
-  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_TEST_EPISODES_FILE = curatedFile;
   process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   process.env.PODCAST_PROMPT_TRANSCRIPT_CHARS = "4000";
   try {
@@ -500,7 +450,7 @@ test("foreign tech podcast source trims oversized transcripts for prompt stabili
     restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
     restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_TEST_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     restoreEnv("PODCAST_PROMPT_TRANSCRIPT_CHARS", previousPromptTranscriptChars);
     fs.rmSync(curatedFile, { force: true });
@@ -513,10 +463,10 @@ test("foreign tech podcast skips a failed episode when enough transcript evidenc
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousCuratedFile = process.env.PODCAST_TEST_EPISODES_FILE;
   const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
   const originalFetch = globalThis.fetch;
-  writeCuratedPodcastFile(curatedFile, [
+  writeTestPodcastEpisodesFile(curatedFile, [
     {
       archiveDate: "2026-06-23",
       title: "Reliable Agent Review Loops",
@@ -542,7 +492,7 @@ test("foreign tech podcast skips a failed episode when enough transcript evidenc
   process.env.PODCAST_MIN_EPISODES = "1";
   process.env.PODCAST_MAX_EPISODES = "2";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "true";
-  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_TEST_EPISODES_FILE = curatedFile;
   process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   globalThis.fetch = (async () => new Response("forbidden", { status: 403 })) as typeof fetch;
   try {
@@ -554,7 +504,7 @@ test("foreign tech podcast skips a failed episode when enough transcript evidenc
     restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
     restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_TEST_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     globalThis.fetch = originalFetch;
     fs.rmSync(curatedFile, { force: true });
@@ -567,11 +517,11 @@ test("foreign tech podcast skips audio downloads that exceed the per-episode tim
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousCuratedFile = process.env.PODCAST_TEST_EPISODES_FILE;
   const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
   const previousDownloadTimeout = process.env.PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS;
   const originalFetch = globalThis.fetch;
-  writeCuratedPodcastFile(curatedFile, [
+  writeTestPodcastEpisodesFile(curatedFile, [
     {
       archiveDate: "2026-06-23",
       title: "Reliable Agent Review Loops",
@@ -597,7 +547,7 @@ test("foreign tech podcast skips audio downloads that exceed the per-episode tim
   process.env.PODCAST_MIN_EPISODES = "1";
   process.env.PODCAST_MAX_EPISODES = "2";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "true";
-  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_TEST_EPISODES_FILE = curatedFile;
   process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   process.env.PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS = "10";
   globalThis.fetch = (async (_url, init) =>
@@ -626,7 +576,7 @@ test("foreign tech podcast skips audio downloads that exceed the per-episode tim
     restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
     restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_TEST_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     restoreEnv("PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS", previousDownloadTimeout);
     globalThis.fetch = originalFetch;
@@ -634,14 +584,14 @@ test("foreign tech podcast skips audio downloads that exceed the per-episode tim
   }
 });
 
-test("foreign tech podcast source rejects curated metadata-only episodes", async () => {
-  const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-metadata-${Date.now()}-${Math.random()}.json`);
+test("foreign tech podcast source rejects metadata-only episodes without transcripts", async () => {
+  const curatedFile = path.join(os.tmpdir(), `astro-paper-podcast-metadata-${Date.now()}-${Math.random()}.json`);
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
-  writeCuratedPodcastFile(curatedFile, [
+  const previousCuratedFile = process.env.PODCAST_TEST_EPISODES_FILE;
+  writeTestPodcastEpisodesFile(curatedFile, [
     {
       archiveDate: "2026-06-23",
       title: "Building the Infrastructure for ASI | Ganesh Krishnan | Ep. 219",
@@ -657,7 +607,7 @@ test("foreign tech podcast source rejects curated metadata-only episodes", async
   process.env.PODCAST_MIN_EPISODES = "1";
   process.env.PODCAST_MAX_EPISODES = "1";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
-  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_TEST_EPISODES_FILE = curatedFile;
   try {
     await assert.rejects(() => buildForeignTechPodcastSource("2026-06-23"), /found only 0 usable episodes/);
   } finally {
@@ -665,7 +615,7 @@ test("foreign tech podcast source rejects curated metadata-only episodes", async
     restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
     restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_TEST_EPISODES_FILE", previousCuratedFile);
     fs.rmSync(curatedFile, { force: true });
   }
 });
@@ -689,7 +639,7 @@ test("daily podcasts fetch skips episodes already in the summarized ledger", asy
     })}\n`,
   );
   const transcript = "This transcript discusses AI engineering, product workflows, verification, release safety, architecture, developer platforms, operational risk, review gates, auditability, and infrastructure changes in enough detail to be usable evidence.";
-  writeCuratedPodcastFile(curatedFile, [
+  writeTestPodcastEpisodesFile(curatedFile, [
     {
       archiveDate: "2026-06-23",
       title: "The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life",
@@ -716,14 +666,14 @@ test("daily podcasts fetch skips episodes already in the summarized ledger", asy
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
   const previousLedgerFile = process.env.PODCAST_SUMMARIZED_LEDGER_FILE;
-  const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
+  const previousCuratedFile = process.env.PODCAST_TEST_EPISODES_FILE;
   const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
   process.env.PODCAST_DISABLE_RSS = "true";
   process.env.PODCAST_MIN_EPISODES = "3";
   process.env.PODCAST_MAX_EPISODES = "3";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
   process.env.PODCAST_SUMMARIZED_LEDGER_FILE = ledgerFile;
-  process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
+  process.env.PODCAST_TEST_EPISODES_FILE = curatedFile;
   process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   try {
     const source = await buildForeignTechPodcastSource("2026-06-23");
@@ -737,7 +687,7 @@ test("daily podcasts fetch skips episodes already in the summarized ledger", asy
     restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
     restoreEnv("PODCAST_SUMMARIZED_LEDGER_FILE", previousLedgerFile);
-    restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
+    restoreEnv("PODCAST_TEST_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     fs.rmSync(curatedFile, { force: true });
     fs.rmSync(ledgerFile, { force: true });

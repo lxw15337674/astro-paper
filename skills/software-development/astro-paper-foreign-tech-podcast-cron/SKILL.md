@@ -65,31 +65,32 @@ Reader expectation:
   - Current base pool includes AI/product sources such as a16z, Decoder, Practical AI, Big Technology, The Cognitive Revolution, and Training Data.
   - Engineering/interview expansion includes Software Engineering Daily, Software Engineering Radio, Oxide and Friends, The InfoQ Podcast, Changelog Interviews, The Data Engineering Show, Dwarkesh Podcast, and Gradient Dissent.
   - Do not mix in generic news brief / daily AI roundup / marketing podcasts unless the user explicitly changes the content direction.
-- Curated external entries: `data/foreign-tech-podcast/curated-episodes.json`
+- Apple Podcasts Top Shows: `fetchAppleTopShows` pulls the storefront chart and resolves each show's RSS feed.
 - Transcription: local Whisper for entries with audio URLs.
-- Curated entries without audio are allowed only when they include useful metadata/show notes; they must be marked as non-transcribed evidence.
+- Episodes without a usable transcript are skipped (no metadata-only fallback).
+- Dedup ledger: `scripts/podcast_ledger.ts` + `data/daily-podcasts/summarized.json` records already-summarized episodes by source fingerprint; the fetch skips any episode whose fingerprint is in the ledger.
 
 ## Data Sources and Upstream Dependencies
 
 ### Primary content source
 The source-of-truth input now lives in the repository-owned GitHub Actions pipeline:
-- RSS metadata and local Whisper transcripts from `scripts/foreign_tech_podcast_source.ts`;
-- repository-curated YouTube / Apple Podcasts / external selected entries from `data/foreign-tech-podcast/curated-episodes.json`.
+- RSS metadata and local Whisper transcripts from `scripts/foreign_tech_podcast_source.ts` (foreign tech feeds + Apple Podcasts Top Shows).
 
 Historical Hermes cron jobs (`daily-global-tech-podcast-markdown` and `foreign-tech-podcast-astro-archive`) are no longer the main repo-owned path. Treat references to them as historical context unless the user explicitly asks to restore the external upstream chain.
 
 ### Ownership split
-- **content selection** belongs to `foreign_tech_podcast_source.ts` plus curated episode data;
+- **content selection** belongs to `foreign_tech_podcast_source.ts` (RSS + Apple Top Shows pools);
+- **dedup** belongs to `scripts/podcast_ledger.ts` and `data/daily-podcasts/summarized.json`;
 - **note drafting** belongs to the AI call using `prompts/blog/foreign-tech-podcast.md`;
 - **Astro persistence** belongs to `scripts/astro_paper_archive.ts`;
 - **quality gate** belongs to `scripts/verify_blog_generation.ts` and the site build.
 
 ### Debugging principle
 When the final article is weak, first determine which problem class it belongs to:
-- wrong episode/topic selection -> source builder or curated data issue;
+- wrong episode/topic selection -> source builder (RSS / Apple Top Shows) issue;
 - correct topic but shallow note style -> prompt / AI response quality issue;
 - correct markdown but broken saved article -> archive issue;
-- generated article does not match a historical manually archived post -> check whether that post came from curated external entries rather than RSS-only automation.
+- the same episode re-archived across runs -> dedup ledger (`podcast_ledger.ts`) issue.
 
 ## Content Contract
 
@@ -125,24 +126,25 @@ This skill should document the repo-owned GitHub Actions chain.
 - `.github/workflows/scheduled-posts.yml`
 - `scripts/generate_scheduled_post.ts --task foreign-tech-podcast`
 - `scripts/foreign_tech_podcast_source.ts`
-- `data/foreign-tech-podcast/curated-episodes.json`
+- `scripts/podcast_ledger.ts` + `data/daily-podcasts/summarized.json`
 - `prompts/blog/foreign-tech-podcast.md`
 - `scripts/astro_paper_archive.ts`
 - `scripts/verify_blog_generation.ts`
 
 ### Responsibility split
-- source builder / curated JSON -> select episodes and assemble evidence;
+- source builder -> select episodes (RSS + Apple Top Shows) and assemble evidence;
+- dedup ledger -> skip episodes already summarized in prior runs;
 - AI prompt -> turn evidence into long-form Chinese notes;
 - Astro archive layer -> save it as a valid post in the content tree;
 - verifier/build -> reject shallow, malformed, duplicated, or placeholder output.
 
 ## Editing Strategy
 
-### Change the source builder or curated data when
+### Change the source builder when
 - the selected content is wrong;
-- YouTube / Apple Podcasts / external selected sources need to be included;
+- Apple Podcasts Top Shows selection needs adjusting;
 - RSS feeds are too narrow or stale;
-- transcript-less curated entries need better metadata/show notes.
+- dedup is too aggressive or too loose (tune `scripts/podcast_ledger.ts` fingerprints).
 
 ### Change the prompt when
 - the article is too short or too chat-like;
@@ -164,7 +166,7 @@ Because the user explicitly prefers long-form note style, do not “fix” a sha
    ```bash
    PODCAST_DISABLE_RSS=true PODCAST_MIN_EPISODES=1 node --import tsx scripts/foreign_tech_podcast_source.ts --date 2026-06-23
    ```
-2. Inspect the source artifact and confirm curated / RSS evidence is clearly labeled.
+2. Inspect the source artifact and confirm RSS / Apple Top Shows evidence is clearly labeled.
 3. Run `pnpm run test:blog`.
 4. Run `pnpm run typecheck`.
 5. Run `pnpm run build`.
@@ -175,8 +177,9 @@ Because the user explicitly prefers long-form note style, do not “fix” a sha
 When the pipeline changes, verify the GitHub Actions path.
 
 ### Source smoke test
-- Use `PODCAST_DISABLE_RSS=true` with a date that has curated entries to avoid expensive Whisper work while checking external-source support.
-- Confirm source output contains YouTube / Apple / curated entries and states when transcript is missing.
+- Use `PODCAST_DISABLE_RSS=true` to skip the RSS pool and exercise only the Apple Top Shows path when checking selection logic.
+- Tests can inject fixed episodes without network via `PODCAST_TEST_EPISODES_FILE` (test-only seam; not used in production).
+- Confirm source output contains RSS / Apple Top Shows entries and states when transcript is missing.
 
 ### End-to-end workflow
 - Trigger `Scheduled posts` with `task=foreign-tech-podcast` and a small `podcast_max_episodes` for smoke tests when needed.
@@ -191,7 +194,7 @@ Because scheduled publishing changes should be manually verified, do not stop af
    - this violates the user's explicit long-note preference.
 
 2. **Expecting the archive job to invent depth that the source/prompt lacks**
-   - if the note is shallow, fix curated metadata, RSS selection, transcript evidence, or the prompt.
+   - if the note is shallow, fix RSS / Apple Top Shows selection, transcript evidence, or the prompt.
 
 3. **Verifying only the cron artifact and not the saved post**
    - success means the Astro article is correct and buildable.
@@ -201,7 +204,7 @@ Because scheduled publishing changes should be manually verified, do not stop af
 
 ## Verification Checklist
 
-- [ ] Source artifact labels RSS, curated, transcript, and transcript-less evidence clearly
+- [ ] Source artifact labels RSS, Apple Top Shows, and transcript evidence clearly
 - [ ] AI response is long-form note style
 - [ ] Archive writes the correct body
 - [ ] Generated post file structure still reads like a podcast note

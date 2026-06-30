@@ -110,20 +110,20 @@ Purpose:
 
 Primary pipeline:
 - GitHub Actions workflow: `.github/workflows/scheduled-posts.yml`
-- scheduled task: `daily-podcasts` at `30 1 * * *` UTC (09:30 Asia/Shanghai); merges the foreign tech RSS/curated pool with Apple Podcasts Top Shows and emits one multimodal article per episode
+- scheduled task: `daily-podcasts` at `30 1 * * *` UTC (09:30 Asia/Shanghai); merges the foreign tech RSS pool with Apple Podcasts Top Shows and emits one multimodal article per episode
 - manual dispatch input: `task=daily-podcasts`
 
 Implementation split:
-- source collection: `scripts/foreign_tech_podcast_source.ts` (`fetchMergedPodcastEpisodes` unions the foreign and Apple Top Shows pools)
-- curated external entries: `data/foreign-tech-podcast/curated-episodes.json`
+- source collection: `scripts/foreign_tech_podcast_source.ts` (`fetchMergedPodcastEpisodes` unions the foreign RSS and Apple Top Shows pools)
+- dedup ledger: `data/daily-podcasts/summarized.json` (`scripts/podcast_ledger.ts` records summarized episodes by source fingerprint)
 - prompt contract: `prompts/blog/daily-podcasts.md`
 - archive write: `scripts/astro_paper_archive.ts`
 - contract verification: `scripts/verify_blog_generation.ts`
 
 Architecture note:
 - GitHub Actions is the source-of-truth publishing path for this repo.
-- The source builder first reads repository-curated YouTube / Apple Podcasts / external selected entries, then fills from RSS feeds and local Whisper transcripts when audio enclosures are available.
-- Curated entries without audio are allowed, but must carry useful metadata/show notes and are explicitly marked as non-transcribed evidence so the AI cannot pretend to have heard the full episode.
+- The source builder collects from the foreign tech RSS feeds and Apple Podcasts Top Shows, transcribing audio enclosures with local Whisper; episodes without a usable transcript are skipped.
+- Already-summarized episodes are skipped via the fingerprint ledger so the same episode is not re-archived across runs.
 - Older Hermes two-step notes (`daily-global-tech-podcast-markdown` → `foreign-tech-podcast-astro-archive`) are historical context, not the current repo-owned main path.
 
 ### 3. Morning Market

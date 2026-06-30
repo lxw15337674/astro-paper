@@ -34,34 +34,10 @@ export type Episode = {
   duration?: string;
   transcript?: string;
   canonicalId?: string;
-  curated?: boolean;
   chartRank?: number;
   appleId?: string;
   appleUrl?: string;
   genres?: string[];
-};
-
-type CuratedEpisodeInput = {
-  archiveDate?: string;
-  show?: string;
-  source?: string;
-  title?: string;
-  link?: string;
-  audioUrl?: string;
-  guid?: string;
-  pubDate?: string;
-  date?: string;
-  description?: string;
-  guest?: string;
-  imageUrl?: string;
-  duration?: string;
-  transcript?: string;
-  canonicalId?: string;
-};
-
-type CuratedEpisodesFile = {
-  episodes?: CuratedEpisodeInput[];
-  dates?: Record<string, CuratedEpisodeInput[]>;
 };
 
 type AppleTopShow = {
@@ -310,19 +286,34 @@ function transcriptForPrompt(episode: Episode): string {
   return `${clipText(transcript, headChars)}${marker}${transcript.slice(-tailChars).trimStart()}`.trim();
 }
 
-function curatedEpisodesFile(): string {
-  return process.env.PODCAST_CURATED_EPISODES_FILE || path.join(repoRoot(), "data/foreign-tech-podcast/curated-episodes.json");
-}
+// 测试专用注入口：仅当显式设置 PODCAST_TEST_EPISODES_FILE 时生效，把预置 Episode 注入 RSS 池，
+// 让单测在不联网的情况下覆盖 transcript 裁剪、音频超时、账本去重等逻辑。生产环境不配置此变量，函数返回空数组。
+type InjectedEpisodeInput = {
+  title?: string;
+  show?: string;
+  source?: string;
+  link?: string;
+  audioUrl?: string;
+  guid?: string;
+  pubDate?: string;
+  date?: string;
+  description?: string;
+  guest?: string;
+  imageUrl?: string;
+  duration?: string;
+  transcript?: string;
+  canonicalId?: string;
+};
 
-function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
+function normalizeInjectedEpisode(input: InjectedEpisodeInput): Episode | null {
   const title = stripHtml(input.title || "");
   const description = stripHtml(input.description || "");
   const link = input.link || "";
   const date = input.date || (input.pubDate ? new Date(input.pubDate).toISOString().slice(0, 10) : "");
   if (!title || !description || !link || !date) return null;
   return {
-    show: input.show || input.source || "外部精选",
-    source: input.source || input.show || "外部精选",
+    show: input.show || input.source || "测试来源",
+    source: input.source || input.show || "测试来源",
     title,
     link,
     audioUrl: input.audioUrl || "",
@@ -335,22 +326,14 @@ function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
     duration: input.duration,
     transcript: input.transcript ? compact(input.transcript) : undefined,
     canonicalId: input.canonicalId,
-    curated: true,
   };
 }
 
-function loadCuratedEpisodes(date: string): Episode[] {
-  const file = curatedEpisodesFile();
-  if (!fs.existsSync(file)) return [];
-  const payload = JSON.parse(fs.readFileSync(file, "utf8")) as CuratedEpisodesFile;
-  const dated = payload.dates?.[date] || [];
-  const global = (payload.episodes || []).filter(episode => {
-    if (episode.archiveDate) return episode.archiveDate === date;
-    if (!episode.date) return false;
-    const delta = daysBetween(date, episode.date);
-    return delta >= 0 && delta <= maxWindowDays();
-  });
-  return [...dated, ...global].map(normalizeCuratedEpisode).filter((episode): episode is Episode => Boolean(episode));
+function loadTestInjectedEpisodes(): Episode[] {
+  const file = process.env.PODCAST_TEST_EPISODES_FILE;
+  if (!file || !fs.existsSync(file)) return [];
+  const payload = JSON.parse(fs.readFileSync(file, "utf8")) as { episodes?: InjectedEpisodeInput[] };
+  return (payload.episodes || []).map(normalizeInjectedEpisode).filter((episode): episode is Episode => Boolean(episode));
 }
 
 async function fetchRssEpisodes(date: string): Promise<Episode[]> {
@@ -484,12 +467,11 @@ async function fetchAppleTopPodcastEpisodes(date: string, force = false): Promis
 }
 
 async function fetchEpisodes(date: string, force = false): Promise<Episode[]> {
-  const curated = loadCuratedEpisodes(date);
   const rss = await fetchRssEpisodes(date);
   const seen = force ? new Set<string>() : loadSummarizedFingerprints();
   const unique: Episode[] = [];
   let skipped = 0;
-  for (const episode of [...curated, ...rss]) {
+  for (const episode of [...loadTestInjectedEpisodes(), ...rss]) {
     const fingerprints = podcastFingerprints(episode);
     const duplicate = fingerprints.find(fingerprint => seen.has(fingerprint));
     if (duplicate) {
@@ -501,9 +483,7 @@ async function fetchEpisodes(date: string, force = false): Promise<Episode[]> {
     unique.push(episode);
   }
   if (skipped) writeStderr(`skipped ${skipped} duplicate podcast episode(s) already present in archive history`);
-  const curatedCount = unique.filter(episode => episode.curated).length;
-  const limit = Math.max(candidateEpisodes(), curatedCount);
-  return unique.slice(0, limit);
+  return unique.slice(0, candidateEpisodes());
 }
 
 async function downloadAudio(url: string, file: string): Promise<void> {
@@ -1021,7 +1001,7 @@ async function enrichWithTranscripts(episodes: Episode[], options: { tolerateFai
         enriched.push({ ...episode, transcript });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (episode.curated || options.tolerateFailures) {
+        if (options.tolerateFailures) {
           writeStderr(`WARN: ${episode.title}: podcast audio transcription unavailable; skipping episode: ${message}`);
           continue;
         }
@@ -1076,7 +1056,7 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
   return `${lines.join("\n").trim()}\n`;
 }
 
-// 合并数据源：海外科技 curated/RSS 池 + Apple Top Shows 榜单池，交替穿插保证两类来源都在前 N 篇里有代表，再跨池按指纹去重。
+// 合并数据源：海外科技 RSS 池 + Apple Top Shows 榜单池，交替穿插保证两类来源都在前 N 篇里有代表，再跨池按指纹去重。
 async function fetchMergedPodcastEpisodes(date: string, force = false): Promise<Episode[]> {
   const foreign = await fetchEpisodes(date, force);
   let apple: Episode[] = [];
@@ -1111,7 +1091,7 @@ export async function buildDailyPodcastSource(date = bjtDateString()): Promise<s
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", episodes.length, minEpisodes());
   return podcastSourceMarkdown(
     episodes,
-    "以下证据来自海外科技播客 RSS/curated 条目与 Apple Podcasts Top Shows 榜单及其可用 transcript。没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
+    "以下证据来自海外科技播客 RSS 条目与 Apple Podcasts Top Shows 榜单及其可用 transcript。没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
     [
       "- 这是基于播客 transcript 的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
       "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
@@ -1121,13 +1101,13 @@ export async function buildDailyPodcastSource(date = bjtDateString()): Promise<s
   );
 }
 
-// 海外科技 RSS/curated 子池的转写式 source；保留为合并 source 的构件并供单测覆盖该数据源。
+// 海外科技 RSS 子池的转写式 source；保留为合并 source 的构件并供单测覆盖该数据源。
 export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
   const episodes = (await enrichWithTranscripts(await fetchEpisodes(date), { tolerateFailures: true })).slice(0, maxEpisodes());
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("foreign tech podcast", episodes.length, minEpisodes());
   return podcastSourceMarkdown(
     episodes,
-    "以下证据来自海外科技访谈/深度讨论类播客 RSS/curated 条目及其可用 transcript。每个候选都必须有音频转写或仓库预置 transcript；没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
+    "以下证据来自海外科技访谈/深度讨论类播客 RSS 条目及其可用 transcript。每个候选都必须有音频转写；没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
     [
       "- 这是基于播客 transcript 的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
       "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",

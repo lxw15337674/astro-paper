@@ -1,6 +1,6 @@
 ## 来源说明
 
-以下证据来自海外科技播客 RSS/curated 条目与 Apple Podcasts Top Shows 榜单。只允许依据标题、节目、发布日期、链接和节目简介/内容写作；不得编造嘉宾、transcript、观点或未提供的事实。
+以下证据来自海外科技播客 RSS 条目与 Apple Podcasts Top Shows 榜单。只允许依据标题、节目、发布日期、链接和节目简介/内容写作；不得编造嘉宾、transcript、观点或未提供的事实。
 
 ## 本期元数据
 
