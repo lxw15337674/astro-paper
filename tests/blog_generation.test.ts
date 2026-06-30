@@ -139,7 +139,7 @@ test("common article rules require knowledge and viewpoint extraction", () => {
   const podcastPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "foreign-tech-podcast.md"), "utf8");
   assert.match(podcastPrompt, /把音频内容提炼成知识和观点/);
   assert.match(podcastPrompt, /不能只描述“聊了什么”/);
-  assert.match(podcastPrompt, /可复用的判断框架/);
+  assert.match(podcastPrompt, /### 核心观点/);
 });
 
 test("blog task registry covers prompts, fixtures, archive paths and schedules", () => {
