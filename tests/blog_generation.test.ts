@@ -11,6 +11,7 @@ import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { FEEDS, PodcastSourceInsufficientEpisodesError, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
+import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
 import { parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
@@ -669,12 +670,23 @@ test("foreign tech podcast source rejects curated metadata-only episodes", async
   }
 });
 
-test("foreign tech podcast filters episodes already archived on previous dates", async () => {
-  const postsDir = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-history-"));
+test("daily podcasts fetch skips episodes already in the summarized ledger", async () => {
+  const ledgerFile = path.join(os.tmpdir(), `astro-paper-ledger-${Date.now()}-${Math.random()}.json`);
   const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-history-${Date.now()}-${Math.random()}.json`);
   fs.writeFileSync(
-    path.join(postsDir, "海外科技播客-2026-06-22.md"),
-    `---\ntitle: old\n---\n\n## The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life\n\n### 基本信息\n\n- **节目**：The Oprah Podcast\n- **日期**：2026-05-19\n- **链接**：https://podcasts.apple.com/us/podcast/the-co-founders-of-claude-ai-tell-oprah-about/id1782960381?i=1000768533274&utm_source=copy&uo=4\n`,
+    ledgerFile,
+    `${JSON.stringify({
+      version: 1,
+      episodes: [
+        {
+          title: "The Co-Founders of Claude AI Tell Oprah About the Impact Artificial Intelligence Has on Your Life",
+          show: "The Oprah Podcast",
+          link: "https://podcasts.apple.com/us/podcast/the-co-founders-of-claude-ai-tell-oprah-about/id1782960381?i=1000768533274&utm_source=copy&uo=4",
+          date: "2026-05-19",
+          archivedAt: "2026-06-22",
+        },
+      ],
+    })}\n`,
   );
   const transcript = "This transcript discusses AI engineering, product workflows, verification, release safety, architecture, developer platforms, operational risk, review gates, auditability, and infrastructure changes in enough detail to be usable evidence.";
   writeCuratedPodcastFile(curatedFile, [
@@ -703,14 +715,14 @@ test("foreign tech podcast filters episodes already archived on previous dates",
   const previousMinEpisodes = process.env.PODCAST_MIN_EPISODES;
   const previousMaxEpisodes = process.env.PODCAST_MAX_EPISODES;
   const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
+  const previousLedgerFile = process.env.PODCAST_SUMMARIZED_LEDGER_FILE;
   const previousCuratedFile = process.env.PODCAST_CURATED_EPISODES_FILE;
   const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
   process.env.PODCAST_DISABLE_RSS = "true";
   process.env.PODCAST_MIN_EPISODES = "3";
   process.env.PODCAST_MAX_EPISODES = "3";
   process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
-  process.env.PODCAST_HISTORY_POSTS_DIR = postsDir;
+  process.env.PODCAST_SUMMARIZED_LEDGER_FILE = ledgerFile;
   process.env.PODCAST_CURATED_EPISODES_FILE = curatedFile;
   process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
   try {
@@ -724,36 +736,36 @@ test("foreign tech podcast filters episodes already archived on previous dates",
     restoreEnv("PODCAST_MIN_EPISODES", previousMinEpisodes);
     restoreEnv("PODCAST_MAX_EPISODES", previousMaxEpisodes);
     restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_HISTORY_POSTS_DIR", previousHistoryPostsDir);
+    restoreEnv("PODCAST_SUMMARIZED_LEDGER_FILE", previousLedgerFile);
     restoreEnv("PODCAST_CURATED_EPISODES_FILE", previousCuratedFile);
     restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
     fs.rmSync(curatedFile, { force: true });
+    fs.rmSync(ledgerFile, { force: true });
   }
 });
 
-test("foreign tech podcast archive rejects episodes already archived on previous dates", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-history-archive-"));
-  const postsDir = path.join(repo, "src/content/posts/zh-cn");
-  fs.mkdirSync(postsDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(postsDir, "每日播客-2099-01-01-01-latent-space.md"),
-    `---\ntitle: old\n---\n\n## Building Reliable AI Developer Platforms\n\n### 基本信息\n\n- **节目**：Latent Space\n- **日期**：2099-01-02\n- **链接**：https://example.com/podcast/dev-platforms?utm_medium=social\n`,
-  );
-  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
-  assert.throws(() => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true }), /already archived/);
-});
-
-test("daily podcast archive rejects same-day duplicate episodes with different suffixes", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-same-day-"));
-  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
-  const first = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true, fileNameSuffix: "01-latent-space" });
-  assert.equal(first.created, true);
-  assert.throws(
-    () => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true, fileNameSuffix: "02-latent-space" }),
-    /already archived/,
-  );
-  const overwrite = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true, fileNameSuffix: "01-latent-space" });
-  assert.equal(overwrite.created, false);
+test("summarized ledger upserts by fingerprint and matches tracking-param variants", () => {
+  const ledgerFile = path.join(os.tmpdir(), `astro-paper-ledger-unit-${Date.now()}-${Math.random()}.json`);
+  const episode = {
+    title: "Building Reliable AI Developer Platforms",
+    show: "Latent Space",
+    link: "https://example.com/podcast/dev-platforms?utm_medium=social",
+    date: "2099-01-02",
+  };
+  try {
+    appendSummarizedEpisode(episode, { archivedAt: "2099-01-02", postPath: "src/content/posts/zh-cn/每日播客-2099-01-02-01-latent-space.md" }, ledgerFile);
+    // 同一集再次写入（force 重生场景）→ upsert，不新增条目，刷新 archivedAt/postPath
+    appendSummarizedEpisode(episode, { archivedAt: "2099-01-03", postPath: "src/content/posts/zh-cn/每日播客-2099-01-03-01-latent-space.md" }, ledgerFile);
+    const parsed = JSON.parse(fs.readFileSync(ledgerFile, "utf8")) as { episodes: { postPath?: string; archivedAt?: string }[] };
+    assert.equal(parsed.episodes.length, 1);
+    assert.equal(parsed.episodes[0].archivedAt, "2099-01-03");
+    assert.match(parsed.episodes[0].postPath || "", /2099-01-03-01-latent-space/);
+    // 追踪参数变体仍命中已存指纹
+    const variant = { title: "Building Reliable AI Developer Platforms", show: "Latent Space", link: "https://example.com/podcast/dev-platforms?uo=4" };
+    assert.equal(isEpisodeSummarized(loadSummarizedFingerprints(ledgerFile), variant), true);
+  } finally {
+    fs.rmSync(ledgerFile, { force: true });
+  }
 });
 
 test("foreign tech podcast URL fingerprints ignore common tracking parameters", () => {

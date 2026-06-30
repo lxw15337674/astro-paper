@@ -4,7 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { bjtDateString, clipText, compact, ensureDir, fetchText, parseArgs, repoRoot, stringArg, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
-import { historicalPodcastFingerprints, podcastFingerprints } from "./foreign_tech_podcast_dedupe.ts";
+import { podcastFingerprints } from "./foreign_tech_podcast_dedupe.ts";
+import { isEpisodeSummarized, loadSummarizedFingerprints } from "./podcast_ledger.ts";
 import { renderPrompt } from "./ai_blog_writer.ts";
 
 type FeedSource = {
@@ -313,10 +314,6 @@ function curatedEpisodesFile(): string {
   return process.env.PODCAST_CURATED_EPISODES_FILE || path.join(repoRoot(), "data/foreign-tech-podcast/curated-episodes.json");
 }
 
-function podcastHistoryPostsDir(): string {
-  return process.env.PODCAST_HISTORY_POSTS_DIR || path.join(repoRoot(), "src/content/posts/zh-cn");
-}
-
 function normalizeCuratedEpisode(input: CuratedEpisodeInput): Episode | null {
   const title = stripHtml(input.title || "");
   const description = stripHtml(input.description || "");
@@ -445,13 +442,13 @@ async function lookupApplePodcast(show: AppleTopShow): Promise<FeedSource | null
   };
 }
 
-function episodeAlreadySeen(seen: Map<string, unknown>, episode: Episode): boolean {
-  return podcastFingerprints(episode).some(fingerprint => seen.has(fingerprint));
+function episodeAlreadySeen(seen: Set<string>, episode: Episode): boolean {
+  return isEpisodeSummarized(seen, episode);
 }
 
-async function fetchAppleTopPodcastEpisodes(date: string): Promise<Episode[]> {
+async function fetchAppleTopPodcastEpisodes(date: string, force = false): Promise<Episode[]> {
   const shows = await fetchAppleTopShows();
-  const seen = historicalPodcastFingerprints(podcastHistoryPostsDir(), date);
+  const seen = force ? new Set<string>() : loadSummarizedFingerprints();
   const selected: Episode[] = [];
   let skippedDuplicates = 0;
   for (const show of shows) {
@@ -475,7 +472,7 @@ async function fetchAppleTopPodcastEpisodes(date: string): Promise<Episode[]> {
         writeStderr(`WARN: Apple Top Shows #${show.rank} ${feed.show}: no recent unarchived episode in ${maxWindowDays()}d window`);
         continue;
       }
-      for (const fingerprint of podcastFingerprints(episode)) seen.set(fingerprint, { ...episode, file: `candidate:${date}` });
+      for (const fingerprint of podcastFingerprints(episode)) seen.add(fingerprint);
       selected.push(episode);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -486,10 +483,10 @@ async function fetchAppleTopPodcastEpisodes(date: string): Promise<Episode[]> {
   return selected;
 }
 
-async function fetchEpisodes(date: string): Promise<Episode[]> {
+async function fetchEpisodes(date: string, force = false): Promise<Episode[]> {
   const curated = loadCuratedEpisodes(date);
   const rss = await fetchRssEpisodes(date);
-  const seen = historicalPodcastFingerprints(podcastHistoryPostsDir(), date);
+  const seen = force ? new Set<string>() : loadSummarizedFingerprints();
   const unique: Episode[] = [];
   let skipped = 0;
   for (const episode of [...curated, ...rss]) {
@@ -497,10 +494,10 @@ async function fetchEpisodes(date: string): Promise<Episode[]> {
     const duplicate = fingerprints.find(fingerprint => seen.has(fingerprint));
     if (duplicate) {
       skipped += 1;
-      writeStderr(`skipping previously archived podcast: ${episode.title}`);
+      writeStderr(`skipping previously summarized podcast: ${episode.title}`);
       continue;
     }
-    for (const fingerprint of fingerprints) seen.set(fingerprint, { ...episode, file: `candidate:${date}` });
+    for (const fingerprint of fingerprints) seen.add(fingerprint);
     unique.push(episode);
   }
   if (skipped) writeStderr(`skipped ${skipped} duplicate podcast episode(s) already present in archive history`);
@@ -1080,11 +1077,11 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
 }
 
 // 合并数据源：海外科技 curated/RSS 池 + Apple Top Shows 榜单池，交替穿插保证两类来源都在前 N 篇里有代表，再跨池按指纹去重。
-async function fetchMergedPodcastEpisodes(date: string): Promise<Episode[]> {
-  const foreign = await fetchEpisodes(date);
+async function fetchMergedPodcastEpisodes(date: string, force = false): Promise<Episode[]> {
+  const foreign = await fetchEpisodes(date, force);
   let apple: Episode[] = [];
   try {
-    apple = await fetchAppleTopPodcastEpisodes(date);
+    apple = await fetchAppleTopPodcastEpisodes(date, force);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     writeStderr(`WARN: Apple Top Shows fetch failed; continuing with foreign episodes only: ${message}`);
@@ -1282,8 +1279,8 @@ async function generateGeminiArticle(prompt: string, audioParts: GeminiAudioPart
 }
 
 // 合并池里每个 episode 各出一篇（多模态：音频→文章），由编排层循环调用。
-export async function fetchDailyPodcastEpisodes(date = bjtDateString()): Promise<Episode[]> {
-  const episodes = (await fetchMergedPodcastEpisodes(date)).filter(episode => episode.audioUrl);
+export async function fetchDailyPodcastEpisodes(date = bjtDateString(), force = false): Promise<Episode[]> {
+  const episodes = (await fetchMergedPodcastEpisodes(date, force)).filter(episode => episode.audioUrl);
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", episodes.length, minEpisodes());
   return episodes;
 }

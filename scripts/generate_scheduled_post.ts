@@ -8,6 +8,7 @@ import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, r
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcastEpisodeArticle, buildDailyPodcastSource, fetchDailyPodcastEpisodes, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
+import { appendSummarizedEpisode } from "./podcast_ledger.ts";
 import { MarketSourceUnavailableError, generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
@@ -719,7 +720,7 @@ type GenerateTaskOptions = {
 
 // 合并任务：海外科技 + Apple Top Shows 候选池逐集走多模态，一集一篇。
 async function generateDailyPodcastArticles({ task, repo, date, force, promptDir, artifactsDir }: GenerateTaskOptions): Promise<ResultItem[]> {
-  const episodes = await fetchDailyPodcastEpisodes(date);
+  const episodes = await fetchDailyPodcastEpisodes(date, force);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const results: ResultItem[] = [];
   for (const [index, episode] of episodes.entries()) {
@@ -746,6 +747,7 @@ async function generateDailyPodcastArticles({ task, repo, date, force, promptDir
         ai_response_artifact: responseArtifact,
         mocked_ai: false,
       };
+      if (!result.skipped) appendSummarizedEpisode(episode, { archivedAt: date, postPath: result.path });
       results.push(result);
     } catch (error) {
       const failed = failedTask(task, date, error);
