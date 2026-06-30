@@ -118,7 +118,8 @@ jobs:
           APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10
           APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true
           APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000
-          PODCAST_FFMPEG_TIMEOUT_MS: 120000
+          PODCAST_FFMPEG_TIMEOUT_MS: 300000
+          PODCAST_DAILY_MAX_EPISODE_MINUTES: 90
         run: |
           set -euo pipefail
           args=(--ai --artifacts-dir blog-generation-artifacts)

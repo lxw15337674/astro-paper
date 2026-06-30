@@ -193,6 +193,9 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(podcastSource, /libopus/);
   assert.match(workflow, /PODCAST_GEMINI_ARTICLE_AUDIO_SPEED: "1\.5"/);
   assert.match(workflow, /PODCAST_GEMINI_ARTICLE_AUDIO_CODEC: libopus/);
+  assert.match(podcastSource, /PODCAST_DAILY_MAX_EPISODE_MINUTES/);
+  assert.match(podcastSource, /skipping overlong daily podcast episode/);
+  assert.match(podcastSource, /audio fetch returned 403; retrying with curl/);
   assert.match(podcastSource, /\"whisper-cpp,local\"/);
   assert.match(podcastSource, /function runWhisperCpp/);
   assert.match(podcastSource, /prepareWhisperCppAudioChunks/);
@@ -218,7 +221,8 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
-  assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 120000/);
+  assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 300000/);
+  assert.match(workflow, /PODCAST_DAILY_MAX_EPISODE_MINUTES: 90/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
   assert.match(workflow, /Report generation failures/);
   assert.match(workflow, /Summarize generation result/);

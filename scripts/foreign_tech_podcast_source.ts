@@ -104,6 +104,11 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function envFloat(name: string, fallback: number): number {
+  const value = Number(process.env[name] || "");
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 async function sleep(ms: number): Promise<void> {
   if (ms > 0) await new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -251,8 +256,29 @@ function maxWindowDays(): number {
   return envNumber("PODCAST_LOOKBACK_DAYS", 10);
 }
 
+function maxDailyEpisodeMinutes(): number {
+  return envNumber("PODCAST_DAILY_MAX_EPISODE_MINUTES", 90);
+}
+
 function minTranscriptChars(): number {
   return envNumber("PODCAST_MIN_TRANSCRIPT_CHARS", 1000);
+}
+
+function parseDurationSeconds(value = ""): number | null {
+  const text = value.trim();
+  if (!text) return null;
+  if (/^\d+(\.\d+)?$/.test(text)) return Math.round(Number(text));
+  const parts = text.split(":").map(part => Number(part));
+  if (!parts.length || parts.some(part => !Number.isFinite(part) || part < 0)) return null;
+  let total = 0;
+  for (const part of parts) total = total * 60 + part;
+  return Math.round(total);
+}
+
+function exceedsDailyEpisodeDurationLimit(episode: Episode): boolean {
+  const seconds = parseDurationSeconds(episode.duration);
+  if (!seconds) return false;
+  return seconds > maxDailyEpisodeMinutes() * 60;
 }
 
 function normalizedTranscript(episode: Episode): string {
@@ -525,11 +551,38 @@ async function downloadAudio(url: string, file: string): Promise<void> {
       out.on("error", reject);
     });
   } catch (error) {
+    if (error instanceof Error && /audio download HTTP 403/.test(error.message)) {
+      writeStderr(`WARN: audio fetch returned 403; retrying with curl: ${url}`);
+      downloadAudioWithCurl(url, file, timeoutMs, maxBytes);
+      return;
+    }
     if (timedOut || (error instanceof Error && error.name === "AbortError")) throw new Error(`audio download timed out after ${timeoutMs}ms`);
     throw error;
   } finally {
     clearTimeout(timer);
   }
+}
+
+function downloadAudioWithCurl(url: string, file: string, timeoutMs: number, maxBytes: number): void {
+  ensureDir(path.dirname(file));
+  const result = spawnSync(
+    "curl",
+    [
+      "-fL",
+      "-A",
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+      "--max-time",
+      String(Math.max(1, Math.ceil(timeoutMs / 1000))),
+      "--output",
+      file,
+      url,
+    ],
+    { encoding: "utf8", timeout: timeoutMs, maxBuffer: 5 * 1024 * 1024 },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`audio download HTTP 403`);
+  const size = fs.statSync(file).size;
+  if (size > maxBytes) throw new Error(`audio exceeds ${Math.round(maxBytes / 1024 / 1024)}MB limit`);
 }
 
 function splitExtraArgs(value = ""): string[] {
@@ -1048,6 +1101,10 @@ async function fetchMergedPodcastEpisodes(date: string): Promise<Episode[]> {
   const merged: Episode[] = [];
   const seen = new Set<string>();
   for (const episode of interleaved) {
+    if (exceedsDailyEpisodeDurationLimit(episode)) {
+      writeStderr(`WARN: skipping overlong daily podcast episode (${episode.duration}): ${episode.show} — ${episode.title}`);
+      continue;
+    }
     const fingerprints = podcastFingerprints(episode);
     if (fingerprints.some(fingerprint => seen.has(fingerprint))) continue;
     for (const fingerprint of fingerprints) seen.add(fingerprint);
@@ -1112,7 +1169,7 @@ function prepareGeminiArticleAudioChunks(audioFile: string, outDir: string): { f
   ensureDir(outDir);
   const segmentSeconds = envNumber("PODCAST_GEMINI_SEGMENT_SECONDS", 20 * 60);
   const bitrate = process.env.PODCAST_GEMINI_ARTICLE_AUDIO_BITRATE || "24k";
-  const speed = process.env.PODCAST_GEMINI_ARTICLE_AUDIO_SPEED || "1.5";
+  const speed = String(envFloat("PODCAST_GEMINI_ARTICLE_AUDIO_SPEED", 1.5));
   const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
   const { codec, ext, mime } = geminiArticleAudioCodec();
   runFfmpeg(
