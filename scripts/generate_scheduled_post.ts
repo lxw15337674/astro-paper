@@ -7,7 +7,7 @@ import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiCo
 import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
-import { type AppleTopPodcastArticleSource, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastArticleSources, buildAppleTopPodcastsSource, buildForeignTechPodcastArticle, buildForeignTechPodcastSource, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
+import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcastEpisodeArticle, buildDailyPodcastSource, fetchDailyPodcastEpisodes, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
 import { MarketSourceUnavailableError, generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
@@ -74,12 +74,8 @@ function slugForFile(text: string): string {
   return slug || "podcast";
 }
 
-function appleTopPodcastFileNameSuffix(article: AppleTopPodcastArticleSource): string {
-  return `${String(article.rank).padStart(2, "0")}-${slugForFile(article.show)}`;
-}
-
-function appleTopPodcastTitleSuffix(article: AppleTopPodcastArticleSource): string {
-  return `#${String(article.rank).padStart(2, "0")} ${article.show}`;
+function dailyPodcastFileNameSuffix(episode: Episode, index: number): string {
+  return `${String(index + 1).padStart(2, "0")}-${slugForFile(episode.show)}`;
 }
 
 function skippedLowQuality(task: Task, date: string, reason: string): ResultItem {
@@ -98,17 +94,10 @@ function skippedLowQuality(task: Task, date: string, reason: string): ResultItem
 }
 
 
-function envFlag(name: string, fallback = false): boolean {
-  const raw = process.env[name];
-  if (raw === undefined || raw === "") return fallback;
-  return !["0", "false", "no", "off"].includes(raw.toLowerCase());
-}
-
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
   if (error instanceof MarketSourceUnavailableError && error.task === task) return true;
   if (!(error instanceof PodcastSourceInsufficientEpisodesError)) return false;
-  if (task === "foreign-tech-podcast") return true;
-  return task === "apple-top-podcasts" && envFlag("APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT", false);
+  return task === "daily-podcasts";
 }
 
 function failedTask(task: Task, date: string, error: unknown): ResultItem {
@@ -140,8 +129,7 @@ const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
   "crypto-market-daily": () => generateCryptoMarketDaily(),
   "us-market-daily": date => generateUsMarketDaily(date),
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
-  "foreign-tech-podcast": date => buildForeignTechPodcastSource(date),
-  "apple-top-podcasts": date => buildAppleTopPodcastsSource(date),
+  "daily-podcasts": date => buildDailyPodcastSource(date),
   "tech-weekly": date => buildTechWeeklySource(date),
   "ai-weekly": date => buildAiWeeklySource(date),
   "tech-business-weekly": date => buildTechBusinessWeeklySource(date),
@@ -729,24 +717,15 @@ type GenerateTaskOptions = {
   artifactsDir: string;
 };
 
-async function generateAppleTopPodcastArticles({
-  task,
-  repo,
-  date,
-  force,
-  useAi,
-  model,
-  promptDir,
-  mockResponseDir,
-  artifactsDir,
-}: GenerateTaskOptions): Promise<ResultItem[]> {
-  const articles = await buildAppleTopPodcastArticleSources(date);
+// 合并任务：海外科技 + Apple Top Shows 候选池逐集走多模态，一集一篇。
+async function generateDailyPodcastArticles({ task, repo, date, force, promptDir, artifactsDir }: GenerateTaskOptions): Promise<ResultItem[]> {
+  const episodes = await fetchDailyPodcastEpisodes(date);
+  const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const results: ResultItem[] = [];
-  for (const article of articles) {
-    const fileNameSuffix = appleTopPodcastFileNameSuffix(article);
-    const titleSuffix = appleTopPodcastTitleSuffix(article);
+  for (const [index, episode] of episodes.entries()) {
+    const fileNameSuffix = dailyPodcastFileNameSuffix(episode, index);
     if (!force) {
-      const skipped = skippedExistingVariant(task, repo, date, fileNameSuffix, titleSuffix);
+      const skipped = skippedExistingVariant(task, repo, date, fileNameSuffix);
       if (skipped) {
         results.push(skipped);
         continue;
@@ -754,54 +733,35 @@ async function generateAppleTopPodcastArticles({
     }
     const artifactKey = `${task}-${fileNameSuffix}`;
     try {
-      let body = article.source;
-      let generation: ResultItem["generation"];
-      if (useAi) {
-        const rendered = await renderWithAi({ task, date, source: article.source, repo, model, promptDir, mockResponseDir, artifactsDir, artifactKey });
-        body = rendered.markdown;
-        generation = rendered.metadata;
-      }
-      const result: ResultItem = archivePost({ task, date, repo, body, force, fileNameSuffix, titleSuffix });
-      if (generation) result.generation = generation;
+      const article = await buildDailyPodcastEpisodeArticle(episode, date, { promptDir: resolvedPromptDir });
+      const markdown = validateMarkdown(article);
+      const responseArtifact = writeArtifact(artifactsDir, artifactKey, "ai-response.md", markdown);
+      const result: ResultItem = archivePost({ task, date, repo, body: markdown, force, fileNameSuffix });
+      result.generation = {
+        ai_model: geminiArticleModel(),
+        ai_base_url: geminiArticleBaseUrl(),
+        ai_fallback_used: false,
+        source_artifact: "",
+        prompt_artifact: "",
+        ai_response_artifact: responseArtifact,
+        mocked_ai: false,
+      };
       results.push(result);
     } catch (error) {
       const failed = failedTask(task, date, error);
       failed.path = variantPostRelPath(task, date, fileNameSuffix);
-      failed.title = titleForVariant(task, date, titleSuffix);
+      failed.title = titleForVariant(task, date);
       results.push(failed);
       writeStderr(`ERROR: ${artifactKey} generation failed: ${failed.error}`);
     }
   }
-  if (!results.length) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", 0, 1);
+  if (!results.length) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", 0, 1);
   return results;
-}
-
-async function generateForeignTechPodcastArticle({ task, repo, date, force, promptDir, artifactsDir }: GenerateTaskOptions): Promise<ResultItem[]> {
-  if (!force) {
-    const skipped = skippedExisting(task, repo, date);
-    if (skipped) return [skipped];
-  }
-  const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const article = await buildForeignTechPodcastArticle(date, { promptDir: resolvedPromptDir });
-  const markdown = validateMarkdown(article);
-  const responseArtifact = writeArtifact(artifactsDir, task, "ai-response.md", markdown);
-  const result: ResultItem = archivePost({ task, date, repo, body: markdown, force });
-  result.generation = {
-    ai_model: geminiArticleModel(),
-    ai_base_url: geminiArticleBaseUrl(),
-    ai_fallback_used: false,
-    source_artifact: "",
-    prompt_artifact: "",
-    ai_response_artifact: responseArtifact,
-    mocked_ai: false,
-  };
-  return [result];
 }
 
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
   const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
-  if (task === "apple-top-podcasts" && !sourceFixtureDir) return generateAppleTopPodcastArticles(options);
-  if (task === "foreign-tech-podcast" && useAi && !sourceFixtureDir && !mockResponseDir) return generateForeignTechPodcastArticle(options);
+  if (task === "daily-podcasts" && useAi && !sourceFixtureDir && !mockResponseDir) return generateDailyPodcastArticles(options);
   if (!force) {
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];

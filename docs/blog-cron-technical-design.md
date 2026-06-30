@@ -110,13 +110,13 @@ Purpose:
 
 Primary pipeline:
 - GitHub Actions workflow: `.github/workflows/scheduled-posts.yml`
-- scheduled task: `foreign-tech-podcast` at `30 1 * * *` UTC (09:30 Asia/Shanghai)
-- manual dispatch input: `task=foreign-tech-podcast`
+- scheduled task: `daily-podcasts` at `30 1 * * *` UTC (09:30 Asia/Shanghai); merges the foreign tech RSS/curated pool with Apple Podcasts Top Shows and emits one multimodal article per episode
+- manual dispatch input: `task=daily-podcasts`
 
 Implementation split:
-- source collection: `scripts/foreign_tech_podcast_source.ts`
+- source collection: `scripts/foreign_tech_podcast_source.ts` (`fetchMergedPodcastEpisodes` unions the foreign and Apple Top Shows pools)
 - curated external entries: `data/foreign-tech-podcast/curated-episodes.json`
-- prompt contract: `prompts/blog/foreign-tech-podcast.md`
+- prompt contract: `prompts/blog/daily-podcasts.md`
 - archive write: `scripts/astro_paper_archive.ts`
 - contract verification: `scripts/verify_blog_generation.ts`
 

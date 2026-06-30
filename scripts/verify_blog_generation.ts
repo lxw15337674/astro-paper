@@ -42,8 +42,8 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
   if (isTask(expectedTask)) {
     const info = taskInfo(expectedTask);
     if (!frontmatter.includes(info.tag)) throw new Error(`${file} frontmatter missing ${info.tag} tag`);
-    // foreign-tech-podcast 标题改为「节目名：本期中文标题」，不再带固定 titlePrefix。
-    if (expectedTask !== "foreign-tech-podcast" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
+    // daily-podcasts 标题改为「节目名：本期中文标题」，不再带固定 titlePrefix。
+    if (expectedTask !== "daily-podcasts" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
   }
   return text;
 }
@@ -103,12 +103,11 @@ function verifySourceContract(repo: string, task: string, sourceArtifact: string
     requireTerms(relPath, source, ["HN 讨论", "原文"]);
     return;
   }
-  if (task === "foreign-tech-podcast" || task === "apple-top-podcasts") {
+  if (task === "daily-podcasts") {
     requireTermPatterns(relPath, source, [
       { label: "podcast metadata", pattern: /节目|来源|音频|链接/ },
       { label: "transcript evidence", pattern: /transcript|转写|摘录|长文|内容/i },
     ]);
-    if (task === "apple-top-podcasts") requireTerms(relPath, source, ["Apple Top Shows", "Apple ID"]);
     return;
   }
   if (task === "github-trending-daily") {

@@ -8,7 +8,7 @@ import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
-import { FEEDS, PodcastSourceInsufficientEpisodesError, buildAppleTopPodcastArticleSources, buildAppleTopPodcastsSource, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
+import { FEEDS, PodcastSourceInsufficientEpisodesError, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
@@ -136,7 +136,7 @@ test("common article rules require knowledge and viewpoint extraction", () => {
   assert.match(commonRules, /可迁移的知识/);
   assert.match(commonRules, /只回答“发生了什么”的段落不合格/);
 
-  const podcastPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "foreign-tech-podcast.md"), "utf8");
+  const podcastPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-podcasts.md"), "utf8");
   assert.match(podcastPrompt, /把音频内容提炼成知识和观点/);
   assert.match(podcastPrompt, /不能只描述“聊了什么”/);
   assert.match(podcastPrompt, /### 核心观点/);
@@ -162,7 +162,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.equal(scheduledTaskInput("30 22 * * *").dateOffset, -1);
   assert.equal(scheduledTaskInput("30 0 * * *").task, "daily-digests");
   assert.equal(scheduledTaskInput("30 9 * * *").task, "hn-top10");
-  assert.equal(scheduledTaskInput("30 3 * * *").task, "apple-top-podcasts");
+  assert.equal(scheduledTaskInput("30 1 * * *").task, "daily-podcasts");
   assert.equal(scheduledTaskInput("unknown schedule").task, "all");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(schedule, /^\d+ \d+ \* \* (?:\*|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)$/);
@@ -173,7 +173,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
   }
   assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
-  assert.match(workflow, /github\.event\.inputs\.task == 'apple-top-podcasts'/);
+  assert.match(workflow, /github\.event\.inputs\.task == 'daily-podcasts'/);
   assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
   assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
   assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
@@ -187,7 +187,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(podcastSource, /inline_data/);
   assert.match(workflow, /PODCAST_GEMINI_ARTICLE_BASE_URL: https:\/\/right\.codes\/gemini/);
   assert.match(workflow, /PODCAST_GEMINI_ARTICLE_MODEL: gemini-3\.5-flash/);
-  assert.match(podcastSource, /export async function buildForeignTechPodcastArticle/);
+  assert.match(podcastSource, /export async function buildDailyPodcastEpisodeArticle/);
   assert.match(podcastSource, /\"whisper-cpp,local\"/);
   assert.match(podcastSource, /function runWhisperCpp/);
   assert.match(podcastSource, /prepareWhisperCppAudioChunks/);
@@ -205,7 +205,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
   assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 10/);
-  assert.match(workflow, /PODCAST_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '1' \}\}/);
+  assert.match(workflow, /PODCAST_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '8' \}\}/);
   assert.match(workflow, /PODCAST_MIN_EPISODES: 1/);
   assert.match(workflow, /PODCAST_CANDIDATE_EPISODES: 8/);
   assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '10' \}\}/);
@@ -231,16 +231,11 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(itemSummaryPrompt, /一次只处理一条候选/);
   assert.match(sectionPlannerPrompt, /动态规划《技术日报》的栏目/);
   assert.match(techDailyPrompt, /不要固定套用 AI\/工程\/商业三段式/);
-  const appleTopPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog/apple-top-podcasts.md"), "utf8");
-  assert.match(appleTopPrompt, /### 内容总结/);
-  assert.match(appleTopPrompt, /### 详细内容/);
-  assert.match(appleTopPrompt, /不要输出 `### Highlights`/);
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
-  assert.match(generator, /APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT/);
-  assert.match(generator, /buildAppleTopPodcastArticleSources/);
-  assert.match(generator, /buildForeignTechPodcastArticle/);
+  assert.match(generator, /generateDailyPodcastArticles/);
+  assert.match(generator, /buildDailyPodcastEpisodeArticle/);
   assert.match(generator, /buildCombinedTechDailySource/);
   assert.match(generator, /daily-digest-item-summary\.md/);
   assert.match(generator, /daily-digest-section-planner\.md/);
@@ -554,155 +549,6 @@ test("foreign tech podcast skips a failed episode when enough transcript evidenc
   }
 });
 
-test("Apple Top podcast source converts top-level source aborts into insufficient evidence", async () => {
-  const previousMinEpisodes = process.env.APPLE_TOP_PODCASTS_MIN_EPISODES;
-  const originalFetch = globalThis.fetch;
-  process.env.APPLE_TOP_PODCASTS_MIN_EPISODES = "2";
-  globalThis.fetch = (async () => {
-    const error = new Error("This operation was aborted");
-    error.name = "AbortError";
-    throw error;
-  }) as typeof fetch;
-  try {
-    await assert.rejects(
-      () => buildAppleTopPodcastsSource("2026-06-23"),
-      (error: unknown) =>
-        error instanceof PodcastSourceInsufficientEpisodesError &&
-        /Apple Top Shows podcast source found only 0 usable episodes; need 2/.test(error.message) &&
-        /request timed out after 20000ms/.test(error.message),
-    );
-  } finally {
-    restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test("Apple Top podcast tries extra candidates but keeps one episode article", async () => {
-  const previousMinEpisodes = process.env.APPLE_TOP_PODCASTS_MIN_EPISODES;
-  const previousMaxEpisodes = process.env.APPLE_TOP_PODCASTS_MAX_EPISODES;
-  const previousCandidateEpisodes = process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES;
-  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
-  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
-  const originalFetch = globalThis.fetch;
-  const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), "apple-top-history-"));
-  process.env.APPLE_TOP_PODCASTS_MIN_EPISODES = "1";
-  process.env.APPLE_TOP_PODCASTS_MAX_EPISODES = "1";
-  process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES = "2";
-  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
-  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
-  process.env.PODCAST_HISTORY_POSTS_DIR = historyDir;
-  globalThis.fetch = (async input => {
-    const url = String(input);
-    if (url.includes("applemarketingtools.com")) {
-      return new Response(
-        JSON.stringify({
-          feed: {
-            results: [
-              { id: "bad-show", name: "Bad Show", artistName: "Bad Host", url: "https://podcasts.apple.com/bad", genres: ["Technology"] },
-              { id: "good-show", name: "Good Show", artistName: "Good Host", url: "https://podcasts.apple.com/good", genres: ["Technology"] },
-            ],
-          },
-        }),
-        { status: 200 },
-      );
-    }
-    if (url.includes("id=bad-show")) return new Response(JSON.stringify({ results: [{ collectionName: "Bad Show", artistName: "Bad Host", feedUrl: "https://feeds.example.com/bad.xml" }] }), { status: 200 });
-    if (url.includes("id=good-show")) return new Response(JSON.stringify({ results: [{ collectionName: "Good Show", artistName: "Good Host", feedUrl: "https://feeds.example.com/good.xml" }] }), { status: 200 });
-    if (url === "https://feeds.example.com/bad.xml") {
-      return new Response("<rss><channel><item><title>Old Episode</title><description>Old item</description><link>https://example.com/old</link><pubDate>Mon, 01 Jun 2020 00:00:00 GMT</pubDate><enclosure url=\"https://example.com/old.mp3\" /></item></channel></rss>", { status: 200 });
-    }
-    if (url === "https://feeds.example.com/good.xml") {
-      return new Response("<rss><channel><item><title>Useful Apple Episode</title><description>Useful recent item with enough metadata for the source.</description><link>https://example.com/useful</link><pubDate>Tue, 23 Jun 2026 00:00:00 GMT</pubDate><podcast:transcript url=\"https://example.com/useful-transcript.txt\" type=\"text/plain\" /></item></channel></rss>", { status: 200 });
-    }
-    if (url === "https://example.com/useful-transcript.txt") {
-      return new Response("This transcript explains agentic software engineering, production review loops, release safety, observability, regression testing, ownership boundaries, and operational tradeoffs in enough detail to support one focused Apple podcast article.", { status: 200 });
-    }
-    throw new Error(`unexpected fetch: ${url}`);
-  }) as typeof fetch;
-  try {
-    const source = await buildAppleTopPodcastsSource("2026-06-23");
-    assert.match(source, /Useful Apple Episode/);
-    assert.doesNotMatch(source, /Old Episode/);
-  } finally {
-    restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
-    restoreEnv("APPLE_TOP_PODCASTS_MAX_EPISODES", previousMaxEpisodes);
-    restoreEnv("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", previousCandidateEpisodes);
-    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
-    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_HISTORY_POSTS_DIR", previousHistoryPostsDir);
-    globalThis.fetch = originalFetch;
-    fs.rmSync(historyDir, { recursive: true, force: true });
-  }
-});
-
-test("Apple Top podcast article sources split top shows into one source per article", async () => {
-  const previousMinEpisodes = process.env.APPLE_TOP_PODCASTS_MIN_EPISODES;
-  const previousMaxEpisodes = process.env.APPLE_TOP_PODCASTS_MAX_EPISODES;
-  const previousCandidateEpisodes = process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES;
-  const previousMinTranscriptChars = process.env.PODCAST_MIN_TRANSCRIPT_CHARS;
-  const previousAudioTranscribe = process.env.PODCAST_AUDIO_TRANSCRIBE;
-  const previousHistoryPostsDir = process.env.PODCAST_HISTORY_POSTS_DIR;
-  const originalFetch = globalThis.fetch;
-  const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), "apple-top-split-history-"));
-  process.env.APPLE_TOP_PODCASTS_MIN_EPISODES = "2";
-  process.env.APPLE_TOP_PODCASTS_MAX_EPISODES = "2";
-  process.env.APPLE_TOP_PODCASTS_CANDIDATE_EPISODES = "2";
-  process.env.PODCAST_MIN_TRANSCRIPT_CHARS = "120";
-  process.env.PODCAST_AUDIO_TRANSCRIBE = "false";
-  process.env.PODCAST_HISTORY_POSTS_DIR = historyDir;
-  globalThis.fetch = (async input => {
-    const url = String(input);
-    if (url.includes("applemarketingtools.com")) {
-      return new Response(
-        JSON.stringify({
-          feed: {
-            results: [
-              { id: "first-show", name: "First Show", artistName: "First Host", url: "https://podcasts.apple.com/first", genres: ["Technology"] },
-              { id: "second-show", name: "Second Show", artistName: "Second Host", url: "https://podcasts.apple.com/second", genres: ["Business"] },
-            ],
-          },
-        }),
-        { status: 200 },
-      );
-    }
-    if (url.includes("id=first-show")) return new Response(JSON.stringify({ results: [{ collectionName: "First Show", artistName: "First Host", feedUrl: "https://feeds.example.com/first.xml" }] }), { status: 200 });
-    if (url.includes("id=second-show")) return new Response(JSON.stringify({ results: [{ collectionName: "Second Show", artistName: "Second Host", feedUrl: "https://feeds.example.com/second.xml" }] }), { status: 200 });
-    if (url === "https://feeds.example.com/first.xml") {
-      return new Response("<rss><channel><item><title>First Episode</title><description>First recent item with enough metadata for source building.</description><link>https://example.com/first</link><pubDate>Tue, 23 Jun 2026 00:00:00 GMT</pubDate><podcast:transcript url=\"https://example.com/first.txt\" type=\"text/plain\" /></item></channel></rss>", { status: 200 });
-    }
-    if (url === "https://feeds.example.com/second.xml") {
-      return new Response("<rss><channel><item><title>Second Episode</title><description>Second recent item with enough metadata for source building.</description><link>https://example.com/second</link><pubDate>Tue, 23 Jun 2026 00:00:00 GMT</pubDate><podcast:transcript url=\"https://example.com/second.txt\" type=\"text/plain\" /></item></channel></rss>", { status: 200 });
-    }
-    if (url === "https://example.com/first.txt") {
-      return new Response("First transcript covers software teams, review loops, release safety, product tradeoffs, observability, incident response, customer feedback, and operational ownership in enough detail for a focused article.", { status: 200 });
-    }
-    if (url === "https://example.com/second.txt") {
-      return new Response("Second transcript covers creator economics, platform ranking incentives, monetization pressure, audience trust, production cadence, market structure, and distribution tradeoffs in enough detail for a focused article.", { status: 200 });
-    }
-    throw new Error(`unexpected fetch: ${url}`);
-  }) as typeof fetch;
-  try {
-    const articles = await buildAppleTopPodcastArticleSources("2026-06-23");
-    assert.equal(articles.length, 2);
-    assert.equal(articles[0].rank, 1);
-    assert.equal(articles[1].rank, 2);
-    assert.match(articles[0].source, /First Episode/);
-    assert.doesNotMatch(articles[0].source, /Second Episode/);
-    assert.match(articles[1].source, /Second Episode/);
-    assert.doesNotMatch(articles[1].source, /First Episode/);
-  } finally {
-    restoreEnv("APPLE_TOP_PODCASTS_MIN_EPISODES", previousMinEpisodes);
-    restoreEnv("APPLE_TOP_PODCASTS_MAX_EPISODES", previousMaxEpisodes);
-    restoreEnv("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", previousCandidateEpisodes);
-    restoreEnv("PODCAST_MIN_TRANSCRIPT_CHARS", previousMinTranscriptChars);
-    restoreEnv("PODCAST_AUDIO_TRANSCRIBE", previousAudioTranscribe);
-    restoreEnv("PODCAST_HISTORY_POSTS_DIR", previousHistoryPostsDir);
-    globalThis.fetch = originalFetch;
-    fs.rmSync(historyDir, { recursive: true, force: true });
-  }
-});
-
 test("foreign tech podcast skips audio downloads that exceed the per-episode timeout", async () => {
   const curatedFile = path.join(os.tmpdir(), `astro-paper-curated-audio-timeout-${Date.now()}-${Math.random()}.json`);
   const previousDisableRss = process.env.PODCAST_DISABLE_RSS;
@@ -882,8 +728,8 @@ test("foreign tech podcast archive rejects episodes already archived on previous
     path.join(postsDir, "海外科技播客-2099-01-01.md"),
     `---\ntitle: old\n---\n\n## Building Reliable AI Developer Platforms\n\n### 基本信息\n\n- **节目**：Latent Space\n- **日期**：2099-01-02\n- **链接**：https://example.com/podcast/dev-platforms?utm_medium=social\n`,
   );
-  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/foreign-tech-podcast.md"), "utf8");
-  assert.throws(() => archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: fixture, force: true }), /already archived/);
+  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
+  assert.throws(() => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true }), /already archived/);
 });
 
 test("foreign tech podcast URL fingerprints ignore common tracking parameters", () => {
@@ -985,36 +831,12 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   assert.match(hnMarkdown, /^## 1\. Developers don't understand CORS/m);
   const asia = archivePost({ task: "asia-market-daily", date: "2099-01-02", repo, body: asiaBody, force: true });
   const crypto = archivePost({ task: "crypto-market-daily", date: "2099-01-02", repo, body: cryptoBody, force: true });
-  const podcastBody = `${fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/foreign-tech-podcast.md"), "utf8")}
+  const podcastBody = `${fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8")}
 
 这期还谈到产品布局和值得关注的设计工作流，这些是产品访谈里的正常语义，不应被市场日报的投顾口吻过滤误伤。
 `;
-  const applePodcastBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/apple-top-podcasts.md"), "utf8");
   const us = archivePost({ task: "us-market-daily", date: "2099-01-02", repo, body: usBody, force: true });
-  const podcast = archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: podcastBody, force: true });
-  const applePodcast = archivePost({ task: "apple-top-podcasts", date: "2099-01-02", repo, body: applePodcastBody, force: true });
-  assert.throws(
-    () =>
-      archivePost({
-        task: "apple-top-podcasts",
-        date: "2099-01-03",
-        repo,
-        body: applePodcastBody.replace("### 内容总结", "### 一句话总结"),
-        force: true,
-      }),
-    /Apple Top Shows podcast contains forbidden section: ### 一句话总结/,
-  );
-  assert.throws(
-    () =>
-      archivePost({
-        task: "apple-top-podcasts",
-        date: "2099-01-03",
-        repo,
-        body: applePodcastBody.replace("### 详细内容", "### Highlights\n\n- 旧格式 bullet。\n\n### 详细内容"),
-        force: true,
-      }),
-    /Apple Top Shows podcast contains forbidden section: ### Highlights/,
-  );
+  const podcast = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: podcastBody, force: true });
   const techWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-weekly.md"), "utf8");
   const techWeekly = archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body: techWeeklyBody, force: true });
   const aiWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/ai-weekly.md"), "utf8");
@@ -1031,7 +853,6 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   const cryptoMarkdown = fs.readFileSync(path.join(repo, crypto.path), "utf8");
   const usMarkdown = fs.readFileSync(path.join(repo, us.path), "utf8");
   const podcastMarkdown = fs.readFileSync(path.join(repo, podcast.path), "utf8");
-  const applePodcastMarkdown = fs.readFileSync(path.join(repo, applePodcast.path), "utf8");
   const techWeeklyMarkdown = fs.readFileSync(path.join(repo, techWeekly.path), "utf8");
   const aiWeeklyMarkdown = fs.readFileSync(path.join(repo, aiWeekly.path), "utf8");
   const techBusinessWeeklyMarkdown = fs.readFileSync(path.join(repo, techBusinessWeekly.path), "utf8");
@@ -1056,10 +877,6 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);
   assert.match(podcastMarkdown, /### 长文笔记/);
-  assert.match(applePodcastMarkdown, /title: "Apple 热门播客笔记｜2099-01-02"/);
-  assert.match(applePodcastMarkdown, /### 内容总结/);
-  assert.match(applePodcastMarkdown, /### 详细内容/);
-  assert.doesNotMatch(applePodcastMarkdown, /### 一句话总结|### Highlights|### 长文笔记/);
   assert.match(techWeeklyMarkdown, /title: "技术趋势与工程观察｜2099-01-03"/);
   assert.match(techWeeklyMarkdown, /技术周刊/);
   assert.match(techWeeklyMarkdown, /^## 工程观察/m);
@@ -1232,13 +1049,13 @@ test("result verifier skips task-level failures with explicit error", () => {
 });
 
 
-test("foreign tech podcast rejects repeated summaries", () => {
+test("daily podcasts archive rejects repeated summaries and duplicate headings", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-repeat-"));
-  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/foreign-tech-podcast.md"), "utf8");
+  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
   const repeatedParagraph = "这期节目最值得记录的地方，是它把 AI 编程工具从个人效率叙事里拽了出来。过去讨论 coding assistant，经常停留在“写得快不快”“补全准不准”；但一旦 agent 能持续提交变更，真正麻烦的问题就变成：这些变更如何进入代码库，谁来审核，出了问题如何回滚，以及平台怎样判断一批机器生成代码是否超过组织承载能力。";
-  assert.throws(() => archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: `${fixture}\n\n${repeatedParagraph}\n`, force: true }), /repeated summary content/);
+  assert.throws(() => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: `${fixture}\n\n${repeatedParagraph}\n`, force: true }), /repeated summary content/);
   assert.throws(
-    () => archivePost({ task: "foreign-tech-podcast", date: "2099-01-02", repo, body: fixture.replace("## Data Centers, Energy, and the AI Infrastructure Stack", "## Building Reliable AI Developer Platforms"), force: true }),
+    () => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: `${fixture}\n\n${fixture}`, force: true }),
     /duplicate episode heading/,
   );
 });

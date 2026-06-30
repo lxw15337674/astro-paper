@@ -25,14 +25,14 @@ Do **not** treat this file as the single source of truth for each pipeline's det
 - Legacy context:
   - older Hermes jobs `0373c42e95ea` / `8640cfe88f41` are historical two-step publishing context, not the current source-of-truth path.
 
-### 2. Foreign Tech Podcast
+### 2. Daily Podcasts (foreign tech + Apple Top Shows)
 - Skill: `skills/software-development/astro-paper-foreign-tech-podcast-cron/SKILL.md`
 - Primary entrypoint:
-  - `.github/workflows/scheduled-posts.yml` with `task=foreign-tech-podcast`
+  - `.github/workflows/scheduled-posts.yml` with `task=daily-podcasts`
 - Key scripts/data:
-  - `scripts/foreign_tech_podcast_source.ts`
+  - `scripts/foreign_tech_podcast_source.ts` (merged foreign + Apple Top Shows pool, one multimodal article per episode)
   - `data/foreign-tech-podcast/curated-episodes.json`
-  - `prompts/blog/foreign-tech-podcast.md`
+  - `prompts/blog/daily-podcasts.md`
   - `scripts/astro_paper_archive.ts`
   - `scripts/verify_blog_generation.ts`
 - Schedule:

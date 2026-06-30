@@ -17,7 +17,7 @@ type FeedSource = {
   genres?: string[];
 };
 
-type Episode = {
+export type Episode = {
   show: string;
   source: string;
   title: string;
@@ -70,14 +70,6 @@ type AppleTopShow = {
   url: string;
   genres: string[];
   rank: number;
-};
-
-export type AppleTopPodcastArticleSource = {
-  rank: number;
-  show: string;
-  appleId: string;
-  episodeTitle: string;
-  source: string;
 };
 
 type AppleLookupResult = {
@@ -381,10 +373,6 @@ function appleTopPodcastsCandidateEpisodes(): number {
     appleTopPodcastsMinEpisodes(),
     envNumber("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", Math.max(appleTopPodcastsMaxEpisodes() * 10, appleTopPodcastsMinEpisodes())),
   );
-}
-
-function appleTopPodcastsTranscribeDelayMs(): number {
-  return envNumber("APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS", envNumber("PODCAST_TRANSCRIBE_DELAY_MS", 0));
 }
 
 function appleStorefront(): string {
@@ -1042,6 +1030,48 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
   return `${lines.join("\n").trim()}\n`;
 }
 
+// 合并数据源：海外科技 curated/RSS 池 + Apple Top Shows 榜单池，交替穿插保证两类来源都在前 N 篇里有代表，再跨池按指纹去重。
+async function fetchMergedPodcastEpisodes(date: string): Promise<Episode[]> {
+  const foreign = await fetchEpisodes(date);
+  let apple: Episode[] = [];
+  try {
+    apple = await fetchAppleTopPodcastEpisodes(date);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeStderr(`WARN: Apple Top Shows fetch failed; continuing with foreign episodes only: ${message}`);
+  }
+  const interleaved: Episode[] = [];
+  for (let i = 0; i < Math.max(foreign.length, apple.length); i += 1) {
+    if (i < foreign.length) interleaved.push(foreign[i]);
+    if (i < apple.length) interleaved.push(apple[i]);
+  }
+  const merged: Episode[] = [];
+  const seen = new Set<string>();
+  for (const episode of interleaved) {
+    const fingerprints = podcastFingerprints(episode);
+    if (fingerprints.some(fingerprint => seen.has(fingerprint))) continue;
+    for (const fingerprint of fingerprints) seen.add(fingerprint);
+    merged.push(episode);
+  }
+  return merged.slice(0, maxEpisodes());
+}
+
+export async function buildDailyPodcastSource(date = bjtDateString()): Promise<string> {
+  const episodes = (await enrichWithTranscripts(await fetchMergedPodcastEpisodes(date), { tolerateFailures: true })).slice(0, maxEpisodes());
+  if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", episodes.length, minEpisodes());
+  return podcastSourceMarkdown(
+    episodes,
+    "以下证据来自海外科技播客 RSS/curated 条目与 Apple Podcasts Top Shows 榜单及其可用 transcript。没有 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。",
+    [
+      "- 这是基于播客 transcript 的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
+      "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
+      "- 每条分析必须能回到 transcript 证据；不得仅凭标题、链接、图片或简短简介扩写。",
+      "- 不要生成金融建议、产品购买建议或夸张标题。",
+    ],
+  );
+}
+
+// 海外科技 RSS/curated 子池的转写式 source；保留为合并 source 的构件并供单测覆盖该数据源。
 export async function buildForeignTechPodcastSource(date = bjtDateString()): Promise<string> {
   const episodes = (await enrichWithTranscripts(await fetchEpisodes(date), { tolerateFailures: true })).slice(0, maxEpisodes());
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("foreign tech podcast", episodes.length, minEpisodes());
@@ -1167,19 +1197,18 @@ async function generateGeminiArticle(prompt: string, audioParts: GeminiAudioPart
   throw new Error(lastError || "Gemini article generation failed");
 }
 
-export async function buildForeignTechPodcastArticle(date = bjtDateString(), options: { promptDir?: string } = {}): Promise<string> {
+// 合并池里每个 episode 各出一篇（多模态：音频→文章），由编排层循环调用。
+export async function fetchDailyPodcastEpisodes(date = bjtDateString()): Promise<Episode[]> {
+  const episodes = (await fetchMergedPodcastEpisodes(date)).filter(episode => episode.audioUrl);
+  if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", episodes.length, minEpisodes());
+  return episodes;
+}
+
+export async function buildDailyPodcastEpisodeArticle(episode: Episode, date = bjtDateString(), options: { promptDir?: string } = {}): Promise<string> {
   const promptDir = options.promptDir || path.join(repoRoot(), "prompts", "blog");
-  const episodes = (await fetchEpisodes(date)).filter(episode => episode.audioUrl).slice(0, maxEpisodes());
-  if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("foreign tech podcast", episodes.length, minEpisodes());
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "foreign-tech-podcast-article-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "daily-podcast-article-"));
   try {
-    const audioParts: GeminiAudioPart[] = [];
-    const metaBlocks: string[] = [];
-    for (const [index, episode] of episodes.entries()) {
-      writeStderr(`preparing audio for multimodal article ${index + 1}/${episodes.length}: ${episode.title}`);
-      audioParts.push(...(await prepareEpisodeAudioParts(episode, tmp, index)));
-      metaBlocks.push(episodeAudioMetadataBlock(episode, index));
-    }
+    const audioParts = await prepareEpisodeAudioParts(episode, tmp, 0);
     const sourceText = [
       "## 来源说明",
       "",
@@ -1187,66 +1216,24 @@ export async function buildForeignTechPodcastArticle(date = bjtDateString(), opt
       "",
       "## 本期元数据",
       "",
-      metaBlocks.join("\n\n"),
+      episodeAudioMetadataBlock(episode, 0),
       "",
       "## 写作边界",
       "",
       ...FOREIGN_PODCAST_WRITING_BOUNDARIES,
     ].join("\n");
-    const prompt = renderPrompt({ task: "foreign-tech-podcast", date, sourceText, promptDir });
-    writeStderr(`generating foreign tech podcast article via ${geminiArticleModel()} (${audioParts.length} audio chunk(s))`);
+    const prompt = renderPrompt({ task: "daily-podcasts", date, sourceText, promptDir });
+    writeStderr(`generating daily podcast article via ${geminiArticleModel()} (${audioParts.length} audio chunk(s)): ${episode.title}`);
     return await generateGeminiArticle(prompt, audioParts);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-async function buildAppleTopPodcastEpisodesWithTranscripts(date: string): Promise<Episode[]> {
-  let episodes: Episode[];
-  try {
-    episodes = await enrichWithTranscripts(await fetchAppleTopPodcastEpisodes(date), { tolerateFailures: true, transcribeDelayMs: appleTopPodcastsTranscribeDelayMs() });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", 0, appleTopPodcastsMinEpisodes(), `source unavailable: ${message}`);
-  }
-  episodes = episodes.slice(0, appleTopPodcastsMaxEpisodes());
-  if (episodes.length < appleTopPodcastsMinEpisodes()) throw new PodcastSourceInsufficientEpisodesError("Apple Top Shows", episodes.length, appleTopPodcastsMinEpisodes());
-  return episodes;
-}
-
-function appleTopPodcastSourceMarkdown(episodes: Episode[]): string {
-  return podcastSourceMarkdown(
-    episodes,
-    `以下证据来自 Apple Podcasts ${appleStorefront().toUpperCase()} Top Shows 官方榜单、iTunes lookup 得到的 RSS feed、节目 RSS 元数据及其可用 transcript。候选按 Apple 榜单顺序保留；每个节目只选择近 ${maxWindowDays()} 天内第一个未归档且可转写的 episode。没有 RSS、近期音频或 transcript 的条目已在 source 阶段跳过。AI 只能依据 transcript 与元数据写作；不得编造嘉宾、观点或未提供的事实。`,
-    [
-      "- 这是基于 Apple Top Shows 热门节目近期 episode transcript 的中文长文笔记，不是榜单介绍或节目推荐。",
-      "- 需要按输入顺序逐条展开，不要额外生成总览或播客清单；不要把多个节目合并成一个主题。",
-      "- 若 transcript 或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
-      "- 每条分析必须能回到 transcript 证据；不得仅凭榜单排名、标题、链接、图片或简短简介扩写。",
-      "- 不要生成金融建议、健康建议、产品购买建议或夸张标题。",
-    ],
-  );
-}
-
-export async function buildAppleTopPodcastArticleSources(date = bjtDateString()): Promise<AppleTopPodcastArticleSource[]> {
-  const episodes = await buildAppleTopPodcastEpisodesWithTranscripts(date);
-  return episodes.map((episode, index) => ({
-    rank: episode.chartRank || index + 1,
-    show: episode.show,
-    appleId: episode.appleId || "",
-    episodeTitle: episode.title,
-    source: appleTopPodcastSourceMarkdown([episode]),
-  }));
-}
-
-export async function buildAppleTopPodcastsSource(date = bjtDateString()): Promise<string> {
-  return appleTopPodcastSourceMarkdown(await buildAppleTopPodcastEpisodesWithTranscripts(date));
-}
-
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = parseArgs();
   const date = stringArg(args, "date", bjtDateString());
-  buildForeignTechPodcastSource(date)
+  buildDailyPodcastSource(date)
     .then(text => writeStdout(text))
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
