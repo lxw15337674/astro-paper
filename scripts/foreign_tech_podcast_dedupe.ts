@@ -16,6 +16,11 @@ export type HistoricalPodcastEpisode = PodcastFingerprintInput & {
   file: string;
 };
 
+type HistoricalPodcastFileOptions = {
+  includeCurrentDate?: boolean;
+  excludeFile?: string;
+};
+
 function normalizeText(value = ""): string {
   return compact(value)
     .toLowerCase()
@@ -121,32 +126,43 @@ export function extractPodcastEpisodesFromMarkdown(markdown: string, file = ""):
     .filter(episode => episode.title);
 }
 
-export function listHistoricalPodcastFiles(postsDir: string, currentDate: string): string[] {
+function podcastPostDate(file: string): string {
+  return /^(?:海外科技播客|每日播客)-(\d{4}-\d{2}-\d{2})(?:-.+)?\.md$/.exec(path.basename(file))?.[1] || "";
+}
+
+function sameFile(a: string, b: string): boolean {
+  return path.resolve(a) === path.resolve(b);
+}
+
+export function listHistoricalPodcastFiles(postsDir: string, currentDate: string, options: HistoricalPodcastFileOptions = {}): string[] {
   if (!fs.existsSync(postsDir)) return [];
   return fs
     .readdirSync(postsDir)
     .filter(file => {
-      const match = /^海外科技播客-(\d{4}-\d{2}-\d{2})\.md$/.exec(file);
-      return Boolean(match && match[1] !== currentDate);
+      const fullPath = path.join(postsDir, file);
+      const date = podcastPostDate(file);
+      if (!date) return false;
+      if (options.excludeFile && sameFile(fullPath, options.excludeFile)) return false;
+      return options.includeCurrentDate || date !== currentDate;
     })
     .map(file => path.join(postsDir, file))
     .toSorted();
 }
 
-export function historicalPodcastEpisodes(postsDir: string, currentDate: string): HistoricalPodcastEpisode[] {
-  return listHistoricalPodcastFiles(postsDir, currentDate).flatMap(file => extractPodcastEpisodesFromMarkdown(fs.readFileSync(file, "utf8"), file));
+export function historicalPodcastEpisodes(postsDir: string, currentDate: string, options: HistoricalPodcastFileOptions = {}): HistoricalPodcastEpisode[] {
+  return listHistoricalPodcastFiles(postsDir, currentDate, options).flatMap(file => extractPodcastEpisodesFromMarkdown(fs.readFileSync(file, "utf8"), file));
 }
 
-export function historicalPodcastFingerprints(postsDir: string, currentDate: string): Map<string, HistoricalPodcastEpisode> {
+export function historicalPodcastFingerprints(postsDir: string, currentDate: string, options: HistoricalPodcastFileOptions = {}): Map<string, HistoricalPodcastEpisode> {
   const fingerprints = new Map<string, HistoricalPodcastEpisode>();
-  for (const episode of historicalPodcastEpisodes(postsDir, currentDate)) {
+  for (const episode of historicalPodcastEpisodes(postsDir, currentDate, options)) {
     for (const fingerprint of podcastFingerprints(episode)) fingerprints.set(fingerprint, episode);
   }
   return fingerprints;
 }
 
-export function assertNoHistoricalPodcastDuplicates(markdown: string, postsDir: string, currentDate: string): void {
-  const historical = historicalPodcastFingerprints(postsDir, currentDate);
+export function assertNoHistoricalPodcastDuplicates(markdown: string, postsDir: string, currentDate: string, options: HistoricalPodcastFileOptions = {}): void {
+  const historical = historicalPodcastFingerprints(postsDir, currentDate, options);
   const seen = new Map<string, HistoricalPodcastEpisode>();
   for (const episode of extractPodcastEpisodesFromMarkdown(markdown, `current:${currentDate}`)) {
     const fingerprints = podcastFingerprints(episode);

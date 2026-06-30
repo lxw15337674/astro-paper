@@ -736,11 +736,24 @@ test("foreign tech podcast archive rejects episodes already archived on previous
   const postsDir = path.join(repo, "src/content/posts/zh-cn");
   fs.mkdirSync(postsDir, { recursive: true });
   fs.writeFileSync(
-    path.join(postsDir, "海外科技播客-2099-01-01.md"),
+    path.join(postsDir, "每日播客-2099-01-01-01-latent-space.md"),
     `---\ntitle: old\n---\n\n## Building Reliable AI Developer Platforms\n\n### 基本信息\n\n- **节目**：Latent Space\n- **日期**：2099-01-02\n- **链接**：https://example.com/podcast/dev-platforms?utm_medium=social\n`,
   );
   const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
   assert.throws(() => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true }), /already archived/);
+});
+
+test("daily podcast archive rejects same-day duplicate episodes with different suffixes", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-same-day-"));
+  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
+  const first = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true, fileNameSuffix: "01-latent-space" });
+  assert.equal(first.created, true);
+  assert.throws(
+    () => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true, fileNameSuffix: "02-latent-space" }),
+    /already archived/,
+  );
+  const overwrite = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: fixture, force: true, fileNameSuffix: "01-latent-space" });
+  assert.equal(overwrite.created, false);
 });
 
 test("foreign tech podcast URL fingerprints ignore common tracking parameters", () => {

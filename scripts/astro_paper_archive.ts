@@ -375,7 +375,7 @@ export function archivePost({
     return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
   const formatted = task === "hn-top10" ? formatHnTop10(body) : task === "daily-podcasts" ? { markdown: formatPodcastEpisode(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
-  if (task === "daily-podcasts") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date);
+  if (task === "daily-podcasts") assertNoHistoricalPodcastDuplicates(formatted.markdown, path.join(repo, "src/content/posts/zh-cn"), date, { includeCurrentDate: true, excludeFile: absPath });
   if (task === "crypto-market-daily") assertPlainCryptoDaily(formatted.markdown);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
