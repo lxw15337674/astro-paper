@@ -393,8 +393,10 @@ test("foreign tech podcast source includes technical interview feeds", () => {
   assert.equal(feeds.get("The InfoQ Podcast"), "https://feeds.soundcloud.com/users/soundcloud:users:215740450/sounds.rss");
   assert.equal(feeds.get("Changelog Interviews"), "https://changelog.com/podcast/feed");
   assert.equal(feeds.get("The Data Engineering Show"), "https://feeds.fame.so/the-data-engineering-show");
-  assert.equal(feeds.get("Dwarkesh Podcast"), "https://apple.dwarkesh-podcast.workers.dev/feed.rss");
-  assert.equal(feeds.get("Gradient Dissent"), "https://feeds.captivate.fm/gradient-dissent/");
+  assert.equal(feeds.has("Dwarkesh Podcast"), false);
+  assert.equal(feeds.has("The Cognitive Revolution"), false);
+  assert.equal(feeds.has("Training Data"), false);
+  assert.equal(feeds.has("Gradient Dissent"), false);
 });
 
 function writeCuratedPodcastFile(file: string, episodes: unknown[]): void {

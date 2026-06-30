@@ -87,16 +87,12 @@ export const FEEDS: FeedSource[] = [
   { show: "Decoder", source: "The Verge", url: "https://feeds.megaphone.fm/recodedecode" },
   { show: "Practical AI", source: "Changelog Media", url: "https://changelog.com/practicalai/feed" },
   { show: "Big Technology Podcast", source: "Big Technology", url: "https://feeds.simplecast.com/4T39_jAj" },
-  { show: "The Cognitive Revolution", source: "Turpentine", url: "https://feeds.megaphone.fm/LSHML4766177163" },
-  { show: "Training Data", source: "Sequoia Capital", url: "https://feeds.simplecast.com/5tQpR8G8" },
   { show: "Software Engineering Daily", source: "Software Engineering Daily", url: "https://softwareengineeringdaily.com/feed/podcast/" },
   { show: "Software Engineering Radio", source: "IEEE Computer Society", url: "https://rss.libsyn.com/shows/21070/destinations/23379.xml" },
   { show: "Oxide and Friends", source: "Oxide Computer Company", url: "https://feeds.transistor.fm/oxide-and-friends" },
   { show: "The InfoQ Podcast", source: "InfoQ", url: "https://feeds.soundcloud.com/users/soundcloud:users:215740450/sounds.rss" },
   { show: "Changelog Interviews", source: "Changelog Media", url: "https://changelog.com/podcast/feed" },
   { show: "The Data Engineering Show", source: "Firebolt", url: "https://feeds.fame.so/the-data-engineering-show" },
-  { show: "Dwarkesh Podcast", source: "Dwarkesh Patel", url: "https://apple.dwarkesh-podcast.workers.dev/feed.rss" },
-  { show: "Gradient Dissent", source: "Weights & Biases", url: "https://feeds.captivate.fm/gradient-dissent/" },
 ];
 
 function envNumber(name: string, fallback: number): number {
@@ -232,7 +228,7 @@ function scoreEpisode(episode: Episode): number {
   ];
   const positive = weightedTerms.reduce((score, [term, weight]) => score + (text.includes(term) ? weight : 0), 0);
   const negative = penalties.reduce((score, [term, weight]) => score + (text.includes(term) ? weight : 0), 0);
-  const showBonus = ["software engineering daily", "software engineering radio", "oxide and friends", "infoq", "changelog", "data engineering show", "dwarkesh", "gradient dissent"].some(show =>
+  const showBonus = ["software engineering daily", "software engineering radio", "oxide and friends", "infoq", "changelog", "data engineering show"].some(show =>
     episode.show.toLowerCase().includes(show),
   )
     ? 2
