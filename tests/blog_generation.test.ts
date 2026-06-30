@@ -137,7 +137,7 @@ test("common article rules require knowledge and viewpoint extraction", () => {
   assert.match(commonRules, /只回答“发生了什么”的段落不合格/);
 
   const podcastPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "foreign-tech-podcast.md"), "utf8");
-  assert.match(podcastPrompt, /把 transcript 提炼成知识和观点/);
+  assert.match(podcastPrompt, /把音频内容提炼成知识和观点/);
   assert.match(podcastPrompt, /不能只描述“聊了什么”/);
   assert.match(podcastPrompt, /可复用的判断框架/);
 });
@@ -1052,7 +1052,7 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   assert.match(usMarkdown, /## 宽基指数/);
   assert.match(usMarkdown, /## 行业指数/);
   assert.match(usMarkdown, /## 个股样本/);
-  assert.match(podcastMarkdown, /title: "海外科技访谈播客笔记｜2099-01-02"/);
+  assert.match(podcastMarkdown, /title: "Latent Space：Building Reliable AI Developer Platforms"/);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
   assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);
   assert.match(podcastMarkdown, /### 长文笔记/);

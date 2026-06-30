@@ -42,7 +42,8 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
   if (isTask(expectedTask)) {
     const info = taskInfo(expectedTask);
     if (!frontmatter.includes(info.tag)) throw new Error(`${file} frontmatter missing ${info.tag} tag`);
-    if (!frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
+    // foreign-tech-podcast 标题改为「节目名：本期中文标题」，不再带固定 titlePrefix。
+    if (expectedTask !== "foreign-tech-podcast" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
   }
   return text;
 }

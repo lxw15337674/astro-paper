@@ -226,7 +226,22 @@ function formatPodcastLongform(
 }
 
 function formatForeignTechPodcast(text: string): string {
-  return formatPodcastLongform(text, "foreign tech podcast", "《今日国外热门科技访谈播客》");
+  const normalized = normalizeMarkdown(text);
+  for (const marker of ["## 今日总览", "## 今日播客清单"]) {
+    if (normalized.includes(marker)) throw new Error(`foreign tech podcast contains forbidden section: ${marker}`);
+  }
+  if (!/^##\s+/m.test(normalized)) throw new Error("foreign tech podcast missing episode heading");
+  rejectRepeatedPodcastContent(normalized);
+  if (normalized.trim().length < 800) throw new Error(`foreign tech podcast note is too short (${normalized.trim().length} < 800)`);
+  return `${normalized.trim()}\n`;
+}
+
+// foreign-tech-podcast 现在一篇只讲一期，标题取「节目名：本期中文标题」，比通用「笔记｜日期」更具体。
+function foreignTechPodcastTitle(body: string): string {
+  const heading = body.match(/^##\s+(.+?)\s*$/m)?.[1]?.trim();
+  const show = body.match(/^-\s*\*\*节目\*\*[：:]\s*(.+?)\s*$/m)?.[1]?.trim();
+  if (heading && show && show !== "未标明") return `${show}：${heading}`;
+  return heading || "";
 }
 
 function formatAppleTopPodcasts(text: string): string {
@@ -383,7 +398,12 @@ export function archivePost({
   if (!isTask(task)) throw new Error(`unsupported task: ${task}`);
   const info = taskInfo(task);
   const relPath = fileNameSuffix ? taskPostRelPath(task, `${date}-${fileNameSuffix}`) : taskPostRelPath(task, date);
-  const title = titleSuffix ? `${taskTitle(task, date)}｜${titleSuffix}` : taskTitle(task, date);
+  const title =
+    task === "foreign-tech-podcast"
+      ? foreignTechPodcastTitle(body) || taskTitle(task, date)
+      : titleSuffix
+        ? `${taskTitle(task, date)}｜${titleSuffix}`
+        : taskTitle(task, date);
   const absPath = path.join(repo, relPath);
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };

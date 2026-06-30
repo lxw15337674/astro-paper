@@ -1060,12 +1060,12 @@ export async function buildForeignTechPodcastSource(date = bjtDateString()): Pro
 type GeminiAudioPart = { inline_data: { mime_type: string; data: string } };
 
 const FOREIGN_PODCAST_AUDIO_INTRO =
-  "以下是海外科技访谈/深度讨论类播客节目，每期的完整音频已作为内联附件随本请求一起提供。请直接依据音频内容写作；音频即本期 transcript 来源，元数据仅作补充。AI 只能依据音频与元数据写作；不得编造嘉宾、观点或未提供的事实。";
+  "本期播客的完整音频已作为内联附件随本请求一起提供。请直接听音频并据此写作；下面的元数据只用于填写基本信息（节目名、嘉宾、日期、来源、链接），不得把元数据当成内容来扩写，也不得编造嘉宾、观点或未提供的事实。";
 
 const FOREIGN_PODCAST_WRITING_BOUNDARIES = [
-  "- 这是基于播客音频的中文长文笔记，不是新闻快讯。需要直接按每期节目独立小节展开，不要额外生成总览或播客清单。",
+  "- 这是基于播客音频的中文长文笔记，不是新闻快讯。直接按本期节目展开，不要额外生成总览或播客清单。",
   "- 若音频或元数据没有明确嘉宾姓名，嘉宾字段写“未标明”，不要猜。",
-  "- 每条分析必须能回到音频证据；不得仅凭标题、链接、图片或简短简介扩写。",
+  "- 每条分析必须能回到音频内容；不得仅凭标题、链接、图片或简短简介扩写。",
   "- 不要生成金融建议、产品购买建议或夸张标题。",
 ];
 
@@ -1185,7 +1185,7 @@ export async function buildForeignTechPodcastArticle(date = bjtDateString(), opt
       "",
       FOREIGN_PODCAST_AUDIO_INTRO,
       "",
-      "## 候选播客清单",
+      "## 本期元数据",
       "",
       metaBlocks.join("\n\n"),
       "",
