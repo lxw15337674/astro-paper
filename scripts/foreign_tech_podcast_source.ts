@@ -1099,13 +1099,44 @@ const FOREIGN_PODCAST_WRITING_BOUNDARIES = [
   "- 不要生成金融建议、产品购买建议或夸张标题。",
 ];
 
+// 多模态文章按时长计费且整集音频拼进同一请求，所以这里比转写路径压得更狠：
+// 变速（同时减字节与 token）+ Opus 低码率（已实测代理收 audio/ogg 内联）。
+function geminiArticleAudioCodec(): { codec: string; ext: string; mime: string } {
+  const codec = process.env.PODCAST_GEMINI_ARTICLE_AUDIO_CODEC || "libopus";
+  if (codec === "mp3" || codec === "libmp3lame") return { codec: "libmp3lame", ext: "mp3", mime: "audio/mp3" };
+  if (codec === "opus" || codec === "libopus") return { codec: "libopus", ext: "ogg", mime: "audio/ogg" };
+  return { codec, ext: "ogg", mime: "audio/ogg" };
+}
+
+function prepareGeminiArticleAudioChunks(audioFile: string, outDir: string): { files: string[]; mimeType: string } {
+  ensureDir(outDir);
+  const segmentSeconds = envNumber("PODCAST_GEMINI_SEGMENT_SECONDS", 20 * 60);
+  const bitrate = process.env.PODCAST_GEMINI_ARTICLE_AUDIO_BITRATE || "24k";
+  const speed = process.env.PODCAST_GEMINI_ARTICLE_AUDIO_SPEED || "1.5";
+  const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
+  const { codec, ext, mime } = geminiArticleAudioCodec();
+  runFfmpeg(
+    ["-y", "-i", audioFile, "-vn", "-ac", "1", "-ar", "16000", "-filter:a", `atempo=${speed}`, "-c:a", codec, "-b:a", bitrate, "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1", path.join(outDir, `chunk-%03d.${ext}`)],
+    timeoutMs,
+  );
+  const maxBytes = envNumber("PODCAST_GEMINI_MAX_INLINE_CHUNK_MB", 14) * 1024 * 1024;
+  const chunks = fs
+    .readdirSync(outDir)
+    .filter(file => file.endsWith(`.${ext}`))
+    .map(file => path.join(outDir, file))
+    .toSorted();
+  if (!chunks.length) throw new Error("ffmpeg produced no Gemini article audio chunks");
+  const oversized = chunks.find(file => fs.statSync(file).size > maxBytes);
+  if (oversized) throw new Error(`Gemini article audio chunk exceeds ${Math.round(maxBytes / 1024 / 1024)}MB inline limit: ${path.basename(oversized)}`);
+  return { files: chunks, mimeType: mime };
+}
+
 async function prepareEpisodeAudioParts(episode: Episode, tmpDir: string, index: number): Promise<GeminiAudioPart[]> {
   if (!episode.audioUrl) throw new Error(`${episode.title}: missing audio URL for multimodal article generation`);
-  const rawAudio = path.join(tmpDir, `${index}.mp3`);
+  const rawAudio = path.join(tmpDir, `${index}.download`);
   await downloadAudio(episode.audioUrl, rawAudio);
-  const chunks = prepareGeminiAudioChunks(rawAudio, path.join(tmpDir, `chunks-${index}`));
-  const mimeType = process.env.PODCAST_GEMINI_AUDIO_MIME_TYPE || "audio/mp3";
-  return chunks.map(chunk => ({ inline_data: { mime_type: mimeType, data: fs.readFileSync(chunk).toString("base64") } }));
+  const { files, mimeType } = prepareGeminiArticleAudioChunks(rawAudio, path.join(tmpDir, `chunks-${index}`));
+  return files.map(chunk => ({ inline_data: { mime_type: mimeType, data: fs.readFileSync(chunk).toString("base64") } }));
 }
 
 function episodeAudioMetadataBlock(episode: Episode, index: number): string {

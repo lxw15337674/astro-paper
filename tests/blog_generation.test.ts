@@ -188,6 +188,11 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /PODCAST_GEMINI_ARTICLE_BASE_URL: https:\/\/right\.codes\/gemini/);
   assert.match(workflow, /PODCAST_GEMINI_ARTICLE_MODEL: gemini-3\.5-flash/);
   assert.match(podcastSource, /export async function buildDailyPodcastEpisodeArticle/);
+  assert.match(podcastSource, /function prepareGeminiArticleAudioChunks/);
+  assert.match(podcastSource, /atempo=\$\{speed\}/);
+  assert.match(podcastSource, /libopus/);
+  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_AUDIO_SPEED: "1\.5"/);
+  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_AUDIO_CODEC: libopus/);
   assert.match(podcastSource, /\"whisper-cpp,local\"/);
   assert.match(podcastSource, /function runWhisperCpp/);
   assert.match(podcastSource, /prepareWhisperCppAudioChunks/);
