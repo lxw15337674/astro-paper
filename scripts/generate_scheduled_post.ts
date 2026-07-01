@@ -5,7 +5,7 @@ import path from "node:path";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
 import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
-import { avoidCloudflareEmailObfuscation, bjtDateString, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcastEpisodeArticle, buildDailyPodcastSource, fetchDailyPodcastEpisodes, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
@@ -32,8 +32,9 @@ export type ResultItem = ReturnType<typeof archivePost> & {
   };
 };
 
-function offsetBjtDate(days: number): string {
-  return bjtDateString(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
+function offsetDate(days: number, timeZone?: string): string {
+  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return timeZone ? dateStringInTimeZone(date, timeZone) : bjtDateString(date);
 }
 
 function titleForVariant(task: Task, date: string, titleSuffix = ""): string {
@@ -860,7 +861,7 @@ async function main(): Promise<void> {
   const offsetArg = stringArg(args, "date-offset");
   const offset = Number(offsetArg || scheduled.dateOffset);
   if (!Number.isInteger(offset)) throw new Error(`invalid --date-offset: ${offsetArg || scheduled.dateOffset}`);
-  const date = explicitDate || offsetBjtDate(offset);
+  const date = explicitDate || offsetDate(offset, scheduled.dateTimeZone);
   const tasks = tasksForInput(taskArg);
   const results: ResultItem[] = [];
   for (const task of tasks as Task[]) {

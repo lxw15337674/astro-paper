@@ -29,19 +29,12 @@ on:
         required: false
         type: string
   schedule:
-    # 08:30 Asia/Shanghai every day: classify one global source pool and generate tech/AI/business daily digests.
     - cron: "30 0 * * *"
-    # 09:30 Asia/Shanghai: merged daily podcasts (foreign tech + Apple Top Shows) notes.
     - cron: "30 1 * * *"
-    # 17:30 Asia/Shanghai: Hacker News Top 10 after the US morning discussion window has activity.
-    - cron: "30 9 * * *"
-    # 18:00 Asia/Shanghai on weekdays: A股 + 港股 after local market close.
+    - cron: "0 6 * * *"
     - cron: "0 10 * * 1-5"
-    # 01:00 Asia/Shanghai next day: digital assets snapshot for previous BJT date.
     - cron: "0 17 * * *"
-    # 06:30 Asia/Shanghai next day: US market after regular close, archived to previous BJT date.
     - cron: "30 22 * * *"
-    # 07:00 Asia/Shanghai: GitHub Trending daily project note.
     - cron: "0 23 * * *"
 
 concurrency:

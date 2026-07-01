@@ -90,14 +90,14 @@ export const TASKS = Object.keys(BLOG_TASKS) as Task[];
 export const DAILY_DIGEST_TASKS = ["tech-daily"] as const satisfies readonly Task[];
 export const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly", ...DAILY_DIGEST_TASKS]);
 
-export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number }> = {
-  "30 0 * * *": { task: "daily-digests" },
+export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number; dateTimeZone?: string }> = {
+  "30 0 * * *": { task: "daily-digests", dateTimeZone: "America/Los_Angeles" },
   "30 1 * * *": { task: "daily-podcasts" },
-  "30 9 * * *": { task: "hn-top10" },
+  "0 6 * * *": { task: "hn-top10", dateTimeZone: "America/Los_Angeles" },
   "0 10 * * 1-5": { task: "asia-market-daily" },
   "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },
-  "30 22 * * *": { task: "us-market-daily", dateOffset: -1 },
-  "0 23 * * *": { task: "github-trending-daily" },
+  "30 22 * * *": { task: "us-market-daily", dateTimeZone: "America/New_York" },
+  "0 23 * * *": { task: "github-trending-daily", dateTimeZone: "America/Los_Angeles" },
 };
 
 export function isTask(value: string): value is Task {
@@ -135,7 +135,7 @@ export function tasksForInput(input: TaskInput): Task[] {
   return [input];
 }
 
-export function scheduledTaskInput(schedule: string): { task: TaskInput; dateOffset: number } {
+export function scheduledTaskInput(schedule: string): { task: TaskInput; dateOffset: number; dateTimeZone?: string } {
   const mapped = SCHEDULED_TASK_INPUTS[schedule];
-  return { task: mapped?.task || "all", dateOffset: mapped?.dateOffset || 0 };
+  return { task: mapped?.task || "all", dateOffset: mapped?.dateOffset || 0, dateTimeZone: mapped?.dateTimeZone };
 }

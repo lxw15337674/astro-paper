@@ -172,10 +172,14 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.equal(scheduledTaskInput("0 17 * * *").task, "crypto-market-daily");
   assert.equal(scheduledTaskInput("0 17 * * *").dateOffset, -1);
   assert.equal(scheduledTaskInput("30 22 * * *").task, "us-market-daily");
-  assert.equal(scheduledTaskInput("30 22 * * *").dateOffset, -1);
+  assert.equal(scheduledTaskInput("30 22 * * *").dateTimeZone, "America/New_York");
   assert.equal(scheduledTaskInput("30 0 * * *").task, "daily-digests");
-  assert.equal(scheduledTaskInput("30 9 * * *").task, "hn-top10");
+  assert.equal(scheduledTaskInput("30 0 * * *").dateTimeZone, "America/Los_Angeles");
+  assert.equal(scheduledTaskInput("0 6 * * *").task, "hn-top10");
+  assert.equal(scheduledTaskInput("0 6 * * *").dateTimeZone, "America/Los_Angeles");
   assert.equal(scheduledTaskInput("30 1 * * *").task, "daily-podcasts");
+  assert.equal(scheduledTaskInput("0 23 * * *").task, "github-trending-daily");
+  assert.equal(scheduledTaskInput("0 23 * * *").dateTimeZone, "America/Los_Angeles");
   assert.equal(scheduledTaskInput("unknown schedule").task, "all");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(schedule, /^\d+ \d+ \* \* (?:\*|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)$/);
