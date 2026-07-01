@@ -80,6 +80,16 @@
       "date": "2026-06-24",
       "archivedAt": "2026-07-01",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-08-software-engineering-radio.md"
+    },
+    {
+      "title": "Mina the Hollower",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/06/25/mina-the-hollower/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=mina-the-hollower",
+      "audioUrl": "https://traffic.megaphone.fm/SED3643239780.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=22330",
+      "date": "2026-06-25",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-01-software-engineering-daily.md"
     }
   ]
 }
