@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "episodes": [
+    {
+      "title": "Architectural Patterns: Moving Beyond Cloud-Native to Local-First - Insights from Adam Wiggins",
+      "show": "The InfoQ Podcast",
+      "link": "https://soundcloud.com/infoq-channel/local-first-software-the",
+      "audioUrl": "http://dts.podtrac.com/redirect.mp3/feeds.soundcloud.com/stream/2344620068-infoq-channel-local-first-software-the.mp3",
+      "guid": "tag:soundcloud,2010:tracks/2344620068",
+      "date": "2026-06-29",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-01-the-infoq-podcast.md"
+    },
+    {
+      "title": "MURDERED: Christine Banfield & Joseph Ryan",
+      "show": "Crime Junkie",
+      "link": "https://crimejunkiepodcast.com/",
+      "audioUrl": "https://tracking.swap.fm/track/fxUKVg2nSMaPSHLeKNKH/pscrb.fm/rss/p/dts.podtrac.com/redirect.mp3/rsv.simplecastaudio.com/ec74d48c-cbf1-4764-923e-7d584dce50fa/episodes/0562cda9-5938-4fe6-84b5-9b15a9ee8ef7/audio/128/default.mp3?aid=rss_feed&awCollectionId=ec74d48c-cbf1-4764-923e-7d584dce50fa&awEpisodeId=0562cda9-5938-4fe6-84b5-9b15a9ee8ef7&feed=qm_9xx0g",
+      "guid": "4f557f9c-e91f-4573-bde6-509e948da30c",
+      "date": "2026-06-29",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-02-crime-junkie.md"
+    },
+    {
+      "title": "How eBPF Empowers Developers to Observe Inside the Linux Kernel in a Safe and Unintrusive Way",
+      "show": "The InfoQ Podcast",
+      "link": "https://soundcloud.com/infoq-channel/how-ebpf-empowers-developers",
+      "audioUrl": "http://dts.podtrac.com/redirect.mp3/feeds.soundcloud.com/stream/2340378536-infoq-channel-how-ebpf-empowers-developers.mp3",
+      "guid": "tag:soundcloud,2010:tracks/2340378536",
+      "date": "2026-06-22",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-03-the-infoq-podcast.md"
+    },
+    {
+      "title": "The Supreme Court Expands Presidential Power. Again.",
+      "show": "The Daily",
+      "link": "https://www.nytimes.com/the-daily",
+      "audioUrl": "https://dts.podtrac.com/redirect.mp3/pdst.fm/e/pfx.vpixl.com/6qj4J/pscrb.fm/rss/p/nyt.simplecastaudio.com/03d8b493-87fc-4bd1-931f-8a8e9b945d8a/episodes/f89e0cc1-0804-4983-a2b3-b6c1a385331c/audio/128/default.mp3?aid=rss_feed&awCollectionId=03d8b493-87fc-4bd1-931f-8a8e9b945d8a&awEpisodeId=f89e0cc1-0804-4983-a2b3-b6c1a385331c&feed=Sl5CSM3S",
+      "guid": "49a8e9da-69e8-46b4-a3ab-7fdbd1d73460",
+      "date": "2026-06-30",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-04-the-daily.md"
+    },
+    {
+      "title": "Foundation Models for Structured Data",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/06/23/foundation-models-for-structured-data/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=foundation-models-for-structured-data",
+      "audioUrl": "https://traffic.megaphone.fm/SED7497287020.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=22320",
+      "date": "2026-06-23",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-05-software-engineering-daily.md"
+    },
+    {
+      "title": "Building Software That People Love",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/06/30/building-software-that-that-people-love/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=building-software-that-that-people-love",
+      "audioUrl": "https://traffic.megaphone.fm/SED3255760528.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=22331",
+      "date": "2026-06-30",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-06-software-engineering-daily.md"
+    },
+    {
+      "title": "After the Flood",
+      "show": "Dateline NBC",
+      "link": "https://www.nbcnews.com/dateline",
+      "audioUrl": "https://dts.podtrac.com/redirect.mp3/pdst.fm/e/tracking.swap.fm/track/WyZndMW35x3t79tHlknd/nbcnews.simplecastaudio.com/ae183fe2-c634-458a-93dd-5770f0676f77/episodes/a353e022-212b-4e7b-94be-730d38901889/audio/128/default.mp3?aid=rss_feed&awCollectionId=ae183fe2-c634-458a-93dd-5770f0676f77&awEpisodeId=a353e022-212b-4e7b-94be-730d38901889&feed=HL4TzgYC",
+      "guid": "c9dae795-053f-4565-a35c-0456ee7fcce1",
+      "date": "2026-06-30",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-07-dateline-nbc.md"
+    },
+    {
+      "title": "SE Radio 726: Scott Kingsley on the Swagger Ecosystem",
+      "show": "Software Engineering Radio",
+      "link": "https://se-radio.net/2026/06/se-radio-726-scott-kingsley-on-the-swagger-ecosystem/",
+      "audioUrl": "https://traffic.libsyn.com/secure/seradio/726-sam-kingsley-the-swagger-ecosystem.mp3?dest-id=23379",
+      "guid": "0470335f-e72e-45ef-8f46-162096df8474",
+      "date": "2026-06-24",
+      "archivedAt": "2026-07-01",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-08-software-engineering-radio.md"
+    }
+  ]
+}
