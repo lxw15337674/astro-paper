@@ -1,4 +1,4 @@
-name: CI
+name: Site Quality Gate
 
 permissions:
   contents: read
@@ -14,15 +14,15 @@ on:
 
 jobs:
   build:
-    name: Code standards & build
+    name: Lint, format, and build site
     runs-on: ubuntu-latest
     timeout-minutes: 3
 
     steps:
-      - name: "☁️ Checkout repository"
+      - name: "Checkout repository"
         uses: actions/checkout@v7
 
-      - name: "📦 Install pnpm"
+      - name: "Install pnpm"
         uses: pnpm/action-setup@v6
         with:
           version: "11.3.0"
@@ -33,14 +33,14 @@ jobs:
           node-version: "24"
           cache: "pnpm"
 
-      - name: "📦 Install dependencies"
+      - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      - name: "🔎 Lint code"
+      - name: "Lint source"
         run: pnpm run lint
 
-      - name: "📝 Checking code format"
+      - name: "Check formatting"
         run: pnpm run format:check
 
-      - name: "🚀 Build the project"
+      - name: "Build site"
         run: pnpm run build

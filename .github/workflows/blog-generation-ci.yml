@@ -1,4 +1,4 @@
-name: Blog generation CI
+name: Blog Generation Contracts
 
 permissions:
   contents: read
@@ -24,15 +24,15 @@ on:
 
 jobs:
   verify:
-    name: Verify blog generation contracts
+    name: Validate blog generation pipeline
     runs-on: ubuntu-latest
     timeout-minutes: 8
 
     steps:
-      - name: "☁️ Checkout repository"
+      - name: "Checkout repository"
         uses: actions/checkout@v7
 
-      - name: "📦 Install pnpm"
+      - name: "Install pnpm"
         uses: pnpm/action-setup@v6
         with:
           version: "11.3.0"
@@ -43,16 +43,16 @@ jobs:
           node-version: "24"
           cache: "pnpm"
 
-      - name: "📦 Install dependencies"
+      - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      - name: "🧪 Run TypeScript pipeline tests"
+      - name: "Run blog pipeline tests"
         run: pnpm run test:blog
 
-      - name: "🔎 Type-check TypeScript scripts"
+      - name: "Type-check generation scripts"
         run: pnpm run typecheck
 
-      - name: "📝 Verify offline AI blog generation contract"
+      - name: "Verify offline AI generation contract"
         run: |
           node --import tsx scripts/generate_scheduled_post.ts \
             --task all \
@@ -66,5 +66,5 @@ jobs:
           cat blog-generation-result.json
           node --import tsx scripts/verify_blog_generation.ts --result-json blog-generation-result.json
 
-      - name: "🚀 Build generated blog output"
+      - name: "Build site from generated output"
         run: pnpm run build

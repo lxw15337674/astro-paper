@@ -1,4 +1,4 @@
-name: Scheduled posts
+name: Automated Blog Publishing
 
 permissions:
   contents: write
@@ -50,17 +50,23 @@ concurrency:
 
 jobs:
   generate:
-    name: Generate scheduled posts
+    name: Publish scheduled blog posts
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
     steps:
-      - name: "☁️ Checkout repository"
+      - name: "Checkout repository"
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: "📦 Install pnpm"
+      - name: "Sync to latest branch head"
+        run: |
+          set -euo pipefail
+          git fetch origin "${GITHUB_REF_NAME}"
+          git checkout -B "${GITHUB_REF_NAME}" "origin/${GITHUB_REF_NAME}"
+
+      - name: "Install pnpm"
         uses: pnpm/action-setup@v6
         with:
           version: "11.3.0"
@@ -71,17 +77,17 @@ jobs:
           node-version: "24"
           cache: "pnpm"
 
-      - name: "📦 Install dependencies"
+      - name: "Install dependencies"
         run: pnpm install --frozen-lockfile
 
-      - name: "🎧 Install ffmpeg for podcast transcription"
+      - name: "Install ffmpeg for podcast transcription"
         if: ${{ github.event.inputs.task == 'daily-podcasts' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' }}
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y ffmpeg ca-certificates
 
-      - name: "📝 Generate posts"
+      - name: "Generate scheduled content"
         env:
           INPUT_TASK: ${{ github.event.inputs.task || '' }}
           INPUT_DATE: ${{ github.event.inputs.date || '' }}
@@ -138,7 +144,7 @@ jobs:
           node --import tsx scripts/generate_scheduled_post.ts "${args[@]}" --result-json scheduled-posts-result.json
           cat scheduled-posts-result.json
 
-      - name: "📦 Upload generation artifacts"
+      - name: "Upload generation artifacts"
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -148,19 +154,19 @@ jobs:
             blog-generation-artifacts/
           if-no-files-found: ignore
 
-      - name: "🧾 Summarize generation result"
+      - name: "Summarize scheduled publishing result"
         if: always()
         run: |
           set -euo pipefail
           if [ ! -f scheduled-posts-result.json ]; then
-            echo "### Scheduled posts" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Scheduled blog publishing" >> "$GITHUB_STEP_SUMMARY"
             echo "scheduled-posts-result.json was not produced." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           const payload = JSON.parse(fs.readFileSync("scheduled-posts-result.json", "utf8"));
-          const lines = ["### Scheduled posts", "", `Archive date: ${payload.date || "unknown"}`, "", "| Task | Status | Path | Detail |", "| --- | --- | --- | --- |"];
+          const lines = ["### Scheduled blog publishing", "", `Archive date: ${payload.date || "unknown"}`, "", "| Task | Status | Path | Detail |", "| --- | --- | --- | --- |"];
           for (const item of payload.results || []) {
             const status = item.failed ? "failed" : item.skipped ? "skipped" : item.created ? "created" : "updated";
             const detail = String(item.error || item.skip_reason || item.title || "")
@@ -172,15 +178,15 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
           NODE
 
-      - name: "🔎 Verify generated post contract"
+      - name: "Verify generated content contract"
         env:
           PODCAST_MIN_EPISODES: 1
         run: node --import tsx scripts/verify_blog_generation.ts --result-json scheduled-posts-result.json
 
-      - name: "🧹 Format generated posts"
+      - name: "Format generated content"
         run: pnpm exec prettier --write "src/content/posts/zh-cn/*.md"
 
-      - name: "🔎 Check whether content changed"
+      - name: "Detect publishable changes"
         id: diff
         run: |
           if [ -z "$(git status --porcelain -- src/content/posts data)" ]; then
@@ -190,10 +196,10 @@ jobs:
           fi
           git status --short
 
-      - name: "🚀 Build the project"
+      - name: "Build site with generated content"
         run: pnpm run build
 
-      - name: "🚢 Commit generated posts"
+      - name: "Commit and push generated content"
         if: steps.diff.outputs.changed == 'true'
         run: |
           set -euo pipefail
@@ -202,8 +208,7 @@ jobs:
           git add src/content/posts data
           git commit -m "feat(posts): archive scheduled posts"
           for attempt in 1 2 3; do
-            git fetch origin "${GITHUB_REF_NAME}"
-            git rebase "origin/${GITHUB_REF_NAME}"
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then
               exit 0
             fi
@@ -213,7 +218,7 @@ jobs:
           echo "failed to push generated posts after 3 attempts" >&2
           exit 1
 
-      - name: "🚨 Report generation failures"
+      - name: "Report task-level generation failures"
         if: always()
         run: |
           set -euo pipefail

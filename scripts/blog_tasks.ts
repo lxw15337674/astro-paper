@@ -42,7 +42,7 @@ export const BLOG_TASKS = {
   "daily-podcasts": {
     titlePrefix: "每日播客笔记",
     tag: "播客",
-    description: "每日海外科技访谈与 Apple Podcasts 热门节目中文长文笔记，按节目逐集生成。",
+    description: "每日海外 Podcasts 热门节目中文长文笔记。",
     fileName: "每日播客-{date}.md",
   },
   "tech-weekly": {

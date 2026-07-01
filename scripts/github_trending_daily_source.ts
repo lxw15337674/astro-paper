@@ -170,6 +170,7 @@ function writeArchive(dataDir: string, payload: GitHubTrendingArchive): string {
   if (!dataDir) return "";
   ensureDir(dataDir);
   const file = path.join(dataDir, `${payload.date}.json`);
+  // Same-day reruns should publish the latest snapshot instead of preserving stale data.
   fs.writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   return file;
 }

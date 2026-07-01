@@ -14,10 +14,21 @@ import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
-import { parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
+import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import { type ResultItem, settleDailyPodcastArticleResults, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
+
+const GITHUB_TRENDING_HTML_FIXTURE = `<!doctype html><html><body>
+  <article class="Box-row">
+    <h2><a href="/acme/agent-lab"> acme / agent-lab </a></h2>
+    <p>Local AI agent workbench for developers</p>
+    <span itemprop="programmingLanguage">TypeScript</span>
+    <a href="/acme/agent-lab/stargazers">12,345</a>
+    <a href="/acme/agent-lab/forks">678</a>
+    <span class="d-inline-block float-sm-right">321 stars today</span>
+  </article>
+</body></html>`;
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
   assert.equal(bjtArchiveInstant("2026-06-22"), "2026-06-21T16:00:00Z");
@@ -225,9 +236,11 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
   assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 300000/);
   assert.match(workflow, /PODCAST_DAILY_MAX_EPISODE_MINUTES: 90/);
+  assert.match(workflow, /git checkout -B "\$\{GITHUB_REF_NAME\}" "origin\/\$\{GITHUB_REF_NAME\}"/);
+  assert.match(workflow, /git pull --rebase -X theirs origin "\$\{GITHUB_REF_NAME\}"/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
-  assert.match(workflow, /Report generation failures/);
-  assert.match(workflow, /Summarize generation result/);
+  assert.match(workflow, /Report task-level generation failures/);
+  assert.match(workflow, /Summarize scheduled publishing result/);
   assert.doesNotMatch(workflow, /Using Groq-only transcription for apple-top-podcasts/);
   assert.match(workflow, /default:\s*hn-top10/);
   assert.doesNotMatch(workflow, /default:\s*all/);
@@ -801,17 +814,7 @@ test("HN source payload carries original and comment evidence", () => {
 });
 
 test("GitHub Trending parser extracts repository metadata", () => {
-  const html = `<!doctype html><html><body>
-    <article class="Box-row">
-      <h2><a href="/acme/agent-lab"> acme / agent-lab </a></h2>
-      <p>Local AI agent workbench for developers</p>
-      <span itemprop="programmingLanguage">TypeScript</span>
-      <a href="/acme/agent-lab/stargazers">12,345</a>
-      <a href="/acme/agent-lab/forks">678</a>
-      <span class="d-inline-block float-sm-right">321 stars today</span>
-    </article>
-  </body></html>`;
-  const repos = parseGitHubTrendingHtml(html, 10);
+  const repos = parseGitHubTrendingHtml(GITHUB_TRENDING_HTML_FIXTURE, 10);
   assert.equal(repos.length, 1);
   assert.equal(repos[0].fullName, "acme/agent-lab");
   assert.equal(repos[0].language, "TypeScript");
@@ -996,6 +999,33 @@ test("task validation catches GitHub trending archive failures before publishing
     .readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/github-trending-daily.md"), "utf8")
     .replace("开发者或工程团队。", "开发者或工程团队参考示例。");
   assert.throws(() => validateGeneratedMarkdownForTask(body, "github-trending-daily", "2099-01-06"), /forbidden language: 示例/);
+});
+
+test("GitHub trending source overwrites an existing daily archive", async () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-github-trending-archive-"));
+  const dataDir = path.join(repo, "data/github-trending");
+  fs.mkdirSync(dataDir, { recursive: true });
+  const archiveFile = path.join(dataDir, "2099-01-06.json");
+  fs.writeFileSync(archiveFile, JSON.stringify({ stale: true, repos: [] }, null, 2));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes("github.com/trending")) return new Response(GITHUB_TRENDING_HTML_FIXTURE, { status: 200 });
+    if (url.includes("api.github.com/repos/")) {
+      return Response.json({ content: Buffer.from("README content for generated archive").toString("base64"), encoding: "base64" });
+    }
+    return new Response("", { status: 404 });
+  };
+  try {
+    const source = await buildGitHubTrendingDailySource("2099-01-06", { dataDir, limit: 1 });
+    const payload = JSON.parse(fs.readFileSync(archiveFile, "utf8")) as { stale?: boolean; date?: string; repos?: unknown[] };
+    assert.equal(payload.stale, undefined);
+    assert.equal(payload.date, "2099-01-06");
+    assert.equal(payload.repos?.length, 1);
+    assert.match(source, /结构化数据归档/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("AI weekly rejects low-signal AI content", () => {
