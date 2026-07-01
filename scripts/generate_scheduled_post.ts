@@ -83,6 +83,10 @@ function dailyPodcastFileNameSuffix(episode: Episode, index: number): string {
 }
 
 const PODCAST_COVER_REL_DIR = path.join("public", "images", "podcast");
+// 封面在 frontmatter 里按内容 schema 的 image() 解析：必须用相对 md 文件的路径（与 HN 封面一致），
+// 绝对 public 路径 (/images/...) 会被当成可导入资源而在构建期 ImageNotFound。
+// 帖子固定位于 src/content/posts/zh-cn/，到 public/ 固定上溯 4 层。
+const PODCAST_COVER_OGIMAGE_PREFIX = "../../../../public/images/podcast/";
 
 // 播客封面原图多为 3000×3000，直接当远程封面太重也不稳；生成时下载→sharp 压成小 webp 自托管。
 // 压缩或下载失败则回落到远程 URL（仍有封面），再不行由上层回落动态卡。
@@ -111,7 +115,7 @@ async function localizePodcastCover(episode: Episode, repo: string, date: string
     ensureDir(path.join(repo, PODCAST_COVER_REL_DIR));
     const fileName = `${date}-${fileNameSuffix}.webp`;
     fs.writeFileSync(path.join(repo, PODCAST_COVER_REL_DIR, fileName), webp);
-    return `/images/podcast/${fileName}`;
+    return `${PODCAST_COVER_OGIMAGE_PREFIX}${fileName}`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     writeStderr(`WARN: podcast cover localization failed; using remote URL: ${message}`);
