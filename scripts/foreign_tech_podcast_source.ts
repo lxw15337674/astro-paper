@@ -16,6 +16,7 @@ type FeedSource = {
   appleId?: string;
   appleUrl?: string;
   genres?: string[];
+  artworkUrl?: string;
 };
 
 export type Episode = {
@@ -57,6 +58,8 @@ type AppleLookupResult = {
   collectionViewUrl?: string;
   primaryGenreName?: string;
   genres?: string[];
+  artworkUrl600?: string;
+  artworkUrl100?: string;
 };
 
 export const FEEDS: FeedSource[] = [
@@ -120,7 +123,16 @@ function attr(block: string, tagName: string, attrName: string): string {
   return decodeXml(match?.[1] || "");
 }
 
+// 频道级封面：多数 feed 不在 <item> 里带 itunes:image，只在 channel 层声明节目封面。
+function channelImageUrl(xml: string): string {
+  const channel = xml.replace(/<item[\s\S]*?<\/item>/gi, "");
+  const itunes = attr(channel, "itunes:image", "href");
+  if (itunes) return itunes;
+  return decodeXml(/<image>[\s\S]*?<url>([\s\S]*?)<\/url>/i.exec(channel)?.[1] || "");
+}
+
 function parseFeed(feed: FeedSource, xml: string): Episode[] {
+  const channelImage = channelImageUrl(xml);
   const items = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
   return items
     .map(item => {
@@ -132,7 +144,8 @@ function parseFeed(feed: FeedSource, xml: string): Episode[] {
       const audioUrl = attr(item, "enclosure", "url");
       const transcriptUrl = attr(item, "podcast:transcript", "url") || attr(item, "transcript", "url");
       const guid = tag(item, "guid") || link || `${feed.show}:${title}`;
-      const imageUrl = attr(item, "itunes:image", "href");
+      // 封面兜底链：逐集图 → 频道级节目图 → Apple artwork（仅 Apple 池有）。
+      const imageUrl = attr(item, "itunes:image", "href") || channelImage || feed.artworkUrl || undefined;
       const duration = tag(item, "itunes:duration");
       return {
         show: feed.show,
@@ -422,6 +435,7 @@ async function lookupApplePodcast(show: AppleTopShow): Promise<FeedSource | null
     appleId: show.id,
     appleUrl: result.collectionViewUrl || show.url,
     genres,
+    artworkUrl: result.artworkUrl600 || result.artworkUrl100 || undefined,
   };
 }
 

@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
 import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
@@ -79,6 +80,43 @@ function slugForFile(text: string): string {
 
 function dailyPodcastFileNameSuffix(episode: Episode, index: number): string {
   return `${String(index + 1).padStart(2, "0")}-${slugForFile(episode.show)}`;
+}
+
+const PODCAST_COVER_REL_DIR = path.join("public", "images", "podcast");
+
+// 播客封面原图多为 3000×3000，直接当远程封面太重也不稳；生成时下载→sharp 压成小 webp 自托管。
+// 压缩或下载失败则回落到远程 URL（仍有封面），再不行由上层回落动态卡。
+async function localizePodcastCover(episode: Episode, repo: string, date: string, fileNameSuffix: string): Promise<string> {
+  const remote = episode.imageUrl;
+  if (!remote) return "";
+  const timeoutMs = envPositiveInt("PODCAST_COVER_TIMEOUT_MS", 20_000);
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let input: Buffer;
+    try {
+      const response = await fetch(remote, {
+        redirect: "follow",
+        headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36" },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`cover download HTTP ${response.status}`);
+      input = Buffer.from(await response.arrayBuffer());
+    } finally {
+      clearTimeout(timer);
+    }
+    const size = envPositiveInt("PODCAST_COVER_SIZE", 800);
+    const quality = envPositiveInt("PODCAST_COVER_QUALITY", 80);
+    const webp = await sharp(input).resize(size, size, { fit: "inside", withoutEnlargement: true }).webp({ quality }).toBuffer();
+    ensureDir(path.join(repo, PODCAST_COVER_REL_DIR));
+    const fileName = `${date}-${fileNameSuffix}.webp`;
+    fs.writeFileSync(path.join(repo, PODCAST_COVER_REL_DIR, fileName), webp);
+    return `/images/podcast/${fileName}`;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeStderr(`WARN: podcast cover localization failed; using remote URL: ${message}`);
+    return remote;
+  }
 }
 
 function skippedLowQuality(task: Task, date: string, reason: string): ResultItem {
@@ -794,7 +832,8 @@ async function generateDailyPodcastArticles({ task, repo, date, force, promptDir
       const article = await buildDailyPodcastEpisodeArticle(episode, date, { promptDir: resolvedPromptDir });
       const markdown = validateMarkdown(article);
       const responseArtifact = writeArtifact(artifactsDir, artifactKey, "ai-response.md", markdown);
-      const result: ResultItem = archivePost({ task, date, repo, body: markdown, force, fileNameSuffix });
+      const ogImage = await localizePodcastCover(episode, repo, date, fileNameSuffix);
+      const result: ResultItem = archivePost({ task, date, repo, body: markdown, force, fileNameSuffix, ogImage });
       result.generation = {
         ai_model: geminiArticleModel(),
         ai_base_url: geminiArticleBaseUrl(),

@@ -182,7 +182,7 @@ jobs:
       - name: "Detect publishable changes"
         id: diff
         run: |
-          if [ -z "$(git status --porcelain -- src/content/posts data)" ]; then
+          if [ -z "$(git status --porcelain -- src/content/posts data public/images/podcast)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -198,7 +198,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/content/posts data
+          git add src/content/posts data public/images/podcast
           git commit -m "feat(posts): archive scheduled posts"
           for attempt in 1 2 3; do
             git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"

@@ -351,6 +351,7 @@ export function archivePost({
   force,
   fileNameSuffix = "",
   titleSuffix = "",
+  ogImage = "",
 }: {
   task: string;
   date: string;
@@ -359,6 +360,7 @@ export function archivePost({
   force: boolean;
   fileNameSuffix?: string;
   titleSuffix?: string;
+  ogImage?: string;
 }): ArchiveResult {
   if (!isTask(task)) throw new Error(`unsupported task: ${task}`);
   const info = taskInfo(task);
@@ -379,7 +381,7 @@ export function archivePost({
   const existed = fs.existsSync(absPath);
   fs.writeFileSync(
     absPath,
-    `${frontmatter({ title, date, description: info.description, tags: taskTags(task), ogImage: formatted.ogImage })}${formatted.markdown.trim()}\n`,
+    `${frontmatter({ title, date, description: info.description, tags: taskTags(task), ogImage: formatted.ogImage || ogImage })}${formatted.markdown.trim()}\n`,
     "utf8",
   );
   return { task, path: relPath, title, created: !existed, skipped: false, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
