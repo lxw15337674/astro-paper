@@ -16,7 +16,7 @@ import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
 import { parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
-import { type ResultItem, settleDailyPodcastArticleResults } from "../scripts/generate_scheduled_post.ts";
+import { type ResultItem, settleDailyPodcastArticleResults, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -989,6 +989,13 @@ test("archive and verifier accept generated GitHub trending daily", () => {
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [result] }));
   assert.equal(verifyResultJson(repo, resultJson), 1);
+});
+
+test("task validation catches GitHub trending archive failures before publishing", () => {
+  const body = fs
+    .readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/github-trending-daily.md"), "utf8")
+    .replace("开发者或工程团队。", "开发者或工程团队参考示例。");
+  assert.throws(() => validateGeneratedMarkdownForTask(body, "github-trending-daily", "2099-01-06"), /forbidden language: 示例/);
 });
 
 test("AI weekly rejects low-signal AI content", () => {
