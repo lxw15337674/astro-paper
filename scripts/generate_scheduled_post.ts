@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
@@ -666,10 +667,21 @@ function shouldRetryWithValidationFeedback(error: string): boolean {
   return !/^(AI request timed out after|AI request failed:)/.test(error);
 }
 
+export function validateGeneratedMarkdownForTask(markdown: string, task: Task, date: string): string {
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-task-validation-"));
+  try {
+    archivePost({ task, date, repo: sandbox, body: markdown, force: true });
+    return markdown;
+  } finally {
+    fs.rmSync(sandbox, { recursive: true, force: true });
+  }
+}
+
 async function renderLiveAiMarkdownWithSourceValidation(
   prompt: string,
   model: string,
   task: Task,
+  date: string,
   artifactsDir: string,
   source: string,
   artifactKey: string = task,
@@ -684,6 +696,7 @@ async function renderLiveAiMarkdownWithSourceValidation(
       const ai = await callAi(attemptPrompt, model);
       const markdown = normalizeMarkdownLinksFromSourceTitles(validateMarkdown(ai.content), source, task);
       assertMarkdownUsesOnlySourceLinks(markdown, source, task);
+      validateGeneratedMarkdownForTask(markdown, task, date);
       return { markdown, ai };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
@@ -732,7 +745,7 @@ async function renderWithAi({
           usedFallback: false,
         },
       }
-    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, artifactsDir, source, artifactKey);
+    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, date, artifactsDir, source, artifactKey);
   const responseArtifact = writeArtifact(artifactsDir, artifactKey, "ai-response.md", rendered.markdown);
   return {
     markdown: rendered.markdown,
