@@ -13,7 +13,7 @@ import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
-import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
+import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText, quoteRowFromYahooChartPayload } from "../scripts/market_daily_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import { type ResultItem, settleDailyPodcastArticleResults, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
@@ -288,6 +288,41 @@ test("market source uses the live EastMoney secid for Hang Seng Tech", () => {
   const source = fs.readFileSync(path.join(process.cwd(), "scripts/market_daily_source.ts"), "utf8");
   assert.match(source, /hstech: "124\.HSTECH"/);
   assert.doesNotMatch(source, /hstech: "100\.HSTECH"/);
+});
+
+test("market source parses Hang Seng Tech Yahoo chart payload when currency is null", () => {
+  const parsed = quoteRowFromYahooChartPayload({
+    code: "HSTECH",
+    name: "恒生科技指数",
+    date: "2026-07-01",
+    payload: {
+      chart: {
+        result: [
+          {
+            meta: {
+              regularMarketPrice: 4472.23,
+              chartPreviousClose: 4393.01,
+              regularMarketTime: 1782806908,
+              regularMarketVolume: 0,
+            },
+            timestamp: [1782806908],
+            indicators: { quote: [{ close: [4472.22998046875], volume: [0] }] },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(parsed?.[0], "HSTECH");
+  assert.equal(parsed?.[1].f2, 4472.22998046875);
+  assert.match(String(parsed?.[1].f3), /^1\.80/);
+});
+
+test("asia market daily does not hard-fail when only Hang Seng Tech is missing", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "scripts/market_daily_source.ts"), "utf8");
+  assert.match(source, /const REQUIRED_ASIA_CORE_QUOTES = \[\.\.\.YAHOO_SYMBOLS\.aShare, YAHOO_SYMBOLS\.hk\[0\], YAHOO_SYMBOLS\.hk\[1\]\]/);
+  assert.match(source, /assertRequiredQuotes\(rows, REQUIRED_ASIA_CORE_QUOTES, "亚洲市场日报"\)/);
+  assert.match(source, /if \(code === "HSTECH"\) return yahooChartQuote\(symbolConfig, date\)\.catch\(\(\) => null\)/);
+  assert.match(source, /恒生科技指数未获取到完整数据/);
 });
 
 test("Yahoo Finance article evidence is rejected when index moves conflict with closing data", () => {

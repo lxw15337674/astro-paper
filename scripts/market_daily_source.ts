@@ -105,6 +105,10 @@ type YahooChartPayload = {
         regularMarketVolume?: number;
         regularMarketTime?: number;
       };
+      timestamp?: number[];
+      indicators?: {
+        quote?: { close?: (number | null)[]; volume?: (number | null)[] }[];
+      };
     }[];
   };
 };
@@ -140,6 +144,8 @@ const YAHOO_SYMBOLS = {
 } satisfies Record<string, YahooSymbol[]>;
 
 const REQUIRED_ASIA_QUOTES = [...YAHOO_SYMBOLS.aShare, ...YAHOO_SYMBOLS.hk];
+const REQUIRED_ASIA_CORE_QUOTES = [...YAHOO_SYMBOLS.aShare, YAHOO_SYMBOLS.hk[0], YAHOO_SYMBOLS.hk[1]];
+const YAHOO_CHART_HOSTS = ["query2.finance.yahoo.com", "query1.finance.yahoo.com"];
 
 function pct(value: unknown): string {
   const num = Number(value);
@@ -405,23 +411,37 @@ async function eastmoneyIndices(secids: string[]): Promise<QuoteRows> {
   return rows;
 }
 
-async function yahooChartQuote({ symbol, code, name }: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
-  const period1 = Math.floor(parseDate(offsetDateString(date, -7)).getTime() / 1000);
-  const period2 = Math.floor(parseDate(offsetDateString(date, 1)).getTime() / 1000);
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=history`;
-  const payload = await fetchJson<YahooChartPayload>(url, { timeoutMs: 20_000 });
-  const meta = payload.chart?.result?.[0]?.meta;
-  const close = Number(meta?.regularMarketPrice);
-  const previousClose = Number(meta?.chartPreviousClose);
-  const timestamp = Number(meta?.regularMarketTime || 0);
+export function quoteRowFromYahooChartPayload({ code, name, date, payload }: { code: string; name: string; date: string; payload: YahooChartPayload }): [string, QuoteRow] | null {
+  const result = payload.chart?.result?.[0];
+  const meta = result?.meta;
+  const timestamps = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const volumes = result?.indicators?.quote?.[0]?.volume || [];
+  const close = Number(closes.at(-1) ?? meta?.regularMarketPrice);
+  const previousClose = Number(closes.length >= 2 ? closes.at(-2) : meta?.chartPreviousClose);
+  const timestamp = Number(timestamps.at(-1) || meta?.regularMarketTime || 0);
   const localDate = timestamp ? new Date(timestamp * 1000).toISOString().slice(0, 10) : "";
   if (!Number.isFinite(close) || !Number.isFinite(previousClose) || close <= 0 || previousClose <= 0 || !localDate || localDate > date) return null;
   const change = close - previousClose;
-  return [code, { f12: code, f14: name, f2: close, f3: (change / previousClose) * 100, f4: change, f6: Number(meta?.regularMarketVolume || 0) }];
+  return [code, { f12: code, f14: name, f2: close, f3: (change / previousClose) * 100, f4: change, f6: Number(volumes.at(-1) ?? meta?.regularMarketVolume ?? 0) }];
+}
+
+async function yahooChartQuote({ symbol, code, name }: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
+  const period1 = Math.floor(parseDate(offsetDateString(date, -7)).getTime() / 1000);
+  const period2 = Math.floor(parseDate(offsetDateString(date, 1)).getTime() / 1000);
+  for (const host of YAHOO_CHART_HOSTS) {
+    const url = `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d&events=history`;
+    const parsed = await fetchJson<YahooChartPayload>(url, { timeoutMs: 20_000 })
+      .then(payload => quoteRowFromYahooChartPayload({ code, name, date, payload }))
+      .catch(() => null);
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 async function yahooQuote(symbolConfig: YahooSymbol, date: string): Promise<[string, QuoteRow] | null> {
   const { code, name } = symbolConfig;
+  if (code === "HSTECH") return yahooChartQuote(symbolConfig, date).catch(() => null);
   try {
     const rows = (await yahooFinance.historical(symbolConfig.symbol, { period1: offsetDateString(date, -21), period2: offsetDateString(date, 1), interval: "1d" })) as YahooHistoryRow[];
     const points = rows
@@ -1080,7 +1100,7 @@ export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<s
       )
     : {};
   const rows = { ...fallbackRows, ...coreRows };
-  if (isWeekday(date)) assertRequiredQuotes(rows, REQUIRED_ASIA_QUOTES, "亚洲市场日报");
+  if (isWeekday(date)) assertRequiredQuotes(rows, REQUIRED_ASIA_CORE_QUOTES, "亚洲市场日报");
   const industryRows = isWeekday(date) ? await safeBoards("m:90+t:2", 20) : [];
   const sections = [buildAShareSection(rows, date, industryRows), buildHkSection(rows, date)];
   return `${[buildSummary(sections, "A股与港股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
