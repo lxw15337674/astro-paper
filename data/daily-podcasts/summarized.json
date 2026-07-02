@@ -90,6 +90,66 @@
       "date": "2026-06-25",
       "archivedAt": "2026-07-01",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-01-01-software-engineering-daily.md"
+    },
+    {
+      "title": "The Oxide 3D Explorer",
+      "show": "Oxide and Friends",
+      "link": "https://share.transistor.fm/s/c9e8b249",
+      "audioUrl": "https://media.transistor.fm/c9e8b249/9c4a816c.mp3",
+      "guid": "247596c6-1ea6-4e07-a408-b4b0446cc455",
+      "date": "2026-06-27",
+      "archivedAt": "2026-07-02",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-01-oxide-and-friends.md"
+    },
+    {
+      "title": "SCOTUS Upholds Birthright Citizenship, Colorado Primary Results, World Cup Heats Up",
+      "show": "Up First from NPR",
+      "link": "https://www.npr.org/2026/07/01/nx-s1-5877267/scotus-upholds-birthright-citizenship-colorado-primary-results-world-cup-heats-up",
+      "audioUrl": "https://prfx.byspotify.com/e/play.podtrac.com/npr-510318/npr.simplecastaudio.com/d52bee4a-b10a-40f8-9417-45064e6b8632/episodes/2d97beeb-9858-4394-b0a0-3e3da6f132f6/audio/128/default.mp3?awCollectionId=d52bee4a-b10a-40f8-9417-45064e6b8632&awEpisodeId=2d97beeb-9858-4394-b0a0-3e3da6f132f6&feed=HMwRVgVt&t=podcast&e=nx-s1-5877267&p=510318&d=805&size=12883217",
+      "guid": "95b0a9da-555b-483b-94b8-f1bc76eac9f6",
+      "date": "2026-07-01",
+      "archivedAt": "2026-07-02",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-02-up-first-from-npr.md"
+    },
+    {
+      "title": "Rewire Your Brain: Subconscious Blocks Removed by Brandon Epstein",
+      "show": "Mick Unplugged",
+      "link": "gid://art19-episode-locator/V0/Giomco1iR5k8a_YTTKm7RR1CWMaciqaGV5rIGeA4vR4",
+      "audioUrl": "https://rss.art19.com/episodes/3f93e299-42de-4d1e-9022-980e2d5036cc.mp3?rss_browser=BAhJIgtDaHJvbWUGOgZFVA%3D%3D--d05363d83ce333c74f32188013892b2863ad051c",
+      "guid": "gid://art19-episode-locator/V0/Giomco1iR5k8a_YTTKm7RR1CWMaciqaGV5rIGeA4vR4",
+      "date": "2026-06-25",
+      "archivedAt": "2026-07-02",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-03-mick-unplugged.md"
+    },
+    {
+      "title": "Mindy Kaling",
+      "show": "Good Hang with Amy Poehler",
+      "link": "833c7d0a-5e03-11f1-9202-9be79f091011",
+      "audioUrl": "https://traffic.megaphone.fm/GLT4930803408.mp3",
+      "guid": "833c7d0a-5e03-11f1-9202-9be79f091011",
+      "date": "2026-06-30",
+      "archivedAt": "2026-07-02",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-04-good-hang-with-amy-poehler.md"
+    },
+    {
+      "title": "Trump Held a Fair And (Almost) No One Came",
+      "show": "Pod Save America",
+      "link": "https://audioboom.com/posts/8922411",
+      "audioUrl": "https://clrtpod.com/m/pscrb.fm/rss/p/prfx.byspotify.com/e/arttrk.com/p/CRMDA/mgln.ai/e/284/dts.podtrac.com/redirect.mp3/audioboom.com/posts/8922411.mp3?modified=1782794927&sid=5166624&source=rss",
+      "guid": "audioboom-019f1650-e84c-71ae-9023-0d2b096b7170",
+      "date": "2026-06-30",
+      "archivedAt": "2026-07-02",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-05-pod-save-america.md"
+    },
+    {
+      "title": "Blanche Taylor Moore, The Oldest Woman on Death Row (Part 1)",
+      "show": "Morbid",
+      "link": "https://morbid-53aa329e.simplecast.com/episodes/blanche-taylor-moore-the-oldest-woman-on-death-row-part-1-kEpnwDe7",
+      "audioUrl": "https://dts.podtrac.com/redirect.mp3/stitcher.simplecastaudio.com/d4d5c1a0-121c-450d-8aed-1ebd2f4dddf0/episodes/66447978-5086-4def-9ee3-d0ca0583ae3d/audio/128/default.mp3?aid=rss_feed&awCollectionId=d4d5c1a0-121c-450d-8aed-1ebd2f4dddf0&awEpisodeId=66447978-5086-4def-9ee3-d0ca0583ae3d&feed=ohmVlJZQ",
+      "guid": "1198a679-fb5d-43c1-953f-38f76f87a788",
+      "date": "2026-06-29",
+      "archivedAt": "2026-07-02",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-06-morbid.md"
     }
   ]
 }
