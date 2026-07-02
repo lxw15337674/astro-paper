@@ -110,7 +110,7 @@ Purpose:
 
 Primary pipeline:
 - GitHub Actions workflow: `.github/workflows/scheduled-posts.yml`
-- scheduled task: `daily-podcasts` at `30 1 * * *` UTC (09:30 Asia/Shanghai); merges the foreign tech RSS pool with Apple Podcasts Top Shows and emits one multimodal article per episode
+- scheduled task: `daily-podcasts` at `30 1 * * *` UTC (09:30 Asia/Shanghai); merges up to 5 foreign tech RSS episodes with Apple Podcasts Top 5 and emits one multimodal article per episode
 - manual dispatch input: `task=daily-podcasts`
 
 Implementation split:

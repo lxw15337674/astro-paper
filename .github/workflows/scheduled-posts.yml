@@ -25,7 +25,7 @@ on:
         required: false
         type: string
       podcast_max_episodes:
-        description: "Maximum daily-podcasts articles (merged foreign tech + Apple Top Shows pool). Empty = 8."
+        description: "Final daily-podcasts safety cap after merging Apple Top 5 + 5 foreign tech episodes. Empty = 10."
         required: false
         type: string
   schedule:
@@ -108,14 +108,12 @@ jobs:
           AI_TIMEOUT_MS: 600000
           PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000
           PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000
-          PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '8' }}
+          PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '10' }}
           PODCAST_MIN_EPISODES: 1
           PODCAST_CANDIDATE_EPISODES: 8
-          APPLE_TOP_PODCASTS_COUNT: 10
-          APPLE_TOP_PODCASTS_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '10' }}
-          APPLE_TOP_PODCASTS_MIN_EPISODES: 1
-          APPLE_TOP_PODCASTS_CANDIDATE_EPISODES: 10
-          APPLE_TOP_PODCASTS_SKIP_ON_INSUFFICIENT: true
+          FOREIGN_TECH_PODCAST_MAX_EPISODES: 5
+          APPLE_TOP_PODCASTS_COUNT: 5
+          APPLE_TOP_PODCASTS_MAX_EPISODES: 5
           APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000
           PODCAST_FFMPEG_TIMEOUT_MS: 300000
           PODCAST_DAILY_MAX_EPISODE_MINUTES: 90

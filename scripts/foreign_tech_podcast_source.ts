@@ -238,6 +238,10 @@ function candidateEpisodes(): number {
   return Math.max(maxEpisodes(), minEpisodes(), envNumber("PODCAST_CANDIDATE_EPISODES", Math.max(maxEpisodes() * 5, minEpisodes())));
 }
 
+function foreignTechPodcastMaxEpisodes(): number {
+  return envNumber("FOREIGN_TECH_PODCAST_MAX_EPISODES", maxEpisodes());
+}
+
 function maxWindowDays(): number {
   return envNumber("PODCAST_LOOKBACK_DAYS", 10);
 }
@@ -378,18 +382,6 @@ function appleTopPodcastsMaxEpisodes(): number {
   return envNumber("APPLE_TOP_PODCASTS_MAX_EPISODES", appleTopPodcastsCount());
 }
 
-function appleTopPodcastsMinEpisodes(): number {
-  return envNumber("APPLE_TOP_PODCASTS_MIN_EPISODES", 1);
-}
-
-function appleTopPodcastsCandidateEpisodes(): number {
-  return Math.max(
-    appleTopPodcastsMaxEpisodes(),
-    appleTopPodcastsMinEpisodes(),
-    envNumber("APPLE_TOP_PODCASTS_CANDIDATE_EPISODES", Math.max(appleTopPodcastsMaxEpisodes() * 10, appleTopPodcastsMinEpisodes())),
-  );
-}
-
 function appleStorefront(): string {
   return (process.env.APPLE_PODCASTS_STOREFRONT || "us").toLowerCase();
 }
@@ -449,7 +441,7 @@ async function fetchAppleTopPodcastEpisodes(date: string, force = false): Promis
   const selected: Episode[] = [];
   let skippedDuplicates = 0;
   for (const show of shows) {
-    if (selected.length >= appleTopPodcastsCandidateEpisodes()) break;
+    if (selected.length >= appleTopPodcastsMaxEpisodes()) break;
     try {
       const feed = await lookupApplePodcast(show);
       if (!feed) {
@@ -477,7 +469,7 @@ async function fetchAppleTopPodcastEpisodes(date: string, force = false): Promis
     }
   }
   if (skippedDuplicates) writeStderr(`skipped ${skippedDuplicates} Apple Top Shows duplicate/latest episode(s) already present in archive history`);
-  return selected;
+  return selected.slice(0, appleTopPodcastsMaxEpisodes());
 }
 
 async function fetchEpisodes(date: string, force = false): Promise<Episode[]> {
@@ -1072,7 +1064,7 @@ function podcastSourceMarkdown(episodes: Episode[], sourceIntro: string, writing
 
 // 合并数据源：海外科技 RSS 池 + Apple Top Shows 榜单池，交替穿插保证两类来源都在前 N 篇里有代表，再跨池按指纹去重。
 async function fetchMergedPodcastEpisodes(date: string, force = false): Promise<Episode[]> {
-  const foreign = await fetchEpisodes(date, force);
+  const foreign = (await fetchEpisodes(date, force)).slice(0, foreignTechPodcastMaxEpisodes());
   let apple: Episode[] = [];
   try {
     apple = await fetchAppleTopPodcastEpisodes(date, force);
