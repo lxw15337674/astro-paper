@@ -150,6 +150,26 @@
       "date": "2026-06-29",
       "archivedAt": "2026-07-02",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-02-06-morbid.md"
+    },
+    {
+      "title": "Grafana&#8217;s Approach to AI-Native Observability",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/07/02/grafanas-approach-to-ai-native-observability/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=grafanas-approach-to-ai-native-observability",
+      "audioUrl": "https://traffic.megaphone.fm/SED4888500318.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=22342",
+      "date": "2026-07-02",
+      "archivedAt": "2026-07-03",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-03-01-software-engineering-daily.md"
+    },
+    {
+      "title": "SE Radio 727: Jeroen Janssens and Thijs Nieuwdorp on Using Polars",
+      "show": "Software Engineering Radio",
+      "link": "https://se-radio.net/2026/07/se-radio-727-jeroen-janssens-and-thijs-nieuwdorp-on-using-polars/",
+      "audioUrl": "https://traffic.libsyn.com/secure/seradio/727-jeroen-janssens-thijs-nieuwdorp-using-polars.mp3?dest-id=23379",
+      "guid": "32ef49cb-aaf6-44f6-8788-b67ca29f5f26",
+      "date": "2026-07-02",
+      "archivedAt": "2026-07-03",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-03-02-software-engineering-radio.md"
     }
   ]
 }
