@@ -166,21 +166,6 @@ function skippedPodcastEpisode(result: ResultItem): ResultItem {
   };
 }
 
-function skippedPodcastArticleVariant(task: Task, date: string, titleSuffix: string, reason: string): ResultItem {
-  return {
-    task,
-    path: "",
-    title: titleForVariant(task, date, titleSuffix),
-    created: false,
-    skipped: true,
-    updated_at_bjt: "",
-    commit: "",
-    push: "",
-    tags: taskTags(task),
-    skip_reason: reason,
-  };
-}
-
 export function settleDailyPodcastArticleResults(results: ResultItem[], date: string, minEpisodes = dailyPodcastMinEpisodes()): ResultItem[] {
   return settlePodcastArticleResults(results, date, minEpisodes);
 }
@@ -204,25 +189,6 @@ function settlePodcastArticleResults(results: ResultItem[], date: string, minEpi
 
 function isPodcastArticleTask(task: Task): boolean {
   return task === "daily-podcasts" || task === "xyzrank-top-episodes";
-}
-
-function xyzRankDurationMinutes(value = ""): number | null {
-  const text = value.trim();
-  if (!text) return null;
-  if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
-  const parts = text.split(":").map(part => Number(part));
-  if (!parts.length || parts.some(part => !Number.isFinite(part) || part < 0)) return null;
-  let total = 0;
-  for (const part of parts) total = total * 60 + part;
-  return Math.round(total / 60);
-}
-
-export function xyzRankPodcastArticleSkipReason(task: Task, episode: Pick<Episode, "duration" | "title">): string {
-  if (task !== "xyzrank-top-episodes") return "";
-  const minutes = xyzRankDurationMinutes(episode.duration || "");
-  const limit = envPositiveInt("PODCAST_DAILY_MAX_EPISODE_MINUTES", 90);
-  if (!minutes || minutes <= limit) return "";
-  return `XYZ Rank episode exceeds ${limit} minute CI audio limit (${minutes} minutes): ${episode.title}`;
 }
 
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
@@ -875,12 +841,6 @@ async function generatePodcastArticles({ task, repo, date, force, promptDir, art
   const results: ResultItem[] = [];
   for (const [index, episode] of episodes.entries()) {
     const fileNameSuffix = dailyPodcastFileNameSuffix(episode, index);
-    const skipReason = xyzRankPodcastArticleSkipReason(task, episode);
-    if (skipReason) {
-      results.push(skippedPodcastArticleVariant(task, date, episode.title, skipReason));
-      writeStderr(`WARN: ${task}-${fileNameSuffix} skipped: ${skipReason}`);
-      continue;
-    }
     if (!force) {
       const skipped = skippedExistingVariant(task, repo, date, fileNameSuffix);
       if (skipped) {
