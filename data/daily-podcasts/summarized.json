@@ -170,6 +170,26 @@
       "date": "2026-07-02",
       "archivedAt": "2026-07-03",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-03-02-software-engineering-radio.md"
+    },
+    {
+      "title": "圆桌会谈：谁说倒霉熊停播了？没看到我正在演绎续作吗！",
+      "show": "凹凸电波",
+      "link": "https://www.xiaoyuzhoufm.com/episode/6a391c989d2f5743683bec5c",
+      "audioUrl": "https://media.xyzcdn.net/5e2839ca418a84a0462431b7/lmkQz2bFIUK3g5UZhufcfSIkZgfj.m4a",
+      "guid": "https://www.xiaoyuzhoufm.com/episode/6a391c989d2f5743683bec5c",
+      "date": "2026-06-22",
+      "archivedAt": "2026-07-03",
+      "postPath": "src/content/posts/zh-cn/XYZRank热门播客-2026-07-03-02-凹凸电波.md"
+    },
+    {
+      "title": "人生体验，真的会在后来支付利息",
+      "show": "谭立人",
+      "link": "https://www.xiaoyuzhoufm.com/episode/6a366c7675ba9e0c533656d6",
+      "audioUrl": "https://media.xyzcdn.net/65a2d0f07242f9fc1c1df60a/lo9VH_Zh-suniFs4y0q68R_njZiN.m4a",
+      "guid": "https://www.xiaoyuzhoufm.com/episode/6a366c7675ba9e0c533656d6",
+      "date": "2026-06-20",
+      "archivedAt": "2026-07-03",
+      "postPath": "src/content/posts/zh-cn/XYZRank热门播客-2026-07-03-04-谭立人.md"
     }
   ]
 }
