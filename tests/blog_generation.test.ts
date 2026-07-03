@@ -844,6 +844,42 @@ test("XYZ Rank top episodes source extracts Xiaoyuzhou audio links", async () =>
   }
 });
 
+test("XYZ Rank top episodes source falls back to reader links when API is blocked", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes("xyzrank.com/api/episodes")) return new Response("blocked", { status: 403 });
+    if (url.includes("r.jina.ai")) {
+      return new Response(
+        [
+          "Title: 中文播客榜",
+          "",
+          "Markdown Content:",
+          "1[![Image 1](https://image.example.com/one.jpg)](https://www.xiaoyuzhoufm.com/episode/fallback-1)123 4 0.1%5.0%42′1天前 科技",
+          "2[![Image 2](https://image.example.com/two.jpg)](https://www.xiaoyuzhoufm.com/episode/fallback-2)99 3 0.1%4.0%38′2天前 商务",
+        ].join("\n"),
+      );
+    }
+    const match = url.match(/fallback-(\d+)/);
+    if (match) {
+      return new Response(
+        `<html><head><meta property="og:audio" content="https://media.xyzcdn.net/fallback/audio-${match[1]}.m4a"/><script name="schema:podcast-show" type="application/ld+json">{"name":"兜底单集 ${match[1]}","datePublished":"2099-01-05T00:00:00.000Z","timeRequired":"PT42M","description":"兜底详情页描述","associatedMedia":{"contentUrl":"https://media.xyzcdn.net/fallback/jsonld-${match[1]}.m4a"},"partOfSeries":{"name":"兜底节目 ${match[1]}"}}</script></head></html>`,
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+  try {
+    const source = await buildXyzRankTopEpisodesSource("2099-01-06", 2);
+    assert.equal((source.match(/^##\s+\d+\.\s+/gm) || []).length, 2);
+    assert.match(source, /## 1\. 兜底单集 1/);
+    assert.match(source, /- 节目：兜底节目 2/);
+    assert.match(source, /- 音频：https:\/\/media\.xyzcdn\.net\/fallback\/jsonld-1\.m4a/);
+    assert.match(source, /- 日期：2099-01-05/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("summarized ledger upserts by fingerprint and matches tracking-param variants", () => {
   const ledgerFile = path.join(os.tmpdir(), `astro-paper-ledger-unit-${Date.now()}-${Math.random()}.json`);
   const episode = {

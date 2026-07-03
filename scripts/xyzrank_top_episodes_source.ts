@@ -4,6 +4,7 @@ import { type Episode } from "./foreign_tech_podcast_source.ts";
 import { isEpisodeSummarized, loadSummarizedFingerprints } from "./podcast_ledger.ts";
 
 const XYZ_RANK_EPISODES_API = "https://xyzrank.com/api/episodes";
+const XYZ_RANK_READER_URL = "https://r.jina.ai/http://r.jina.ai/http://https://xyzrank.com/";
 const DEFAULT_LIMIT = 5;
 const BROWSER_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
 
@@ -22,6 +23,16 @@ type XyzRankEpisode = {
 
 type XyzRankEpisodesResponse = {
   items?: XyzRankEpisode[];
+};
+
+type XiaoyuzhouEpisodeMetadata = {
+  title?: string;
+  show?: string;
+  audioUrl?: string;
+  description?: string;
+  datePublished?: string;
+  duration?: string;
+  imageUrl?: string;
 };
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -65,15 +76,42 @@ function extractAudioUrl(html: string): string {
   return contentUrl ? decodeHtmlAttr(contentUrl) : "";
 }
 
-function extractJsonLdDescription(html: string): string {
+function extractJsonLdPayload(html: string): Record<string, unknown> {
   const raw = html.match(/<script name=["']schema:podcast-show["'] type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/i)?.[1] || "";
-  if (!raw) return "";
+  if (!raw) return {};
   try {
-    const payload = JSON.parse(raw) as { description?: string };
-    return payload.description || "";
+    return JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    return "";
+    return {};
   }
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function extractXiaoyuzhouMetadata(html: string): XiaoyuzhouEpisodeMetadata {
+  const payload = extractJsonLdPayload(html);
+  const associatedMedia = typeof payload.associatedMedia === "object" && payload.associatedMedia ? (payload.associatedMedia as Record<string, unknown>) : {};
+  const partOfSeries = typeof payload.partOfSeries === "object" && payload.partOfSeries ? (payload.partOfSeries as Record<string, unknown>) : {};
+  return {
+    title: stringField(payload.name) || decodeHtmlAttr(html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i)?.[1] || ""),
+    show: stringField(partOfSeries.name),
+    audioUrl: stringField(associatedMedia.contentUrl) || extractAudioUrl(html),
+    description: stringField(payload.description),
+    datePublished: stringField(payload.datePublished),
+    duration: stringField(payload.timeRequired),
+    imageUrl: decodeHtmlAttr(html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i)?.[1] || ""),
+  };
+}
+
+function isoDurationMinutes(value?: string): string | undefined {
+  const match = value?.match(/^PT(?:(\d+)H)?(?:(\d+)M)?/);
+  if (!match) return undefined;
+  const hours = Number(match[1] || "0");
+  const minutes = Number(match[2] || "0");
+  const total = hours * 60 + minutes;
+  return total > 0 ? String(total) : undefined;
 }
 
 function episodeDate(value: unknown, fallback: string): string {
@@ -91,16 +129,46 @@ async function fetchXyzRankEpisodeItems(limit = episodeLimit()): Promise<XyzRank
   const url = new URL(XYZ_RANK_EPISODES_API);
   url.searchParams.set("offset", "0");
   url.searchParams.set("limit", String(limit));
-  const payload = await fetchJson<XyzRankEpisodesResponse>(url.toString());
-  return payload.items || [];
+  try {
+    const payload = await fetchJson<XyzRankEpisodesResponse>(url.toString());
+    return payload.items || [];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeStderr(`WARN: XYZ Rank API unavailable (${message}); retrying with reader fallback`);
+    return fetchXyzRankEpisodeItemsFromReader(limit);
+  }
+}
+
+async function fetchXyzRankEpisodeItemsFromReader(limit: number): Promise<XyzRankEpisode[]> {
+  const markdown = await fetchText(XYZ_RANK_READER_URL);
+  const items: XyzRankEpisode[] = [];
+  const pattern = /^(\d+)\[!\[Image \d+\]\(([^)]+)\)\]\((https:\/\/www\.xiaoyuzhoufm\.com\/episode\/[^)]+)\)([^\n]*)/gm;
+  for (const match of markdown.matchAll(pattern)) {
+    const rank = Number(match[1]);
+    const tail = match[4] || "";
+    const duration = Number(tail.match(/(\d+)′/)?.[1] || "");
+    const genre = tail.match(/天前\s+(.+)$/)?.[1]?.trim();
+    items.push({
+      rank,
+      link: match[3],
+      logoURL: decodeHtmlAttr(match[2]),
+      duration: Number.isFinite(duration) ? duration : undefined,
+      primaryGenreName: genre,
+    });
+    if (items.length >= limit) break;
+  }
+  if (!items.length) throw new Error("XYZ Rank reader fallback returned no episode links");
+  return items;
 }
 
 async function toEpisode(item: XyzRankEpisode, index: number, archiveDate: string): Promise<Episode> {
   const rank = Number.isInteger(item.rank) ? Number(item.rank) : index + 1;
   if (!item.link) throw new Error(`XYZ Rank episode #${rank} is missing link`);
   const html = await fetchText(item.link);
-  const audioUrl = extractAudioUrl(html);
+  const metadata = extractXiaoyuzhouMetadata(html);
+  const audioUrl = metadata.audioUrl || "";
   if (!audioUrl) throw new Error(`XYZ Rank episode #${rank} is missing audio URL: ${item.link}`);
+  const pubDate = item.postTime || metadata.datePublished || "";
   const metrics = [
     `XYZ Rank 热门单集 #${rank}`,
     item.primaryGenreName ? `分类：${item.primaryGenreName}` : "",
@@ -110,17 +178,17 @@ async function toEpisode(item: XyzRankEpisode, index: number, archiveDate: strin
     .filter(Boolean)
     .join("；");
   return {
-    show: compact(item.podcastName || "未标明节目"),
+    show: compact(item.podcastName || metadata.show || "未标明节目"),
     source: "XYZ Rank / 小宇宙",
-    title: compact(item.title || `XYZ Rank 热门单集 #${rank}`),
+    title: compact(item.title || metadata.title || `XYZ Rank 热门单集 #${rank}`),
     link: item.link,
     audioUrl,
     guid: item.link,
-    pubDate: item.postTime || "",
-    date: episodeDate(item.postTime, archiveDate),
-    description: extractJsonLdDescription(html) || metrics,
-    imageUrl: item.logoURL,
-    duration: Number.isFinite(item.duration) ? String(item.duration) : undefined,
+    pubDate,
+    date: episodeDate(pubDate, archiveDate),
+    description: metadata.description || metrics,
+    imageUrl: item.logoURL || metadata.imageUrl,
+    duration: Number.isFinite(item.duration) ? String(item.duration) : isoDurationMinutes(metadata.duration),
     chartRank: rank,
     genres: item.primaryGenreName ? [item.primaryGenreName] : undefined,
   };
