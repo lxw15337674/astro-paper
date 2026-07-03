@@ -17,7 +17,7 @@ import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceA
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
-import { type ResultItem, settleDailyPodcastArticleResults, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
+import { type ResultItem, settleDailyPodcastArticleResults, validateGeneratedMarkdownForTask, xyzRankPodcastArticleSkipReason } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
 const GITHUB_TRENDING_HTML_FIXTURE = `<!doctype html><html><body>
@@ -877,6 +877,18 @@ test("XYZ Rank top episodes source falls back to reader links when API is blocke
     assert.match(source, /- 日期：2099-01-05/);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("XYZ Rank podcast article generation treats bare durations as minutes for CI limits", () => {
+  const previous = process.env.PODCAST_DAILY_MAX_EPISODE_MINUTES;
+  process.env.PODCAST_DAILY_MAX_EPISODE_MINUTES = "90";
+  try {
+    assert.match(xyzRankPodcastArticleSkipReason("xyzrank-top-episodes", { title: "超长单集", duration: "124" }), /124 minutes/);
+    assert.equal(xyzRankPodcastArticleSkipReason("xyzrank-top-episodes", { title: "可处理单集", duration: "63" }), "");
+    assert.equal(xyzRankPodcastArticleSkipReason("daily-podcasts", { title: "RSS 秒数", duration: "3600" }), "");
+  } finally {
+    restoreEnv("PODCAST_DAILY_MAX_EPISODE_MINUTES", previous);
   }
 });
 
