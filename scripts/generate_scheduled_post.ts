@@ -165,10 +165,10 @@ function skippedPodcastEpisode(result: ResultItem): ResultItem {
   };
 }
 
-function skippedPodcastArticleVariant(task: Task, date: string, fileNameSuffix: string, titleSuffix: string, reason: string): ResultItem {
+function skippedPodcastArticleVariant(task: Task, date: string, titleSuffix: string, reason: string): ResultItem {
   return {
     task,
-    path: variantPostRelPath(task, date, fileNameSuffix),
+    path: "",
     title: titleForVariant(task, date, titleSuffix),
     created: false,
     skipped: true,
@@ -875,7 +875,7 @@ async function generatePodcastArticles({ task, repo, date, force, promptDir, art
     const fileNameSuffix = dailyPodcastFileNameSuffix(episode, index);
     const skipReason = xyzRankPodcastArticleSkipReason(task, episode);
     if (skipReason) {
-      results.push(skippedPodcastArticleVariant(task, date, fileNameSuffix, episode.title, skipReason));
+      results.push(skippedPodcastArticleVariant(task, date, episode.title, skipReason));
       writeStderr(`WARN: ${task}-${fileNameSuffix} skipped: ${skipReason}`);
       continue;
     }
