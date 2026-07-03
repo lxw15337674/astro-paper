@@ -103,6 +103,14 @@ function normalizeParagraph(text: string): string {
   return sanitizeGeneratedText(text);
 }
 
+function hasChinese(text: string): boolean {
+  return /[\u3400-\u9fff]/.test(text);
+}
+
+function assertHnTitleUsesChinese(title: string): void {
+  if (!hasChinese(title)) throw new Error(`HN item title should use a Chinese title: ${title}`);
+}
+
 function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   const { body, items: payloadItems } = extractPayload(text);
   const blocks = body
@@ -113,6 +121,7 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   blocks.forEach((block, index) => {
     const rank = index + 1;
     const title = block.match(/^\d+\.\s*🔥?\s*(.+)$/m)?.[1]?.trim() || payloadItems[index]?.title || `Item ${rank}`;
+    assertHnTitleUsesChinese(title);
     const bullets = extractBullets(block);
     const payload = payloadItems[index] || {};
     const points = bullets.find(bullet => bullet.startsWith("⭐"))?.replace(/^⭐\s*/, "") || `${payload.score || 0} points · ${payload.comments || 0} 评论`;
@@ -281,10 +290,43 @@ function rejectDuplicateLinksAndHeadings(markdown: string, label: string): void 
   if (new Set(headings).size !== headings.length) throw new Error(`${label} contains duplicate headings`);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sectionBody(markdown: string, heading: string): string {
+  const match = new RegExp(`^##\\s+${escapeRegExp(heading)}\\s*$`, "m").exec(markdown);
+  if (!match) throw new Error(`missing section: ${heading}`);
+  const rest = markdown.slice(match.index + match[0].length);
+  const next = rest.search(/\n##\s+/);
+  return (next >= 0 ? rest.slice(0, next) : rest).trim();
+}
+
+function assertTechDailyBriefOverview(markdown: string): void {
+  const overview = sectionBody(markdown, "今日总览");
+  if (/^[-*]\s+/m.test(overview)) throw new Error("tech daily overview must be one short paragraph, not a list");
+  const paragraphs = overview
+    .split(/\n{2,}/)
+    .map(paragraph => paragraph.trim())
+    .filter(Boolean);
+  if (paragraphs.length !== 1) throw new Error(`tech daily overview must be exactly one paragraph, got ${paragraphs.length}`);
+  const length = compact(paragraphs[0]).length;
+  if (length > 140) throw new Error(`tech daily overview is too long (${length} > 140)`);
+}
+
+function assertLinkedHeadingsUseChinese(markdown: string, label: string): void {
+  for (const match of markdown.matchAll(/^###\s+\[([^\]]+)\]\(https?:\/\/[^)]+\)\s*$/gm)) {
+    const title = match[1].trim();
+    if (!hasChinese(title)) throw new Error(`${label} linked heading should use a Chinese title: ${title}`);
+  }
+}
+
 function formatTechDaily(text: string): string {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   rejectPureTutorialWeekly(normalized);
   rejectDuplicateLinksAndHeadings(normalized, "tech daily");
+  assertTechDailyBriefOverview(normalized);
+  assertLinkedHeadingsUseChinese(normalized, "tech daily");
   const links = normalized.match(/https?:\/\/\S+/g) || [];
   if (links.length < 1) throw new Error(`tech daily needs source links, got ${links.length}`);
   if (!/影响|取舍|风险|迁移|适合|代价|工程|实践|架构|版本|安全/.test(normalized)) throw new Error("tech daily lacks engineering judgement language");

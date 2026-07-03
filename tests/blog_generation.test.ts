@@ -253,10 +253,15 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   }
   const itemSummaryPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-digest-item-summary.md"), "utf8");
   const sectionPlannerPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-digest-section-planner.md"), "utf8");
+  const hnPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "hn-top10.md"), "utf8");
   const techDailyPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "tech-daily.md"), "utf8");
   assert.match(itemSummaryPrompt, /一次只处理一条候选/);
   assert.match(sectionPlannerPrompt, /动态规划《技术日报》的栏目/);
+  assert.match(hnPrompt, /每个条目的主标题必须翻译成自然中文/);
   assert.match(techDailyPrompt, /不要固定套用 AI\/工程\/商业三段式/);
+  assert.match(techDailyPrompt, /只写 1 个极短自然段/);
+  assert.match(techDailyPrompt, /中文事件标题/);
+  assert.match(techDailyPrompt, /不要直接照搬英文原题/);
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
@@ -863,7 +868,7 @@ test("GitHub Trending parser extracts repository metadata", () => {
 
 test("archive and verifier accept generated HN, market posts, podcast notes, weekly and daily digests", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-archive-"));
-  const hnBody = `1. 🔥 Developers don't understand CORS
+  const hnBody = `1. 🔥 开发者并不真正理解 CORS
 - ⭐ 185 points · 88 评论
 - 主题：开发工具 / 编程语言
 - 原文：https://example.com/cors
@@ -910,7 +915,7 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
   assert.match(hnMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
   assert.doesNotMatch(hnMarkdown, /今日 HackerNews 热门文章 Top 10|今日总览/);
-  assert.match(hnMarkdown, /^## 1\. Developers don't understand CORS/m);
+  assert.match(hnMarkdown, /^## 1\. 开发者并不真正理解 CORS/m);
   const asia = archivePost({ task: "asia-market-daily", date: "2099-01-02", repo, body: asiaBody, force: true });
   const crypto = archivePost({ task: "crypto-market-daily", date: "2099-01-02", repo, body: cryptoBody, force: true });
   const podcastBody = `${fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8")}
@@ -1006,6 +1011,18 @@ test("tech weekly rejects pure tutorial language", () => {
 
 这是一篇没有工程事件的 API 详解，只是在讲基础知识。https://example.com/redis https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e`;
   assert.throws(() => archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body, force: true }), /pure tutorial language|at least three expected sections/);
+});
+
+test("HN archive rejects untranslated item titles", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-hn-title-bad-"));
+  const body = `1. 🔥 Developers don't understand CORS
+- ⭐ 185 points · 88 评论
+- 主题：开发工具 / 编程语言
+- 原文：https://example.com/cors
+- HN 讨论：https://news.ycombinator.com/item?id=123
+- 内容总结：文章解释了浏览器同源策略与 CORS 预检机制之间的关系，并指出很多后端开发者把跨域报错误解成服务端权限问题。作者用请求头、凭证模式和常见配置误区串起了 CORS 的真实执行路径。
+- 评论总结：评论区主要补充了反向代理、CDN 和本地开发场景下最容易踩坑的缓存与凭证问题，也有人强调把通配配置当万能解法会埋下安全隐患。`;
+  assert.throws(() => archivePost({ task: "hn-top10", date: "2099-01-02", repo, body, force: true }), /HN item title should use a Chinese title/);
 });
 
 test("archive and verifier accept generated GitHub trending daily", () => {
@@ -1111,7 +1128,7 @@ test("daily digest verifier accepts one high-quality item", () => {
 
 ## 平台工程
 
-### [PostgreSQL release improves planner behavior](https://example.com/postgresql-planner)
+### [PostgreSQL 新版本改进查询规划行为](https://example.com/postgresql-planner)
 
 PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`,
     force: true,
@@ -1155,6 +1172,31 @@ test("daily digest verifier skips zero-item rows", () => {
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "tech-daily", path: "", skipped: true, skip_reason: "no high-quality daily items" }] }));
   assert.equal(verifyResultJson(repo, resultJson), 0);
+});
+
+test("tech daily rejects long overview and untranslated linked titles", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-tech-daily-bad-"));
+  const longOverview = `## 今日总览
+
+今天的技术日报主线是工程平台、安全供应链和 AI 运行时开始互相收敛。数据库、云原生和 Agent 工具链不再是分散更新，而是在发布治理、可观测性、成本和风险边界上形成同一组工程问题。另一个变化是企业平台开始把模型能力、权限体系、部署成本和事故响应放进同一条生产链路，要求团队同时处理架构、版本、安全和迁移风险。
+
+## 平台工程
+
+### [PostgreSQL 新版本改进查询规划行为](https://example.com/postgresql-planner)
+
+PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`;
+  assert.throws(() => archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: longOverview, force: true }), /overview is too long/);
+
+  const englishTitle = `## 今日总览
+
+今天的技术日报只保留一条数据库版本事件，重点是查询规划变化可能影响复杂 SQL 的迁移验证和生产回滚边界。
+
+## 平台工程
+
+### [PostgreSQL release improves planner behavior](https://example.com/postgresql-planner)
+
+PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`;
+  assert.throws(() => archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: englishTitle, force: true }), /Chinese title/);
 });
 
 test("result verifier skips task-level failures with explicit error", () => {

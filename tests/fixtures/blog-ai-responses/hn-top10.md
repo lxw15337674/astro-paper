@@ -1,4 +1,4 @@
-1. 🔥 Developers finally test their automation contracts
+1. 🔥 开发者终于开始测试自动化契约
 - ⭐ 320 points · 64 评论
 - 主题：开发工具 / 编程语言
 - 原文：https://example.com/automation-contracts
