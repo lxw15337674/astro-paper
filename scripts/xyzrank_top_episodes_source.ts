@@ -5,6 +5,7 @@ import { isEpisodeSummarized, loadSummarizedFingerprints } from "./podcast_ledge
 
 const XYZ_RANK_EPISODES_API = "https://xyzrank.com/api/episodes";
 const DEFAULT_LIMIT = 5;
+const BROWSER_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
 
 type XyzRankEpisode = {
   rank?: number;
@@ -26,8 +27,15 @@ type XyzRankEpisodesResponse = {
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
-      accept: "application/json",
-      "user-agent": "astro-paper-xyzrank/1.0",
+      accept: "application/json, text/plain, */*",
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "cache-control": "no-cache",
+      pragma: "no-cache",
+      referer: "https://xyzrank.com/",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin",
+      "user-agent": BROWSER_USER_AGENT,
     },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
@@ -37,7 +45,9 @@ async function fetchJson<T>(url: string): Promise<T> {
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
-      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "user-agent": BROWSER_USER_AGENT,
     },
   });
   if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
