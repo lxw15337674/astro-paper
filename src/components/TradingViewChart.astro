@@ -1,5 +1,5 @@
 ---
-type WidgetKind = "advanced-chart" | "symbol-overview";
+type WidgetKind = "advanced-chart" | "symbol-overview" | "asia-overview";
 
 type Props = {
   kind: WidgetKind;
@@ -10,6 +10,7 @@ type Props = {
 const { kind, title, caption } = Astro.props;
 
 const isAdvancedChart = kind === "advanced-chart";
+const isAsiaOverview = kind === "asia-overview";
 const scriptSrc = isAdvancedChart
   ? "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
   : "https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js";
@@ -27,39 +28,76 @@ const options = isAdvancedChart
       calendar: false,
       support_host: "https://www.tradingview.com",
     }
-  : {
-      symbols: [
-        ["SPY", "AMEX:SPY|1D"],
-        ["QQQ", "NASDAQ:QQQ|1D"],
-        ["DIA", "AMEX:DIA|1D"],
-      ],
-      chartOnly: false,
-      width: "100%",
-      height: "100%",
-      locale: "zh_CN",
-      colorTheme: "dark",
-      autosize: true,
-      showVolume: true,
-      showMA: false,
-      hideDateRanges: false,
-      hideMarketStatus: false,
-      hideSymbolLogo: false,
-      scalePosition: "right",
-      scaleMode: "Normal",
-      fontFamily: "inherit",
-      fontSize: "10",
-      noTimeScale: false,
-      valuesTracking: "1",
-      changeMode: "price-and-percent",
-      chartType: "area",
-      maLineColor: "#2962FF",
-      maLineWidth: 1,
-      maLength: 9,
-      headerFontSize: "medium",
-      lineWidth: 2,
-      lineType: 0,
-      dateRanges: ["1d|1", "1m|30", "3m|60", "12m|1D", "60m|1W"],
-    };
+  : isAsiaOverview
+    ? {
+        symbols: [
+          ["上证", "SSE:000001|1D"],
+          ["深成", "SZSE:399001|1D"],
+          ["创业板", "SZSE:399006|1D"],
+          ["恒生", "HSI:HSI|1D"],
+          ["国企", "HSI:HSCEI|1D"],
+          ["恒科", "HSI:HSTECH|1D"],
+        ],
+        chartOnly: false,
+        width: "100%",
+        height: "100%",
+        locale: "zh_CN",
+        colorTheme: "dark",
+        autosize: true,
+        showVolume: true,
+        showMA: false,
+        hideDateRanges: false,
+        hideMarketStatus: false,
+        hideSymbolLogo: false,
+        scalePosition: "right",
+        scaleMode: "Normal",
+        fontFamily: "inherit",
+        fontSize: "10",
+        noTimeScale: false,
+        valuesTracking: "1",
+        changeMode: "price-and-percent",
+        chartType: "area",
+        maLineColor: "#2962FF",
+        maLineWidth: 1,
+        maLength: 9,
+        headerFontSize: "medium",
+        lineWidth: 2,
+        lineType: 0,
+        dateRanges: ["1d|1", "1m|30", "3m|60", "12m|1D", "60m|1W"],
+      }
+    : {
+        symbols: [
+          ["SPY", "AMEX:SPY|1D"],
+          ["QQQ", "NASDAQ:QQQ|1D"],
+          ["DIA", "AMEX:DIA|1D"],
+        ],
+        chartOnly: false,
+        width: "100%",
+        height: "100%",
+        locale: "zh_CN",
+        colorTheme: "dark",
+        autosize: true,
+        showVolume: true,
+        showMA: false,
+        hideDateRanges: false,
+        hideMarketStatus: false,
+        hideSymbolLogo: false,
+        scalePosition: "right",
+        scaleMode: "Normal",
+        fontFamily: "inherit",
+        fontSize: "10",
+        noTimeScale: false,
+        valuesTracking: "1",
+        changeMode: "price-and-percent",
+        chartType: "area",
+        maLineColor: "#2962FF",
+        maLineWidth: 1,
+        maLength: 9,
+        headerFontSize: "medium",
+        lineWidth: 2,
+        lineType: 0,
+        dateRanges: ["1d|1", "1m|30", "3m|60", "12m|1D", "60m|1W"],
+      };
 ---
 
 <section class="tv-chart not-prose" aria-label={title}>

@@ -80,6 +80,7 @@ const ogImage = ogImageUrl
 const showCoverImage = Boolean(ogImageUrl);
 const showBitcoinChart = tags.includes("比特币日报");
 const showUsMarketChart = tags.includes("美股市场日报");
+const showAsiaMarketChart = tags.includes("亚洲市场日报");
 ---
 
 <PostLayout
@@ -149,6 +150,15 @@ const showUsMarketChart = tags.includes("美股市场日报");
         "prose-pre:bg-(--shiki-light-bg) dark:prose-pre:bg-(--shiki-dark-bg)",
       ]}
     >
+      {
+        showAsiaMarketChart && (
+          <TradingViewChart
+            kind="asia-overview"
+            title="亚洲市场走势"
+            caption="A 股三大指数 / 港股三大指数 · 日线"
+          />
+        )
+      }
       {
         showBitcoinChart && (
           <TradingViewChart
