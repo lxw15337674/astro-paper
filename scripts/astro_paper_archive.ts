@@ -385,6 +385,27 @@ function formatGitHubTrendingDaily(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
+function formatMdblistWeekly(text: string): string {
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
+  for (const section of ["电影推荐", "剧集推荐"]) {
+    if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized)) throw new Error(`mdblist weekly missing section: ${section}`);
+  }
+  const works = (normalized.match(/^###\s+.+$/gm) || []).length;
+  if (works < 4) throw new Error(`mdblist weekly needs at least four title entries, got ${works}`);
+  const count = (label: string): number => (normalized.match(new RegExp(`^####\\s+${label}\\s*$`, "gm")) || []).length;
+  if (count("基本信息") !== works) throw new Error(`mdblist weekly each work needs a 基本信息 block: ${count("基本信息")} vs ${works} works`);
+  for (const label of ["剧情概要", "推荐理由", "评论总结"]) {
+    if (count(label) < works) throw new Error(`mdblist weekly missing ${label} block for some works: ${count(label)} < ${works}`);
+  }
+  const posters = (normalized.match(/^!\[[^\]]*\]\(https:\/\/image\.tmdb\.org\/[^)]+\)\s*$/gm) || []).length;
+  if (posters < works - 1) throw new Error(`mdblist weekly needs a poster per work, got ${posters} for ${works} works`);
+  if (!/IMDb/.test(normalized)) throw new Error("mdblist weekly 基本信息 lacks IMDb rating");
+  for (const pattern of [/待补充/, /示例/, /信息不足/, /无法判断/, /本文将/]) {
+    if (pattern.test(normalized)) throw new Error(`mdblist weekly contains forbidden language: ${pattern.source}`);
+  }
+  return `${normalized.trim()}\n`;
+}
+
 function isPodcastArticleTask(task: string): boolean {
   return task === "daily-podcasts" || task === "xyzrank-top-episodes";
 }
@@ -416,7 +437,7 @@ export function archivePost({
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
-  const formatted = task === "hn-top10" ? formatHnTop10(body) : isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
+  const formatted = task === "hn-top10" ? formatHnTop10(body) : isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } : { markdown: formatMarketDaily(body), ogImage: "" };
   if (task === "crypto-market-daily") assertPlainCryptoDaily(formatted.markdown);
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);

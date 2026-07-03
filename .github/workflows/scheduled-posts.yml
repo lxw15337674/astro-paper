@@ -37,6 +37,7 @@ on:
     - cron: "0 17 * * *"
     - cron: "30 22 * * *"
     - cron: "0 23 * * *"
+    - cron: "0 2 * * 5"
 
 concurrency:
   group: scheduled-posts-${{ github.ref }}
@@ -94,6 +95,7 @@ jobs:
           AI_FALLBACK_BASE_URL: ${{ secrets.AI_FALLBACK_BASE_URL || 'https://api.deepseek.com' }}
           AI_FALLBACK_MODEL: ${{ secrets.AI_FALLBACK_MODEL || 'deepseek-v4-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           PODCAST_TRANSCRIBE_PROVIDER: gemini
           PODCAST_GEMINI_MODEL: gemini-flash-latest

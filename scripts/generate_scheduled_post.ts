@@ -18,6 +18,7 @@ import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts"
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource, fetchXyzRankTopEpisodes } from "./xyzrank_top_episodes_source.ts";
+import { buildMdblistWeeklySource } from "./mdblist_weekly_source.ts";
 
 export type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
@@ -261,6 +262,7 @@ const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),
+  "mdblist-weekly": date => buildMdblistWeeklySource(date),
   "tech-weekly": date => buildTechWeeklySource(date),
   "ai-weekly": date => buildAiWeeklySource(date),
   "tech-business-weekly": date => buildTechBusinessWeeklySource(date),

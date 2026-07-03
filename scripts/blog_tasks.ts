@@ -87,6 +87,12 @@ export const BLOG_TASKS = {
     description: "每日科技商业观察，覆盖过去 24 小时的科技公司、平台政策、监管、安全事件、芯片/云供应链与产业竞争。",
     fileName: "科技商业观察日报-{date}.md",
   },
+  "mdblist-weekly": {
+    titlePrefix: "每周影视推荐",
+    tag: "每周影视推荐",
+    description: "每周影视推荐专栏，基于 mdblist 聚合的 Trakt 趋势电影与剧集榜单，汇总本周值得看的作品并补充口碑观察。",
+    fileName: "每周影视推荐-{date}.md",
+  },
 } as const satisfies Record<string, BlogTaskInfo>;
 
 export type Task = keyof typeof BLOG_TASKS;
@@ -105,6 +111,7 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },
   "30 22 * * *": { task: "us-market-daily", dateTimeZone: "America/New_York" },
   "0 23 * * *": { task: "github-trending-daily", dateTimeZone: "America/Los_Angeles" },
+  "0 2 * * 5": { task: "mdblist-weekly", dateTimeZone: "Asia/Shanghai" },
 };
 
 export function isTask(value: string): value is Task {
