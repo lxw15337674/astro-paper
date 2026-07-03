@@ -19,6 +19,7 @@ import { getLocalizedSiteTitle } from "@/utils/siteMeta";
 import { getPostLocaleAlternates } from "@/utils/localeAlternates";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
+import TradingViewChart from "@/components/TradingViewChart.astro";
 
 export async function getStaticPaths() {
   return getPostDetailPaths(DEFAULT_LOCALE);
@@ -77,6 +78,8 @@ const ogImage = ogImageUrl
   : undefined;
 
 const showCoverImage = Boolean(ogImageUrl);
+const showBitcoinChart = tags.includes("比特币日报");
+const showUsMarketChart = tags.includes("美股市场日报");
 ---
 
 <PostLayout
@@ -146,6 +149,24 @@ const showCoverImage = Boolean(ogImageUrl);
         "prose-pre:bg-(--shiki-light-bg) dark:prose-pre:bg-(--shiki-dark-bg)",
       ]}
     >
+      {
+        showBitcoinChart && (
+          <TradingViewChart
+            kind="advanced-chart"
+            title="BTC 走势"
+            caption="BINANCE:BTCUSDT · 日线"
+          />
+        )
+      }
+      {
+        showUsMarketChart && (
+          <TradingViewChart
+            kind="symbol-overview"
+            title="美股宽基走势"
+            caption="SPY / QQQ / DIA · 日线"
+          />
+        )
+      }
       <Content />
     </article>
 
