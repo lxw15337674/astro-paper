@@ -1176,8 +1176,9 @@ async function prepareEpisodeAudioParts(episode: Episode, tmpDir: string, index:
 }
 
 function episodeAudioMetadataBlock(episode: Episode, index: number): string {
+  const rankLabel = episode.source.includes("XYZ Rank") ? "XYZ Rank 热门单集排名" : "Apple Top Shows 排名";
   const metadata = [
-    episode.chartRank ? `- Apple Top Shows 排名：#${episode.chartRank}` : "",
+    episode.chartRank ? `- ${rankLabel}：#${episode.chartRank}` : "",
     `- 节目：${episode.show}`,
     `- 来源：${episode.source}`,
     episode.guest ? `- 嘉宾：${episode.guest}` : "- 嘉宾：未标明",

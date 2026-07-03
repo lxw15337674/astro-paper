@@ -15,6 +15,7 @@ import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprint
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText, quoteRowFromYahooChartPayload } from "../scripts/market_daily_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
+import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import { type ResultItem, settleDailyPodcastArticleResults, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
@@ -178,6 +179,8 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.equal(scheduledTaskInput("0 6 * * *").task, "hn-top10");
   assert.equal(scheduledTaskInput("0 6 * * *").dateTimeZone, "America/Los_Angeles");
   assert.equal(scheduledTaskInput("30 1 * * *").task, "daily-podcasts");
+  assert.equal(scheduledTaskInput("0 2 * * 1").task, "xyzrank-top-episodes");
+  assert.equal(scheduledTaskInput("0 2 * * 1").dateTimeZone, "Asia/Shanghai");
   assert.equal(scheduledTaskInput("0 23 * * *").task, "github-trending-daily");
   assert.equal(scheduledTaskInput("0 23 * * *").dateTimeZone, "America/Los_Angeles");
   assert.equal(scheduledTaskInput("unknown schedule").task, "all");
@@ -191,6 +194,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   }
   assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
   assert.match(workflow, /github\.event\.inputs\.task == 'daily-podcasts'/);
+  assert.match(workflow, /github\.event\.inputs\.task == 'xyzrank-top-episodes'/);
   assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
   assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
   assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
@@ -238,6 +242,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
   assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 300000/);
   assert.match(workflow, /PODCAST_DAILY_MAX_EPISODE_MINUTES: 90/);
+  assert.match(workflow, /XYZRANK_TOP_EPISODES_LIMIT: 5/);
   assert.match(workflow, /git checkout -B "\$\{GITHUB_REF_NAME\}" "origin\/\$\{GITHUB_REF_NAME\}"/);
   assert.match(workflow, /git pull --rebase -X theirs origin "\$\{GITHUB_REF_NAME\}"/);
   assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
@@ -265,7 +270,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
   assert.match(generator, /retrying with validation feedback/);
   assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
-  assert.match(generator, /generateDailyPodcastArticles/);
+  assert.match(generator, /generatePodcastArticles/);
   assert.match(generator, /buildDailyPodcastEpisodeArticle/);
   assert.match(generator, /buildCombinedTechDailySource/);
   assert.match(generator, /daily-digest-item-summary\.md/);
@@ -805,6 +810,40 @@ test("daily podcasts fetch skips episodes already in the summarized ledger", asy
   }
 });
 
+test("XYZ Rank top episodes source extracts Xiaoyuzhou audio links", async () => {
+  const originalFetch = globalThis.fetch;
+  const items = Array.from({ length: 5 }, (_, index) => ({
+    rank: index + 1,
+    title: `热门单集 ${index + 1}`,
+    podcastName: `中文播客 ${index + 1}`,
+    link: `https://www.xiaoyuzhoufm.com/episode/test-${index + 1}`,
+    duration: 60 + index,
+    playCount: 1000 + index,
+    commentCount: 100 + index,
+    primaryGenreName: "社会与文化",
+    postTime: "2099-01-05T00:00:00.000Z",
+    logoURL: "https://image.xyzcdn.net/demo.png",
+  }));
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.includes("xyzrank.com/api/episodes")) return Response.json({ items });
+    const match = url.match(/test-(\d+)/);
+    if (match) {
+      return new Response(`<html><head><meta property="og:audio" content="https://media.xyzcdn.net/test/audio-${match[1]}.m4a"/><script name="schema:podcast-show" type="application/ld+json">{"description":"这一期节目讨论沟通边界和关系协商。"}</script></head></html>`);
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+  try {
+    const source = await buildXyzRankTopEpisodesSource("2099-01-06", 5);
+    assert.match(source, /XYZ Rank 热门播客单集候选源/);
+    assert.equal((source.match(/^##\s+\d+\.\s+/gm) || []).length, 5);
+    assert.match(source, /- 音频：https:\/\/media\.xyzcdn\.net\/test\/audio-1\.m4a/);
+    assert.match(source, /- 节目：中文播客 5/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("summarized ledger upserts by fingerprint and matches tracking-param variants", () => {
   const ledgerFile = path.join(os.tmpdir(), `astro-paper-ledger-unit-${Date.now()}-${Math.random()}.json`);
   const episode = {
@@ -930,6 +969,8 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   const aiWeekly = archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body: aiWeeklyBody, force: true });
   const techBusinessWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-business-weekly.md"), "utf8");
   const techBusinessWeekly = archivePost({ task: "tech-business-weekly", date: "2099-01-05", repo, body: techBusinessWeeklyBody, force: true });
+  const xyzRankTopEpisodeBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/xyzrank-top-episodes.md"), "utf8");
+  const xyzRankTopEpisode = archivePost({ task: "xyzrank-top-episodes", date: "2099-01-06", repo, body: xyzRankTopEpisodeBody, force: true, fileNameSuffix: "01-jokes-aside" });
   const techDailyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-daily.md"), "utf8");
   const techDaily = archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: techDailyBody, force: true });
   const aiDailyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/ai-daily.md"), "utf8");
@@ -943,6 +984,7 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   const techWeeklyMarkdown = fs.readFileSync(path.join(repo, techWeekly.path), "utf8");
   const aiWeeklyMarkdown = fs.readFileSync(path.join(repo, aiWeekly.path), "utf8");
   const techBusinessWeeklyMarkdown = fs.readFileSync(path.join(repo, techBusinessWeekly.path), "utf8");
+  const xyzRankTopEpisodeMarkdown = fs.readFileSync(path.join(repo, xyzRankTopEpisode.path), "utf8");
   const techDailyMarkdown = fs.readFileSync(path.join(repo, techDaily.path), "utf8");
   const aiDailyMarkdown = fs.readFileSync(path.join(repo, aiDaily.path), "utf8");
   const techBusinessDailyMarkdown = fs.readFileSync(path.join(repo, techBusinessDaily.path), "utf8");
@@ -979,6 +1021,15 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   assert.match(techBusinessWeeklyMarkdown, /^## 政策、监管与安全/m);
   assert.match(techBusinessWeeklyMarkdown, /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察/);
   assert.doesNotMatch(techBusinessWeeklyMarkdown.split("---\n\n").at(-1) || "", /娱乐八卦|购物推荐|工具榜单|融资快讯|投资建议|买卖建议|股价预测|赋能|颠覆|革命性|不容错过|值得关注/);
+  assert.match(xyzRankTopEpisodeMarkdown, /title: "不开玩笑 Jokes Aside：沟通不是技巧表演，而是关系里的边界协商"/);
+  assert.match(xyzRankTopEpisodeMarkdown, /中文播客榜/);
+  assert.match(xyzRankTopEpisodeMarkdown, /^### 基本信息/m);
+  assert.match(xyzRankTopEpisodeMarkdown, /^### 核心观点/m);
+  assert.match(xyzRankTopEpisodeMarkdown, /^### Highlights/m);
+  assert.match(xyzRankTopEpisodeMarkdown, /^### 长文笔记/m);
+  assert.match(xyzRankTopEpisodeMarkdown, /XYZ Rank \/ 小宇宙/);
+  assert.doesNotMatch(xyzRankTopEpisodeMarkdown, /^##\s*今日总览\s*$/m);
+  assert.doesNotMatch(xyzRankTopEpisodeMarkdown, /^##\s*Top 5/m);
   assert.match(techDailyMarkdown, /title: "技术日报｜2099-01-06"/);
   assert.match(techDailyMarkdown, /技术日报/);
   assert.match(techDailyMarkdown, /今日总览/);
@@ -998,9 +1049,13 @@ Fear & Greed 为 17，属于 Extreme Fear，市场情绪明显偏冷。这个读
   assert.match(asiaMarkdown.split("---\n\n").at(-1) || "", /^## 总结/m);
   assert.match(usMarkdown.split("---\n\n").at(-1) || "", /^## 总结/m);
   assert.match(cryptoMarkdown.split("---\n\n").at(-1) || "", /^## 一句话结论/m);
+  const artifactsDir = path.join(repo, "blog-generation-artifacts", "xyzrank-top-episodes");
+  fs.mkdirSync(artifactsDir, { recursive: true });
+  fs.copyFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/xyzrank-top-episodes.md"), path.join(artifactsDir, "source.fixture.md"));
+  const xyzRankTopEpisodeWithSource = { ...xyzRankTopEpisode, generation: { source_artifact: "blog-generation-artifacts/xyzrank-top-episodes/source.fixture.md" } };
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, asia, crypto, us, podcast, techWeekly, aiWeekly, techBusinessWeekly, techDaily, aiDaily, techBusinessDaily] }));
-  assert.equal(verifyResultJson(repo, resultJson), 11);
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, asia, crypto, us, podcast, techWeekly, aiWeekly, techBusinessWeekly, xyzRankTopEpisodeWithSource, techDaily, aiDaily, techBusinessDaily] }));
+  assert.equal(verifyResultJson(repo, resultJson), 12);
 });
 
 test("tech weekly rejects pure tutorial language", () => {

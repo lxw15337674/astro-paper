@@ -17,6 +17,7 @@ import { buildAiWeeklySource } from "./ai_weekly_source.ts";
 import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
+import { buildXyzRankTopEpisodesSource, fetchXyzRankTopEpisodes } from "./xyzrank_top_episodes_source.ts";
 
 export type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
@@ -165,6 +166,10 @@ function skippedPodcastEpisode(result: ResultItem): ResultItem {
 }
 
 export function settleDailyPodcastArticleResults(results: ResultItem[], date: string, minEpisodes = dailyPodcastMinEpisodes()): ResultItem[] {
+  return settlePodcastArticleResults(results, date, minEpisodes);
+}
+
+function settlePodcastArticleResults(results: ResultItem[], date: string, minEpisodes = dailyPodcastMinEpisodes(), task: Task = "daily-podcasts"): ResultItem[] {
   const usableCount = usablePodcastArticleCount(results);
   const settled = results.map(result => {
     if (!result.failed) return result;
@@ -174,18 +179,21 @@ export function settleDailyPodcastArticleResults(results: ResultItem[], date: st
   return [
     ...settled,
     failedTask(
-      "daily-podcasts",
+      task,
       date,
-      new PodcastSourceInsufficientEpisodesError("daily podcasts", usableCount, minEpisodes),
+      new PodcastSourceInsufficientEpisodesError(task, usableCount, minEpisodes),
     ),
   ];
 }
 
+function isPodcastArticleTask(task: Task): boolean {
+  return task === "daily-podcasts" || task === "xyzrank-top-episodes";
+}
 
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
   if (error instanceof MarketSourceUnavailableError && error.task === task) return true;
   if (!(error instanceof PodcastSourceInsufficientEpisodesError)) return false;
-  return task === "daily-podcasts";
+  return isPodcastArticleTask(task);
 }
 
 function failedTask(task: Task, date: string, error: unknown): ResultItem {
@@ -218,6 +226,7 @@ const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
   "us-market-daily": date => generateUsMarketDaily(date),
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
+  "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),
   "tech-weekly": date => buildTechWeeklySource(date),
   "ai-weekly": date => buildAiWeeklySource(date),
   "tech-business-weekly": date => buildTechBusinessWeeklySource(date),
@@ -817,9 +826,15 @@ type GenerateTaskOptions = {
   artifactsDir: string;
 };
 
-// 合并任务：海外科技 + Apple Top Shows 候选池逐集走多模态，一集一篇。
-async function generateDailyPodcastArticles({ task, repo, date, force, promptDir, artifactsDir }: GenerateTaskOptions): Promise<ResultItem[]> {
-  const episodes = await fetchDailyPodcastEpisodes(date, force);
+async function fetchPodcastArticleEpisodes(task: Task, date: string, force: boolean): Promise<Episode[]> {
+  if (task === "daily-podcasts") return fetchDailyPodcastEpisodes(date, force);
+  if (task === "xyzrank-top-episodes") return fetchXyzRankTopEpisodes(date, force);
+  throw new Error(`unsupported podcast article task: ${task}`);
+}
+
+// 播客音频任务逐集走多模态，一集一篇。
+async function generatePodcastArticles({ task, repo, date, force, promptDir, artifactsDir }: GenerateTaskOptions): Promise<ResultItem[]> {
+  const episodes = await fetchPodcastArticleEpisodes(task, date, force);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const results: ResultItem[] = [];
   for (const [index, episode] of episodes.entries()) {
@@ -857,13 +872,13 @@ async function generateDailyPodcastArticles({ task, repo, date, force, promptDir
       writeStderr(`ERROR: ${artifactKey} generation failed: ${failed.error}`);
     }
   }
-  if (!results.length) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", 0, 1);
-  return settleDailyPodcastArticleResults(results, date);
+  if (!results.length) throw new PodcastSourceInsufficientEpisodesError(task, 0, 1);
+  return settlePodcastArticleResults(results, date, dailyPodcastMinEpisodes(), task);
 }
 
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
   const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
-  if (task === "daily-podcasts" && useAi && !sourceFixtureDir && !mockResponseDir) return generateDailyPodcastArticles(options);
+  if (isPodcastArticleTask(task) && useAi && !sourceFixtureDir && !mockResponseDir) return generatePodcastArticles(options);
   if (!force) {
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];

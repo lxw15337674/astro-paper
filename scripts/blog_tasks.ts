@@ -45,6 +45,12 @@ export const BLOG_TASKS = {
     description: "每日海外 Podcasts 热门节目中文长文笔记。",
     fileName: "每日播客-{date}.md",
   },
+  "xyzrank-top-episodes": {
+    titlePrefix: "XYZ Rank 热门播客",
+    tag: "中文播客榜",
+    description: "每周 XYZ Rank 中文播客热门单集 Top 5 音频长文笔记。",
+    fileName: "XYZRank热门播客-{date}.md",
+  },
   "tech-weekly": {
     titlePrefix: "技术趋势与工程观察",
     tag: "技术周刊",
@@ -94,6 +100,7 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "30 0 * * *": { task: "daily-digests", dateTimeZone: "America/Los_Angeles" },
   "30 1 * * *": { task: "daily-podcasts" },
   "0 6 * * *": { task: "hn-top10", dateTimeZone: "America/Los_Angeles" },
+  "0 2 * * 1": { task: "xyzrank-top-episodes", dateTimeZone: "Asia/Shanghai" },
   "0 10 * * 1-5": { task: "asia-market-daily" },
   "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },
   "30 22 * * *": { task: "us-market-daily", dateTimeZone: "America/New_York" },

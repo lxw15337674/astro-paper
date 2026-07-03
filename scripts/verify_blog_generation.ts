@@ -42,8 +42,8 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
   if (isTask(expectedTask)) {
     const info = taskInfo(expectedTask);
     if (!frontmatter.includes(info.tag)) throw new Error(`${file} frontmatter missing ${info.tag} tag`);
-    // daily-podcasts 标题改为「节目名：本期中文标题」，不再带固定 titlePrefix。
-    if (expectedTask !== "daily-podcasts" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
+    // 播客逐集文章标题改为「节目名：本期中文标题」，不再带固定 titlePrefix。
+    if (expectedTask !== "daily-podcasts" && expectedTask !== "xyzrank-top-episodes" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
   }
   return text;
 }
@@ -108,6 +108,12 @@ function verifySourceContract(repo: string, task: string, sourceArtifact: string
       { label: "podcast metadata", pattern: /节目|来源|音频|链接/ },
       { label: "transcript evidence", pattern: /transcript|转写|摘录|长文|内容/i },
     ]);
+    return;
+  }
+  if (task === "xyzrank-top-episodes") {
+    verifyNumberedSourceBlocks(relPath, source, 5);
+    requireTerms(relPath, source, ["XYZ Rank", "小宇宙", "音频"]);
+    requireTermPatterns(relPath, source, [{ label: "episode audio links", pattern: /- 音频：https?:\/\// }]);
     return;
   }
   if (task === "github-trending-daily") {
