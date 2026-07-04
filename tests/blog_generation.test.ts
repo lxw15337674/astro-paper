@@ -79,7 +79,7 @@ test("GitHub Trending README sanitizer removes template delimiters from evidence
 test("AI writer rejects placeholder markdown", () => {
   assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
   assert.match(validateMarkdown("## 标题\n\n### [@ai-sdk/workflow-harness@1.0.0-beta.0](https://example.com)\n\n" + "这是一段完整中文正文。".repeat(30)), /@ai-sdk\/workflow-harness v1\.0\.0-beta\.0/);
-  assert.throws(() => validateMarkdown("## TODO\n\n" + "内容".repeat(120)), /forbidden pattern/);
+  assert.match(validateMarkdown("## 标题\n\nhttps://mathstodon.xyz/@iblech/116769502749142438\n\n" + "内容".repeat(120)), /mathstodon/);
 });
 
 test("AI client surfaces aborts as timeout errors", async () => {

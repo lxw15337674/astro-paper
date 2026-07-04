@@ -22,7 +22,7 @@ export function stripMarkdownFence(text: string): string {
 export function validateMarkdown(text: string): string {
   const cleaned = avoidCloudflareEmailObfuscation(stripMarkdownFence(text));
   if (cleaned.trim().length < 200) throw new Error("AI markdown output is too short to publish");
-  const forbidden = [/Traceback \(most recent call last\)/i, /Script not found:/i, /归档失败/i, /\{\{[^}]+\}\}/, /TODO/i];
+  const forbidden = [/Traceback \(most recent call last\)/i, /Script not found:/i, /归档失败/i, /\{\{[^}]+\}\}/];
   for (const pattern of forbidden) {
     if (pattern.test(cleaned)) throw new Error(`AI markdown output contains forbidden pattern: ${pattern.source}`);
   }
