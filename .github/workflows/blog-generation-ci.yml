@@ -17,7 +17,6 @@ on:
       - "docs/hn-cron-pipeline.md"
       - "prompts/blog/**"
       - "scripts/**"
-      - "skills/software-development/astro-paper-*-cron/**"
       - "tests/**"
   workflow_dispatch:
   workflow_call:
