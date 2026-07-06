@@ -22,7 +22,6 @@ import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadme
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import { type ResultItem, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
-import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
 // prompts 已按 daily/weekly/market/podcast 分类到子目录，用解析器按名查找（根目录 + 一层子目录）。
 const PROMPTS_DIR = path.join(process.cwd(), "prompts/blog");
@@ -45,7 +44,7 @@ function composeFixtureBody(task: string): string {
   const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}.json`), "utf8");
   if (task === "github-trending-daily") return githubTrendingMarkdownFromModelJson(raw, source);
   if (task === "mdblist-weekly") return mdblistMarkdownFromModelJson(raw, source);
-  return dailyDigestMarkdownFromModelJson(raw, source, task);
+  return dailyDigestMarkdownFromModelJson(raw, source);
 }
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
@@ -685,7 +684,7 @@ test("GitHub Trending parser extracts repository metadata", () => {
   assert.equal(repos[0].url, "https://github.com/acme/agent-lab");
 });
 
-test("archive and verifier accept generated HN, market posts, podcast notes, weekly and daily digests", () => {
+test("archive and verifier accept generated HN, podcast notes, and retained digests", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-archive-"));
   const hnBody = `1. 🔥 开发者并不真正理解 CORS
 - ⭐ 185 points · 88 评论
@@ -701,27 +700,17 @@ test("archive and verifier accept generated HN, market posts, podcast notes, wee
 这期还谈到产品布局和值得关注的设计工作流，这些是产品访谈里的正常语义，不应被市场日报的投顾口吻过滤误伤。
 `;
   const podcast = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: podcastBody, force: true });
-  const techWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-weekly.md"), "utf8");
-  const techWeekly = archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body: techWeeklyBody, force: true });
-  const aiWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/ai-weekly.md"), "utf8");
-  const aiWeekly = archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body: aiWeeklyBody, force: true });
-  const techBusinessWeeklyBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/tech-business-weekly.md"), "utf8");
-  const techBusinessWeekly = archivePost({ task: "tech-business-weekly", date: "2099-01-05", repo, body: techBusinessWeeklyBody, force: true });
   const xyzRankTopEpisodeBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/xyzrank-top-episodes.md"), "utf8");
   const xyzRankTopEpisode = archivePost({ task: "xyzrank-top-episodes", date: "2099-01-06", repo, body: xyzRankTopEpisodeBody, force: true, fileNameSuffix: "01-jokes-aside" });
   const techDailyBody = composeFixtureBody("tech-daily");
   const techDaily = archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: techDailyBody, force: true });
-  const aiDailyBody = composeFixtureBody("ai-daily");
-  const aiDaily = archivePost({ task: "ai-daily", date: "2099-01-06", repo, body: aiDailyBody, force: true });
-  const techBusinessDailyBody = composeFixtureBody("tech-business-daily");
-  const techBusinessDaily = archivePost({ task: "tech-business-daily", date: "2099-01-06", repo, body: techBusinessDailyBody, force: true });
   const artifactsDir = path.join(repo, "blog-generation-artifacts", "xyzrank-top-episodes");
   fs.mkdirSync(artifactsDir, { recursive: true });
   fs.copyFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/xyzrank-top-episodes.md"), path.join(artifactsDir, "source.fixture.md"));
   const xyzRankTopEpisodeWithSource = { ...xyzRankTopEpisode, generation: { source_artifact: "blog-generation-artifacts/xyzrank-top-episodes/source.fixture.md" } };
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, podcast, techWeekly, aiWeekly, techBusinessWeekly, xyzRankTopEpisodeWithSource, techDaily, aiDaily, techBusinessDaily] }));
-  assert.equal(verifyResultJson(repo, resultJson), 9);
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, podcast, xyzRankTopEpisodeWithSource, techDaily] }));
+  assert.equal(verifyResultJson(repo, resultJson), 4);
 });
 
 test("HN compose parses source facts from markdown blocks", () => {
@@ -810,15 +799,15 @@ test("daily digest compose rejects links outside the source pool and duplicates"
   const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/tech-daily.md"), "utf8");
   const good = { title_zh: "中文标题", source_url: "https://example.com/postgresql-19-beta", body_markdown: "这是一段足够长的中文正文用于通过低信号与长度校验，说明事件影响与风险。" };
   const overview = "今天的主线是工程平台与供应链在发布治理上收敛。";
-  assert.doesNotThrow(() => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [good] }] }), source, "tech-daily"));
+  assert.doesNotThrow(() => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [good] }] }), source));
   // 编造的链接不在 source 池 → 拒绝。
   assert.throws(
-    () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [{ ...good, source_url: "https://evil.example.com/x" }] }] }), source, "tech-daily"),
+    () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [{ ...good, source_url: "https://evil.example.com/x" }] }] }), source),
     /outside the source pool/,
   );
   // 同一链接复用 → 拒绝。
   assert.throws(
-    () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [good, { ...good, title_zh: "另一个标题" }] }] }), source, "tech-daily"),
+    () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [good, { ...good, title_zh: "另一个标题" }] }] }), source),
     /reuses source link/,
   );
 });
@@ -869,7 +858,7 @@ test("daily digest verifier skips zero-item rows", () => {
 test("result verifier skips task-level failures with explicit error", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-task-failed-"));
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "ai-daily", path: "", failed: true, error: "validator rejected low-signal language" }] }));
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "tech-daily", path: "", failed: true, error: "validator rejected low-signal language" }] }));
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 

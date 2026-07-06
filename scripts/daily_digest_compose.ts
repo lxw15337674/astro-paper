@@ -1,4 +1,4 @@
-// 技术/AI/科技商业日报规则层：模型返回「栏目 + 条目」结构 JSON，
+// 技术日报规则层：模型返回「栏目 + 条目」结构 JSON，
 // 每条正文放 body_markdown 自由散文字段；链接由规则从 source 池按 source_url 回填校验，
 // 模型不再手写链接语法。事实（链接）来自 source，散文来自模型。
 import { compact } from "./blog_common.ts";
@@ -51,7 +51,7 @@ function parseSections(rawSections: unknown): DailyDigestSection[] {
   });
 }
 
-export function parseDailyDigestModelJson(raw: string, source: string, task: string): { overview: string; sections: DailyDigestSection[] } {
+export function parseDailyDigestModelJson(raw: string, source: string): { overview: string; sections: DailyDigestSection[] } {
   const parsed = parseModelJsonObject(raw, "daily digest");
   const sections = parseSections(parsed.sections);
   const allowed = sourceLinkSet(source);
@@ -69,17 +69,14 @@ export function parseDailyDigestModelJson(raw: string, source: string, task: str
     }
   }
   const overview = String(parsed.overview || "").trim();
-  if (task === "tech-daily") {
-    if (!overview) throw new Error("tech-daily model JSON is missing overview");
-    if (/\n/.test(overview)) throw new Error("tech-daily overview must be a single paragraph");
-    if (compact(overview).length > 140) throw new Error(`tech-daily overview is too long (${compact(overview).length} > 140)`);
-  }
+  if (!overview) throw new Error("tech-daily model JSON is missing overview");
+  if (/\n/.test(overview)) throw new Error("tech-daily overview must be a single paragraph");
+  if (compact(overview).length > 140) throw new Error(`tech-daily overview is too long (${compact(overview).length} > 140)`);
   return { overview, sections };
 }
 
-export function composeDailyDigestBody(overview: string, sections: DailyDigestSection[], task: string): string {
-  const blocks: string[] = [];
-  if (task === "tech-daily" && overview) blocks.push(`## 今日总览\n\n${overview}`);
+export function composeDailyDigestBody(overview: string, sections: DailyDigestSection[]): string {
+  const blocks: string[] = [`## 今日总览\n\n${overview}`];
   for (const section of sections) {
     const items = section.items.map(item => `### [${item.title_zh}](${item.source_url})\n\n${item.body_markdown}`);
     blocks.push(`## ${section.title}\n\n${items.join("\n\n")}`);
@@ -87,7 +84,7 @@ export function composeDailyDigestBody(overview: string, sections: DailyDigestSe
   return `${blocks.join("\n\n")}\n`;
 }
 
-export function dailyDigestMarkdownFromModelJson(raw: string, source: string, task: string): string {
-  const { overview, sections } = parseDailyDigestModelJson(raw, source, task);
-  return composeDailyDigestBody(overview, sections, task);
+export function dailyDigestMarkdownFromModelJson(raw: string, source: string): string {
+  const { overview, sections } = parseDailyDigestModelJson(raw, source);
+  return composeDailyDigestBody(overview, sections);
 }

@@ -229,51 +229,6 @@ function rejectPureTutorialWeekly(markdown: string): void {
   }
 }
 
-function formatTechWeekly(text: string): string {
-  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  rejectPureTutorialWeekly(normalized);
-  const requiredAny = [/^##\s+本周快讯\s*$/m, /^##\s+工程观察\s*$/m, /^##\s+工具与项目\s*$/m, /^##\s+版本与安全\s*$/m, /^##\s+值得读的长文\s*$/m];
-  const matched = requiredAny.filter(pattern => pattern.test(normalized)).length;
-  if (matched < 3) throw new Error("tech weekly needs at least three expected sections");
-  const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 6) throw new Error(`tech weekly needs source links, got ${links.length}`);
-  if (!/影响|取舍|风险|迁移|适合|可以忽略|代价|工程|实践/.test(normalized)) throw new Error("tech weekly lacks engineering judgement language");
-  return `${normalized.trim()}\n`;
-}
-
-function rejectAiNoise(markdown: string, label: string): void {
-  const forbidden = [/融资/, /工具榜单/, /prompt\s*技巧/i, /提示词技巧/, /一文[读看搞]懂/, /从零(?:开始)?/, /入门教程/, /论文导读/, /赋能|颠覆|革命性|不容错过|值得关注/];
-  for (const pattern of forbidden) {
-    if (pattern.test(markdown)) throw new Error(`${label} contains low-signal language: ${pattern.source}`);
-  }
-}
-
-function formatTechBusinessWeekly(text: string): string {
-  const normalized = normalizeMarkdown(text);
-  const requiredAny = [/^##\s+本周大事件\s*$/m, /^##\s+公司与平台\s*$/m, /^##\s+政策、监管与安全\s*$/m, /^##\s+市场与商业信号\s*$/m, /^##\s+值得继续观察\s*$/m];
-  const matched = requiredAny.filter(pattern => pattern.test(normalized)).length;
-  if (matched < 3) throw new Error("tech business weekly needs at least three expected sections");
-  const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 8) throw new Error(`tech business weekly needs source links, got ${links.length}`);
-  if (!/影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察/.test(normalized)) throw new Error("tech business weekly lacks business judgement language");
-  for (const pattern of [/原始链接未提供|链接见候选源/, /娱乐八卦/, /购物推荐/, /工具榜单/, /融资快讯/, /投资建议/, /买卖建议/, /股价预测/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
-    if (pattern.test(normalized)) throw new Error(`tech business weekly contains low-signal language: ${pattern.source}`);
-  }
-  return `${normalized.trim()}\n`;
-}
-
-function formatAiWeekly(text: string): string {
-  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  rejectAiNoise(normalized, "ai weekly");
-  const requiredAny = [/^##\s+本周模型与产品\s*$/m, /^##\s+Agent 与工程化\s*$/m, /^##\s+AI Infra 与成本\s*$/m, /^##\s+安全、评测与治理\s*$/m, /^##\s+值得读的案例\/长文\s*$/m];
-  const matched = requiredAny.filter(pattern => pattern.test(normalized)).length;
-  if (matched < 3) throw new Error("ai weekly needs at least three expected sections");
-  const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 6) throw new Error(`ai weekly needs source links, got ${links.length}`);
-  if (!/能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产/.test(normalized)) throw new Error("ai weekly lacks AI judgement language");
-  return `${normalized.trim()}\n`;
-}
-
 function stripLeadingTitleHeading(markdown: string): string {
   return markdown.replace(/^#\s+[^\n]+\n{2,}/, "");
 }
@@ -325,28 +280,6 @@ function formatTechDaily(text: string): string {
   const links = normalized.match(/https?:\/\/\S+/g) || [];
   if (links.length < 1) throw new Error(`tech daily needs source links, got ${links.length}`);
   if (!/影响|取舍|风险|迁移|适合|代价|工程|实践|架构|版本|安全/.test(normalized)) throw new Error("tech daily lacks engineering judgement language");
-  return `${normalized.trim()}\n`;
-}
-
-function formatAiDaily(text: string): string {
-  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  rejectAiNoise(normalized, "ai daily");
-  rejectDuplicateLinksAndHeadings(normalized, "AI daily");
-  const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 1) throw new Error(`AI daily needs source links, got ${links.length}`);
-  if (!/能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产|工程/.test(normalized)) throw new Error("AI daily lacks AI judgement language");
-  return `${normalized.trim()}\n`;
-}
-
-function formatTechBusinessDaily(text: string): string {
-  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  const links = normalized.match(/https?:\/\/\S+/g) || [];
-  if (links.length < 1) throw new Error(`tech business daily needs source links, got ${links.length}`);
-  rejectDuplicateLinksAndHeadings(normalized, "tech business daily");
-  if (!/影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察|供应链/.test(normalized)) throw new Error("tech business daily lacks business judgement language");
-  for (const pattern of [/原始链接未提供|链接见候选源/, /娱乐八卦/, /购物推荐/, /工具榜单/, /融资快讯/, /投资建议/, /买卖建议/, /股价预测/, /赋能|颠覆|革命性|不容错过|值得关注/]) {
-    if (pattern.test(normalized)) throw new Error(`tech business daily contains low-signal language: ${pattern.source}`);
-  }
   return `${normalized.trim()}\n`;
 }
 
@@ -435,7 +368,7 @@ export function archivePost({
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
-  const formatted = task === "hn-top10" ? formatHnTop10(body) : isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } : task === "tech-weekly" ? { markdown: formatTechWeekly(body), ogImage: "" } : task === "ai-weekly" ? { markdown: formatAiWeekly(body), ogImage: "" } : task === "tech-business-weekly" ? { markdown: formatTechBusinessWeekly(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "ai-daily" ? { markdown: formatAiDaily(body), ogImage: "" } : task === "tech-business-daily" ? { markdown: formatTechBusinessDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } : (() => { throw new Error(`no archive formatter for task: ${task}`); })();
+  const formatted = task === "hn-top10" ? formatHnTop10(body) : isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } : (() => { throw new Error(`no archive formatter for task: ${task}`); })();
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
   fs.writeFileSync(

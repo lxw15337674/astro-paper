@@ -103,17 +103,7 @@ function verifySourceContract(repo: string, task: string, sourceArtifact: string
     requireTermPatterns(relPath, source, [{ label: "repository links", pattern: /https:\/\/github\.com\// }]);
     return;
   }
-  if (task === "tech-weekly" || task === "ai-weekly") {
-    verifyNumberedSourceBlocks(relPath, source, 8);
-    requireTermPatterns(relPath, source, [{ label: "source links", pattern: /- 链接：https?:\/\// }]);
-    return;
-  }
-  if (task === "tech-business-weekly") {
-    verifyNumberedSourceBlocks(relPath, source, 8);
-    requireTermPatterns(relPath, source, [{ label: "source links", pattern: /- 链接：https?:\/\// }]);
-    return;
-  }
-  if (task === "tech-daily" || task === "ai-daily" || task === "tech-business-daily") {
+  if (task === "tech-daily") {
     requireTermPatterns(relPath, source, [{ label: "classified source link", pattern: /- 链接：https?:\/\// }]);
   }
 }

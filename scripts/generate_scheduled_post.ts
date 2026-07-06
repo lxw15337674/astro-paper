@@ -7,7 +7,7 @@ import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt, resolvePromptFile } from "./ai_blog_writer.ts";
 import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
 import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
-import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type MarketSegment, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
+import { type MarketSegment, type Task, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { hnMarkdownFromModelJson } from "./hn_compose.ts";
 import { githubTrendingMarkdownFromModelJson } from "./github_trending_compose.ts";
@@ -18,9 +18,6 @@ import { appendSummarizedEpisode } from "./podcast_ledger.ts";
 import { MarketSourceUnavailableError, buildCapitalSegmentSource } from "./market_daily_source.ts";
 import { capitalMarketMarkdownFromModelJson } from "./market_compose.ts";
 import { buildMarketTable } from "./market_table_source.ts";
-import { buildTechWeeklySource } from "./tech_weekly_source.ts";
-import { buildAiWeeklySource } from "./ai_weekly_source.ts";
-import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource, fetchXyzRankTopEpisodes } from "./xyzrank_top_episodes_source.ts";
@@ -233,12 +230,7 @@ const SOURCE_BUILDERS: Partial<Record<Task, (date: string) => Promise<string>>> 
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),
   "mdblist-weekly": date => buildMdblistWeeklySource(date),
-  "tech-weekly": date => buildTechWeeklySource(date),
-  "ai-weekly": date => buildAiWeeklySource(date),
-  "tech-business-weekly": date => buildTechBusinessWeeklySource(date),
   "tech-daily": date => buildDailyDigestSource(date),
-  "ai-daily": date => buildDailyDigestSource(date),
-  "tech-business-daily": date => buildDailyDigestSource(date),
 };
 
 // capital-market-daily 的 source fixture 按段命名：capital-market-daily-{segment}.md。
@@ -302,15 +294,6 @@ function parseJsonObject(text: string): unknown {
   throw new Error("AI selector response did not contain a JSON object");
 }
 
-function parseSelectedIds(text: string, maxId: number): number[] {
-  const payload = parseJsonObject(text) as { selected?: unknown };
-  if (!Array.isArray(payload.selected)) throw new Error("AI selector response missing selected array");
-  const ids = payload.selected.map(value => Number(value)).filter(value => Number.isInteger(value) && value >= 1 && value <= maxId);
-  const unique = [...new Set(ids)].slice(0, 14);
-  if (unique.length < 8) throw new Error(`AI selector kept too few tech business items: ${unique.length}`);
-  return unique;
-}
-
 function splitNumberedSource(source: string): { header: string; blocks: Map<number, string> } {
   const match = source.match(/^([\s\S]*?)(?=^##\s+\d+\.\s+)/m);
   const header = match ? match[1].trimEnd() : "";
@@ -323,138 +306,8 @@ function splitNumberedSource(source: string): { header: string; blocks: Map<numb
   return { header, blocks };
 }
 
-function filterNumberedSourceWithMin(source: string, ids: number[], minItems: number, label: string): string {
-  const { header, blocks } = splitNumberedSource(source);
-  const selectedBlocks = ids.map(id => blocks.get(id)).filter((block): block is string => Boolean(block));
-  if (selectedBlocks.length < minItems) throw new Error(`${label} selected source has too few blocks: ${selectedBlocks.length}`);
-  const rewrittenHeader = header.replace(/候选数量：\d+/, `候选数量：${selectedBlocks.length}`);
-  return `${rewrittenHeader}\n\n${selectedBlocks.join("\n\n")}\n`;
-}
-
 function countNumberedBlocks(source: string): number {
   return (source.match(/^#{2,3}\s+\d+\.\s+/gm) || []).length;
-}
-
-function filterNumberedSource(source: string, ids: number[]): string {
-  return filterNumberedSourceWithMin(source, ids, 8, "tech-business-weekly");
-}
-
-async function selectTechBusinessSource({
-  source,
-  date,
-  repo,
-  model,
-  promptDir,
-  artifactsDir,
-}: {
-  source: string;
-  date: string;
-  repo: string;
-  model: string;
-  promptDir: string;
-  artifactsDir: string;
-}): Promise<string> {
-  const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const selectorPromptFile = resolvePromptFile(resolvedPromptDir, "tech-business-weekly-selector");
-  const selectorTemplate = fs.readFileSync(selectorPromptFile, "utf8");
-  const selectorPrompt = selectorTemplate.replaceAll("{task}", "tech-business-weekly").replaceAll("{date}", date).replaceAll("{source_text}", source.trim());
-  writeArtifact(artifactsDir, "tech-business-weekly", "selector-source.raw.md", source);
-  writeArtifact(artifactsDir, "tech-business-weekly", "selector-prompt.md", selectorPrompt);
-  const response = await callAi(selectorPrompt, model);
-  writeArtifact(artifactsDir, "tech-business-weekly", "selector-response.json", response.content);
-  const maxId = (source.match(/^##\s+\d+\.\s+/gm) || []).length;
-  const ids = parseSelectedIds(response.content, maxId);
-  writeArtifact(artifactsDir, "tech-business-weekly", "selector-selected-ids.json", JSON.stringify({ selected: ids }, null, 2));
-  const selectedSource = filterNumberedSource(source, ids);
-  writeArtifact(artifactsDir, "tech-business-weekly", "source.selected.md", selectedSource);
-  return selectedSource;
-}
-
-
-type DailyAssignmentTask = "tech-daily" | "ai-daily" | "tech-business-daily" | "drop";
-
-type DailyAssignmentPayload = {
-  assignments?: { id?: unknown; task?: unknown; reason?: unknown }[];
-};
-
-const FIXED_DAILY_ASSIGNMENT_TASKS = ["tech-daily", "ai-daily", "tech-business-daily"] as const satisfies readonly Task[];
-
-function parseDailyAssignments(text: string, maxId: number): Record<string, number[]> {
-  const payload = parseJsonObject(text) as DailyAssignmentPayload;
-  if (!Array.isArray(payload.assignments)) throw new Error("daily classifier response missing assignments array");
-  const out: Record<string, number[]> = { "tech-daily": [], "ai-daily": [], "tech-business-daily": [] };
-  const seen = new Set<number>();
-  for (const row of payload.assignments) {
-    const id = Number(row.id);
-    const task = String(row.task || "") as DailyAssignmentTask;
-    if (!Number.isInteger(id) || id < 1 || id > maxId) continue;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    if (task === "tech-daily" || task === "ai-daily" || task === "tech-business-daily") out[task].push(id);
-  }
-  for (const task of FIXED_DAILY_ASSIGNMENT_TASKS) out[task] = out[task].slice(0, 10);
-  return out;
-}
-
-const dailyClassifiedSourceCache = new Map<string, Promise<Record<string, string>>>();
-
-async function classifyDailyDigestSources({
-  source,
-  date,
-  repo,
-  model,
-  promptDir,
-  artifactsDir,
-}: {
-  source: string;
-  date: string;
-  repo: string;
-  model: string;
-  promptDir: string;
-  artifactsDir: string;
-}): Promise<Record<string, string>> {
-  const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const classifierPromptFile = resolvePromptFile(resolvedPromptDir, "daily-digest-classifier");
-  const classifierTemplate = fs.readFileSync(classifierPromptFile, "utf8");
-  const classifierPrompt = classifierTemplate.replaceAll("{date}", date).replaceAll("{source_text}", source.trim());
-  writeArtifact(artifactsDir, "daily-digests", "classifier-source.raw.md", source);
-  writeArtifact(artifactsDir, "daily-digests", "classifier-prompt.md", classifierPrompt);
-  const response = await callAi(classifierPrompt, model);
-  writeArtifact(artifactsDir, "daily-digests", "classifier-response.json", response.content);
-  const maxId = countNumberedBlocks(source);
-  const assignments = parseDailyAssignments(response.content, maxId);
-  writeArtifact(artifactsDir, "daily-digests", "classifier-assignments.json", JSON.stringify(assignments, null, 2));
-  const result: Record<string, string> = {};
-  for (const task of DAILY_DIGEST_TASKS) {
-    result[task] = filterNumberedSourceWithMin(source, assignments[task] || [], 0, task);
-    writeArtifact(artifactsDir, task, "source.classified.md", result[task]);
-  }
-  return result;
-}
-
-async function classifiedDailySourceForTask({
-  task,
-  source,
-  date,
-  repo,
-  model,
-  promptDir,
-  artifactsDir,
-}: {
-  task: Task;
-  source: string;
-  date: string;
-  repo: string;
-  model: string;
-  promptDir: string;
-  artifactsDir: string;
-}): Promise<string> {
-  const key = `${date}:${model || process.env.AI_MODEL || ""}`;
-  if (!dailyClassifiedSourceCache.has(key)) {
-    dailyClassifiedSourceCache.set(key, classifyDailyDigestSources({ source, date, repo, model, promptDir, artifactsDir }));
-  }
-  const classified = await dailyClassifiedSourceCache.get(key)!;
-  return classified[task] || "";
 }
 
 type DailyCandidateMeta = {
@@ -554,9 +407,9 @@ async function summarizeDailyItem({
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "daily-digest-item-summary"), "utf8");
   const prompt = template.replaceAll("{date}", date).replaceAll("{item_id}", String(meta.id)).replaceAll("{item_text}", meta.block.trim());
-  writeArtifact(artifactsDir, "daily-digests", `item-${String(meta.id).padStart(3, "0")}-prompt.md`, prompt);
+  writeArtifact(artifactsDir, "tech-daily", `item-${String(meta.id).padStart(3, "0")}-prompt.md`, prompt);
   const response = await callAi(prompt, model);
-  writeArtifact(artifactsDir, "daily-digests", `item-${String(meta.id).padStart(3, "0")}-summary.json`, response.content);
+  writeArtifact(artifactsDir, "tech-daily", `item-${String(meta.id).padStart(3, "0")}-summary.json`, response.content);
   return parseDailyItemSummaryResponse(response.content, meta);
 }
 
@@ -653,22 +506,22 @@ async function buildCombinedTechDailySource({
     .slice(0, dailySummaryMaxCandidates())
     .map(([id, block]) => candidateMetaFromBlock(id, block));
   if (!metas.length) throw new Error("tech daily source has no candidate items");
-  writeArtifact(artifactsDir, "daily-digests", "combined-source.raw.md", source);
+  writeArtifact(artifactsDir, "tech-daily", "combined-source.raw.md", source);
   const summaries = await mapWithConcurrency(metas, dailySummaryConcurrency(), meta =>
     summarizeDailyItem({ meta, date, repo, model, promptDir, artifactsDir }),
   );
   const kept = summaries.filter(item => item.include);
   if (!kept.length) throw new Error("tech daily item summaries kept no candidates");
   const summaryCards = formatDailyItemCards(summaries);
-  writeArtifact(artifactsDir, "daily-digests", "item-summaries.md", summaryCards);
+  writeArtifact(artifactsDir, "tech-daily", "item-summaries.md", summaryCards);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const plannerTemplate = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "daily-digest-section-planner"), "utf8");
   const plannerPrompt = plannerTemplate.replaceAll("{date}", date).replaceAll("{item_summaries}", summaryCards);
-  writeArtifact(artifactsDir, "daily-digests", "section-planner-prompt.md", plannerPrompt);
+  writeArtifact(artifactsDir, "tech-daily", "section-planner-prompt.md", plannerPrompt);
   const plannerResponse = await callAi(plannerPrompt, model);
-  writeArtifact(artifactsDir, "daily-digests", "section-planner-response.json", plannerResponse.content);
+  writeArtifact(artifactsDir, "tech-daily", "section-planner-response.json", plannerResponse.content);
   const sections = parseDailySectionPlan(plannerResponse.content, summaries);
-  writeArtifact(artifactsDir, "daily-digests", "section-plan.json", JSON.stringify({ sections }, null, 2));
+  writeArtifact(artifactsDir, "tech-daily", "section-plan.json", JSON.stringify({ sections }, null, 2));
   const combined = formatCombinedTechDailySource(date, summaries, sections, header.match(/^抓取失败源：.+$/m)?.[0] || "");
   writeArtifact(artifactsDir, "tech-daily", "source.dynamic.md", combined);
   return combined;
@@ -691,7 +544,7 @@ function sourceTitleLinks(source: string): Map<string, string> {
 }
 
 function normalizeMarkdownLinksFromSourceTitles(markdown: string, source: string, task: Task): string {
-  if (!SOURCE_LINK_WHITELIST_TASKS.has(task)) return markdown;
+  if (task !== "tech-daily") return markdown;
   const titleLinks = sourceTitleLinks(source);
   return markdown.replace(/^###\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/gm, (line, title: string) => {
     const sourceLink = titleLinks.get(normalizedHeadingTitle(title));
@@ -712,11 +565,10 @@ function markdownHeadingLinks(markdown: string): string[] {
 }
 
 function assertMarkdownUsesOnlySourceLinks(markdown: string, source: string, task: Task): void {
-  if (!SOURCE_LINK_WHITELIST_TASKS.has(task)) return;
+  if (task !== "tech-daily") return;
   const allowed = sourceLinks(source);
   const links = markdownHeadingLinks(markdown);
-  const minLinks = isDailyDigestTask(task) ? 1 : 8;
-  if (links.length < minLinks) throw new Error(`${task} generated too few linked item headings: ${links.length}`);
+  if (links.length < 1) throw new Error(`${task} generated too few linked item headings: ${links.length}`);
   if (links.length > allowed.size) throw new Error(`${task} generated more linked item headings than selected sources: ${links.length} > ${allowed.size}`);
   const duplicate = links.find((link, index) => links.indexOf(link) !== index);
   if (duplicate) throw new Error(`${task} generated duplicate source link: ${duplicate}`);
@@ -753,9 +605,7 @@ const JSON_COMPOSERS: Partial<Record<Task, (rawJson: string, source: string) => 
   "hn-top10": hnMarkdownFromModelJson,
   "github-trending-daily": githubTrendingMarkdownFromModelJson,
   "mdblist-weekly": mdblistMarkdownFromModelJson,
-  "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src, "tech-daily"),
-  "ai-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src, "ai-daily"),
-  "tech-business-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src, "tech-business-daily"),
+  "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src),
 };
 
 export function usesJsonComposer(task: Task): boolean {
@@ -937,18 +787,10 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     if (skipped) return [skipped];
   }
   let source = await sourceForTask(task, date, sourceFixtureDir, marketSegment);
-  if (useAi && task === "tech-business-weekly" && !mockResponseDir) {
-    source = await selectTechBusinessSource({ source, date, repo, model, promptDir, artifactsDir });
-  }
   if (useAi && task === "tech-daily" && !mockResponseDir) {
     source = await buildCombinedTechDailySource({ source, date, repo, model, promptDir, artifactsDir });
     const itemCount = countNumberedBlocks(source);
     if (itemCount < 1) return [skippedLowQuality(task, date, "tech-daily has no high-quality daily items")];
-  }
-  if (useAi && (task === "ai-daily" || task === "tech-business-daily") && !mockResponseDir) {
-    source = await classifiedDailySourceForTask({ task, source, date, repo, model, promptDir, artifactsDir });
-    const itemCount = countNumberedBlocks(source);
-    if (itemCount < 1) return [skippedLowQuality(task, date, `${task} has no high-quality daily items`)];
   }
   const artifactKey = task === "capital-market-daily" && marketSegment ? `${task}-${marketSegment}` : task;
   let body = source;

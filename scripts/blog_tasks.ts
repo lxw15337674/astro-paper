@@ -39,41 +39,11 @@ export const BLOG_TASKS = {
     description: "每周 XYZ Rank 中文播客热门单集 Top 5 音频长文笔记。",
     fileName: "XYZRank热门播客-{date}.md",
   },
-  "tech-weekly": {
-    titlePrefix: "技术趋势与工程观察",
-    tag: "技术周刊",
-    description: "每周技术趋势与工程观察，覆盖全技术领域的事件、工具、版本、安全与工程实践变化，不做纯教程搬运。",
-    fileName: "技术周刊-{date}.md",
-  },
-  "ai-weekly": {
-    titlePrefix: "AI 周刊",
-    tag: "AI周刊",
-    description: "每周 AI 模型、Agent、AI infra、安全评测与企业落地观察，过滤融资、营销、工具榜单和纯论文导读。",
-    fileName: "AI周刊-{date}.md",
-  },
-  "tech-business-weekly": {
-    titlePrefix: "科技商业观察周刊",
-    tag: "科技商业观察",
-    description: "每周科技商业观察，覆盖科技公司、平台政策、AI/芯片/云、监管、安全事件、开源生态与商业落地。",
-    fileName: "科技商业观察-{date}.md",
-  },
   "tech-daily": {
     titlePrefix: "技术日报",
     tag: "技术日报",
     description: "每日技术综合整理，基于文章级 AI 摘要动态聚合过去 24 小时的 AI、工程、安全、平台与科技商业变化。",
     fileName: "技术日报-{date}.md",
-  },
-  "ai-daily": {
-    titlePrefix: "AI 工程日报",
-    tag: "AI工程日报",
-    description: "每日 AI 工程深度整理，覆盖过去 24 小时的模型、Agent、AI infra、评测、安全治理与企业落地。",
-    fileName: "AI工程日报-{date}.md",
-  },
-  "tech-business-daily": {
-    titlePrefix: "科技商业观察日报",
-    tag: "科技商业观察日报",
-    description: "每日科技商业观察，覆盖过去 24 小时的科技公司、平台政策、监管、安全事件、芯片/云供应链与产业竞争。",
-    fileName: "科技商业观察日报-{date}.md",
   },
   "mdblist-weekly": {
     titlePrefix: "每周影视推荐",
@@ -84,17 +54,15 @@ export const BLOG_TASKS = {
 } as const satisfies Record<string, BlogTaskInfo>;
 
 export type Task = keyof typeof BLOG_TASKS;
-export type TaskInput = Task | "all" | "daily-digests";
+export type TaskInput = Task | "all";
 
 // 资本市场日报的三段：一篇文章由三次独立调度增量拼成，每次跑只写自己这一段。
 export type MarketSegment = "us" | "asia" | "crypto";
 
 export const TASKS = Object.keys(BLOG_TASKS) as Task[];
-export const DAILY_DIGEST_TASKS = ["tech-daily"] as const satisfies readonly Task[];
-export const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly", ...DAILY_DIGEST_TASKS]);
 
 export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number; dateTimeZone?: string; marketSegment?: MarketSegment }> = {
-  "30 0 * * *": { task: "daily-digests", dateTimeZone: "America/Los_Angeles" },
+  "30 0 * * *": { task: "tech-daily", dateTimeZone: "America/Los_Angeles" },
   "30 1 * * *": { task: "daily-podcasts" },
   "0 6 * * *": { task: "hn-top10", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 1": { task: "xyzrank-top-episodes", dateTimeZone: "Asia/Shanghai" },
@@ -111,11 +79,7 @@ export function isTask(value: string): value is Task {
 }
 
 export function isTaskInput(value: string): value is TaskInput {
-  return value === "all" || value === "daily-digests" || isTask(value);
-}
-
-export function isDailyDigestTask(task: string): task is (typeof DAILY_DIGEST_TASKS)[number] {
-  return (DAILY_DIGEST_TASKS as readonly string[]).includes(task);
+  return value === "all" || isTask(value);
 }
 
 export function taskInfo(task: string): BlogTaskInfo {
@@ -137,7 +101,6 @@ export function taskPostRelPath(task: Task, date: string): string {
 
 export function tasksForInput(input: TaskInput): Task[] {
   if (input === "all") return [...TASKS];
-  if (input === "daily-digests") return [...DAILY_DIGEST_TASKS];
   return [input];
 }
 
