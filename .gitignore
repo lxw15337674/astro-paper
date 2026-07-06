@@ -31,3 +31,7 @@ public/pagefind
 
 # docker compose
 compose.override.yaml
+
+# python bytecode (market table fetcher)
+__pycache__/
+*.pyc

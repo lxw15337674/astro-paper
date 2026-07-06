@@ -1,0 +1,25 @@
+{
+  "date": "2099-01-02",
+  "asof": "2099-01-01 16:30",
+  "rows": [
+    { "category": "股票", "name": "上证指数", "unit": "pct", "decimals": 2, "latest": 4043.64, "prev_close": 4028.75, "year_open": 3968.99 },
+    { "category": "股票", "name": "深证成指", "unit": "pct", "decimals": 2, "latest": 15597.51, "prev_close": 15498.32, "year_open": 13525.03 },
+    { "category": "股票", "name": "创业板指数", "unit": "pct", "decimals": 2, "latest": 4019.93, "prev_close": 4017.12, "year_open": 3203.13 },
+    { "category": "股票", "name": "沪深300", "unit": "pct", "decimals": 2, "latest": 4842.17, "prev_close": 4812.34, "year_open": 4630.03 },
+    { "category": "股票", "name": "中证500", "unit": "pct", "decimals": 2, "latest": 8745.26, "prev_close": 8693.98, "year_open": 7465.65 },
+    { "category": "股票", "name": "科创50", "unit": "pct", "decimals": 2, "latest": 1975.60, "prev_close": 1987.32, "year_open": 1344.22 },
+    { "category": "股票", "name": "恒生指数", "unit": "pct", "decimals": 2, "latest": 23350.03, "prev_close": 22881.95, "year_open": 25631.72 },
+    { "category": "债券", "name": "1年国债到期收益率", "unit": "bp", "decimals": 4, "latest": 1.1392, "prev_close": 1.1367, "year_open": 1.3372 },
+    { "category": "债券", "name": "10年国债到期收益率", "unit": "bp", "decimals": 4, "latest": 1.7463, "prev_close": 1.7410, "year_open": 1.8473 },
+    { "category": "债券", "name": "30年国债到期收益率", "unit": "bp", "decimals": 4, "latest": 2.2685, "prev_close": 2.2580, "year_open": 2.2674 },
+    { "category": "外汇", "name": "美元指数", "unit": "pct", "decimals": 4, "latest": 100.9804, "prev_close": 101.3656, "year_open": 98.2683 },
+    { "category": "外汇", "name": "美元兑人民币", "unit": "pct", "decimals": 4, "latest": 6.8088, "prev_close": 6.8068, "year_open": 7.0288 },
+    { "category": "外汇", "name": "欧元兑人民币", "unit": "pct", "decimals": 4, "latest": 7.7362, "prev_close": 7.7571, "year_open": 8.2354 },
+    { "category": "外汇", "name": "100日元兑人民币", "unit": "pct", "decimals": 4, "latest": 4.1840, "prev_close": 4.1836, "year_open": 4.4797 },
+    { "category": "黄金", "name": "伦敦金（美元/盎司）", "unit": "pct", "decimals": 2, "latest": 4181.75, "prev_close": 4075.40, "year_open": 4318.20 },
+    { "category": "黄金", "name": "上海金（元/克）", "unit": "pct", "decimals": 2, "latest": 910.98, "prev_close": 887.03, "year_open": 974.94 },
+    { "category": "原油", "name": "布伦特原油（美元/桶）", "unit": "pct", "decimals": 2, "latest": 71.56, "prev_close": 71.01, "year_open": 60.91 },
+    { "category": "原油", "name": "WTI原油（美元/桶）", "unit": "pct", "decimals": 2, "latest": 68.34, "prev_close": 68.09, "year_open": 57.41 },
+    { "category": "比特币", "name": "比特币（美元）", "unit": "pct", "decimals": 0, "latest": 68000, "prev_close": 67193, "year_open": 93000 }
+  ]
+}

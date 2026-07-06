@@ -82,6 +82,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg ca-certificates
 
+      - name: "Setup Python for market table"
+        if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: "Install AkShare for market table"
+        if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
+        run: pip install akshare
+
       - name: "Generate scheduled content"
         env:
           INPUT_TASK: ${{ github.event.inputs.task || '' }}

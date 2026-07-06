@@ -12,6 +12,7 @@ import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFa
 import { githubTrendingMarkdownFromModelJson, parseGitHubTrendingFacts } from "../scripts/github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "../scripts/mdblist_compose.ts";
 import { dailyDigestMarkdownFromModelJson } from "../scripts/daily_digest_compose.ts";
+import { type MarketTableData, renderMarketTable } from "../scripts/market_table_source.ts";
 import { FEEDS, PodcastSourceInsufficientEpisodesError, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
@@ -43,6 +44,20 @@ function composeFixtureBody(task: string): string {
   if (task === "mdblist-weekly") return mdblistMarkdownFromModelJson(raw, source);
   return dailyDigestMarkdownFromModelJson(raw, source, task);
 }
+
+test("market table renders category groups, pct/BP units and missing cells", () => {
+  const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/capital-market-daily-table.json"), "utf8")) as MarketTableData;
+  const md = renderMarketTable(data);
+  assert.match(md, /^## 市场速览$/m);
+  assert.match(md, /\| 股票 \| 上证指数 \| 4043\.64 \| \+0\.37% \| \+1\.88% \|/);
+  assert.match(md, /\| 债券 \| 1年国债到期收益率 \| 1\.1392 \| \+0\.25BP \| -19\.80BP \|/);
+  assert.match(md, /\| 比特币 \| 比特币（美元） \| 68000 \| \+1\.20% \| -26\.88% \|/);
+  // 同一分类只在首行显示分类名，其余留空。
+  assert.match(md, /\|  \| 深证成指 \|/);
+  // 缺失数据渲染为 —，不让整表失败。
+  const missing = renderMarketTable({ date: "d", asof: "d", rows: [{ category: "外汇", name: "美元指数", unit: "pct", decimals: 4, latest: null, prev_close: null, year_open: null }] });
+  assert.match(missing, /\| 外汇 \| 美元指数 \| — \| — \| — \|/);
+});
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
   assert.equal(bjtArchiveInstant("2026-06-22"), "2026-06-21T16:00:00Z");
@@ -253,7 +268,8 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.doesNotMatch(workflow, /GROQ_API_KEY/);
   assert.doesNotMatch(workflow, /PODCAST_GROQ_/);
   assert.doesNotMatch(workflow, /openai-whisper/);
-  assert.doesNotMatch(workflow, /uses: actions\/setup-python@v6/);
+  // 播客转写不再用 Python，但资本市场日报的「市场速览」表格需要 Python + AkShare。
+  assert.match(workflow, /pip install akshare/);
   assert.doesNotMatch(workflow, /podcast_whisper_model/);
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
