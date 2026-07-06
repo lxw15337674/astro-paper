@@ -15,23 +15,11 @@ export const BLOG_TASKS = {
     description: "每日 Hacker News 热门文章 Top 10 中文整理，按当天归档并覆盖更新。",
     fileName: "hackernews-{date}.md",
   },
-  "asia-market-daily": {
-    titlePrefix: "亚洲市场日报",
-    tag: "亚洲市场日报",
-    description: "每日 A股与港股市场日报，按北京时间自然日汇总主要指数、成交与板块结构。",
-    fileName: "亚洲市场日报-{date}.md",
-  },
-  "crypto-market-daily": {
-    titlePrefix: "比特币日报",
-    tag: "比特币日报",
-    description: "每日比特币走势速读，汇总 BTC 价格、情绪与短线风险。",
-    fileName: "比特币日报-{date}.md",
-  },
-  "us-market-daily": {
-    titlePrefix: "美股市场日报",
-    tag: "美股市场日报",
-    description: "每日美股市场日报，按完整常规收盘口径汇总主要指数与行业板块结构。",
-    fileName: "美股市场日报-{date}.md",
+  "capital-market-daily": {
+    titlePrefix: "资本市场日报",
+    tag: "资本市场日报",
+    description: "每日资本市场日报，一篇汇总美股、A股/港股与比特币三段行情，按交易日增量拼合。",
+    fileName: "资本市场日报-{date}.md",
   },
   "github-trending-daily": {
     titlePrefix: "GitHub 项目日报",
@@ -98,18 +86,22 @@ export const BLOG_TASKS = {
 export type Task = keyof typeof BLOG_TASKS;
 export type TaskInput = Task | "all" | "daily-digests";
 
+// 资本市场日报的三段：一篇文章由三次独立调度增量拼成，每次跑只写自己这一段。
+export type MarketSegment = "us" | "asia" | "crypto";
+
 export const TASKS = Object.keys(BLOG_TASKS) as Task[];
 export const DAILY_DIGEST_TASKS = ["tech-daily"] as const satisfies readonly Task[];
 export const SOURCE_LINK_WHITELIST_TASKS = new Set<Task>(["tech-business-weekly", ...DAILY_DIGEST_TASKS]);
 
-export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number; dateTimeZone?: string }> = {
+export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number; dateTimeZone?: string; marketSegment?: MarketSegment }> = {
   "30 0 * * *": { task: "daily-digests", dateTimeZone: "America/Los_Angeles" },
   "30 1 * * *": { task: "daily-podcasts" },
   "0 6 * * *": { task: "hn-top10", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 1": { task: "xyzrank-top-episodes", dateTimeZone: "Asia/Shanghai" },
-  "0 10 * * 1-5": { task: "asia-market-daily" },
-  "0 17 * * *": { task: "crypto-market-daily", dateOffset: -1 },
-  "30 22 * * *": { task: "us-market-daily", dateTimeZone: "America/New_York" },
+  // 资本市场日报：三段分三次跑，靠 dateOffset 对齐到同一交易日 D 的文件，增量拼一篇。
+  "0 17 * * 1-5": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", marketSegment: "asia" },
+  "5 17 * * *": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", marketSegment: "crypto" },
+  "0 6 * * 2-6": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", dateOffset: -1, marketSegment: "us" },
   "0 23 * * *": { task: "github-trending-daily", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 5": { task: "mdblist-weekly", dateTimeZone: "Asia/Shanghai" },
 };
@@ -149,7 +141,7 @@ export function tasksForInput(input: TaskInput): Task[] {
   return [input];
 }
 
-export function scheduledTaskInput(schedule: string): { task: TaskInput; dateOffset: number; dateTimeZone?: string } {
+export function scheduledTaskInput(schedule: string): { task: TaskInput; dateOffset: number; dateTimeZone?: string; marketSegment?: MarketSegment } {
   const mapped = SCHEDULED_TASK_INPUTS[schedule];
-  return { task: mapped?.task || "all", dateOffset: mapped?.dateOffset || 0, dateTimeZone: mapped?.dateTimeZone };
+  return { task: mapped?.task || "all", dateOffset: mapped?.dateOffset || 0, dateTimeZone: mapped?.dateTimeZone, marketSegment: mapped?.marketSegment };
 }

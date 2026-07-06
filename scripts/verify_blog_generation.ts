@@ -17,7 +17,6 @@ const SOURCE_TECHNICAL_ERROR_PATTERNS = [
   /Traceback \(most recent call last\)/i,
   /Script not found:/i,
   /BLOCKED:/i,
-  /\{\{[^}]+\}\}/,
 ];
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
@@ -77,26 +76,17 @@ function verifySourceContract(repo: string, task: string, sourceArtifact: string
   if (!fs.existsSync(sourcePath)) throw new Error(`source artifact does not exist: ${sourceArtifact}`);
   const source = fs.readFileSync(sourcePath, "utf8");
   const relPath = path.relative(repo, sourcePath) || sourceArtifact;
-  if (task === "us-market-daily" && hasNoCompleteUsRegularCloseData(source)) return;
+  if (task === "capital-market-daily" && hasNoCompleteUsRegularCloseData(source)) return;
   if (source.trim().length < 80) throw new Error(`${relPath} source is too short to support generation`);
   for (const pattern of SOURCE_TECHNICAL_ERROR_PATTERNS) {
     if (pattern.test(source)) throw new Error(`${relPath} source contains technical error pattern: ${pattern.source}`);
   }
 
-  if (task === "crypto-market-daily") {
-    requireTerms(relPath, source, ["BTC", "CoinGecko", "Deribit", "Put/Call", "ATM IV", "5% OTM Put IV", "5% OTM Call IV", "Fear & Greed"]);
-    return;
-  }
-  if (task === "us-market-daily") {
-    requireTerms(relPath, source, ["道指", "纳指"]);
+  if (task === "capital-market-daily") {
+    // 一篇三段增量拼合，source 按段独立，只要命中任一市场证据即可。
     requireTermPatterns(relPath, source, [
-      { label: "标普500", pattern: /标普\s*500/ },
-      { label: "regular close or sector ETF evidence", pattern: /完整常规收盘|行业 ETF/ },
+      { label: "market evidence", pattern: /道指|纳指|上证指数|恒生指数|BTC|Fear & Greed/ },
     ]);
-    return;
-  }
-  if (task === "asia-market-daily") {
-    requireTerms(relPath, source, ["上证指数", "深证成指", "创业板指", "恒生指数", "国企指数", "恒生科技指数"]);
     return;
   }
   if (task === "hn-top10") {

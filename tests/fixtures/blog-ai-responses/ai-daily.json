@@ -1,0 +1,34 @@
+{
+  "sections": [
+    {
+      "title": "今日模型与产品",
+      "items": [
+        {
+          "title_zh": "OpenAI 增加企业模型路由控制",
+          "source_url": "https://example.com/openai-enterprise-routing",
+          "body_markdown": "OpenAI 增加企业模型路由控制，让管理员能按 workspace 策略约束模型选择、审计日志和数据边界。变化点在于模型调用不再只是开发者 API 参数，而进入企业治理平面。影响对象是平台团队、安全团队和需要统一管理多模型使用的业务线。风险是策略配置错误会直接影响成本、响应质量和合规结果，因此需要把路由变更纳入评测和审批流程。"
+        }
+      ]
+    },
+    {
+      "title": "Agent 与工程化",
+      "items": [
+        {
+          "title_zh": "Vercel 发布持久化 Agent 工作流运行时",
+          "source_url": "https://example.com/vercel-agent-runtime",
+          "body_markdown": "Vercel 发布 durable agent workflow runtime，重点是让多步骤 Agent 任务具备状态保存、恢复和工具调用边界。工程影响在于，Agent 从单轮生成走向长期任务后，真正难点变成幂等、副作用确认、失败恢复和人工介入。适合已有自动化开发/部署流程的团队试验；风险是如果权限模型和审计不清楚，持久化 Agent 会把一次性错误变成持续性系统风险。"
+        }
+      ]
+    },
+    {
+      "title": "AI Infra、成本与数据",
+      "items": [
+        {
+          "title_zh": "Weaviate 改进向量索引成本控制",
+          "source_url": "https://example.com/weaviate-vector-cost-controls",
+          "body_markdown": "Weaviate 改进向量索引成本控制，说明 RAG 和语义检索系统正在从“能查到”进入“可预算、可运维”的阶段。影响对象是知识库、检索增强生成和企业搜索团队。能力边界在于成本控制不能替代评测：压缩索引、调整召回和降低存储开销都可能改变答案质量。生产采用前需要同时看延迟、召回、P95 成本和失败案例。"
+        }
+      ]
+    }
+  ]
+}

@@ -35,6 +35,7 @@ export async function callBlogAi({
   model,
   timeoutMs = envDurationMs("AI_TIMEOUT_MS", 120_000),
   maxTokens = DEFAULT_MAX_TOKENS,
+  jsonMode = false,
 }: {
   prompt: string;
   apiKey: string;
@@ -42,6 +43,7 @@ export async function callBlogAi({
   model: string;
   timeoutMs?: number;
   maxTokens?: number;
+  jsonMode?: boolean;
 }): Promise<string> {
   if (!apiKey) throw new Error("AI_API_KEY is required for live AI blog generation");
   if (!baseUrl) throw new Error("AI_BASE_URL is required for live AI blog generation");
@@ -59,11 +61,17 @@ export async function callBlogAi({
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "你是严格的中文博客编辑。只输出可归档的 Markdown 正文，不输出解释、前后缀或代码围栏。" },
+          {
+            role: "system",
+            content: jsonMode
+              ? "你是严格的中文技术编辑。只输出一个合法 JSON 对象，不要输出解释、Markdown、前后缀或代码围栏。"
+              : "你是严格的中文博客编辑。只输出可归档的 Markdown 正文，不输出解释、前后缀或代码围栏。",
+          },
           { role: "user", content: prompt },
         ],
         temperature: 0.4,
         max_tokens: maxTokens,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     });
     const raw = await response.text();
@@ -153,12 +161,14 @@ export async function callBlogAiWithFailover({
   fallbackConfig = envFallbackAiConfig(),
   timeoutMs = envDurationMs("AI_TIMEOUT_MS", 120_000),
   maxTokens = DEFAULT_MAX_TOKENS,
+  jsonMode = false,
 }: {
   prompt: string;
   primaryConfig?: AiConfig;
   fallbackConfig?: AiConfig;
   timeoutMs?: number;
   maxTokens?: number;
+  jsonMode?: boolean;
 }): Promise<AiCallResult> {
   const primaryConfigError = configErrorMessage(primaryConfig, "primary");
   const fallbackConfigError = configErrorMessage(fallbackConfig, "fallback");
@@ -166,7 +176,7 @@ export async function callBlogAiWithFailover({
 
   if (!primaryConfigError) {
     try {
-      const content = await callBlogAi({ prompt, ...primaryConfig, timeoutMs, maxTokens });
+      const content = await callBlogAi({ prompt, ...primaryConfig, timeoutMs, maxTokens, jsonMode });
       return { content, config: primaryConfig, usedFallback: false };
     } catch (error) {
       primaryError = error instanceof Error ? error.message : String(error);
@@ -181,7 +191,7 @@ export async function callBlogAiWithFailover({
   }
 
   try {
-    const content = await callBlogAi({ prompt, ...fallbackConfig, timeoutMs, maxTokens });
+    const content = await callBlogAi({ prompt, ...fallbackConfig, timeoutMs, maxTokens, jsonMode });
     return { content, config: fallbackConfig, usedFallback: true };
   } catch (error) {
     if (error instanceof Error) throw withPriorFailureContext(error, primaryError || primaryConfigError);

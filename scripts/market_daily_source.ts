@@ -4,6 +4,7 @@ import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import YahooFinance from "yahoo-finance2";
 import { bjtDateString, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import type { MarketSegment } from "./blog_tasks.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
@@ -1125,6 +1126,17 @@ export async function generateUsMarketDaily(date = bjtDateString()): Promise<str
 export async function generateCryptoMarketDaily(): Promise<string> {
   const sections = [await buildCryptoSection()];
   return `${[buildSummary(sections, "BTC 市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
+}
+
+// 去掉开头的 `## 总结` 块，只留数据/证据段，作为资本市场日报某段给模型的 source。
+function stripSummaryBlock(markdown: string): string {
+  return markdown.replace(/^##\s+总结[\s\S]*?(?=\n##\s+)/, "").trim();
+}
+
+// 资本市场日报按段取 source：us/asia 返回可发布的数据正文，crypto 返回技术证据（供模型翻成人话）。
+export async function buildCapitalSegmentSource(segment: MarketSegment, date = bjtDateString()): Promise<string> {
+  const full = segment === "us" ? await generateUsMarketDaily(date) : segment === "asia" ? await generateAsiaMarketDaily(date) : await generateCryptoMarketDaily();
+  return `${stripSummaryBlock(full)}\n`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

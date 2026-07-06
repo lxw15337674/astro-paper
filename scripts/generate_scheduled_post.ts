@@ -7,11 +7,16 @@ import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
 import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
 import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
-import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
+import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type MarketSegment, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
+import { hnMarkdownFromModelJson } from "./hn_compose.ts";
+import { githubTrendingMarkdownFromModelJson } from "./github_trending_compose.ts";
+import { mdblistMarkdownFromModelJson } from "./mdblist_compose.ts";
+import { dailyDigestMarkdownFromModelJson } from "./daily_digest_compose.ts";
 import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcastEpisodeArticle, buildDailyPodcastSource, fetchDailyPodcastEpisodes, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
 import { appendSummarizedEpisode } from "./podcast_ledger.ts";
-import { MarketSourceUnavailableError, generateAsiaMarketDaily, generateCryptoMarketDaily, generateUsMarketDaily } from "./market_daily_source.ts";
+import { MarketSourceUnavailableError, buildCapitalSegmentSource } from "./market_daily_source.ts";
+import { capitalMarketMarkdownFromModelJson } from "./market_compose.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
 import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
@@ -214,17 +219,15 @@ function failedTask(task: Task, date: string, error: unknown): ResultItem {
   };
 }
 
-function fixtureSource(task: Task, sourceFixtureDir: string): string {
-  const file = path.join(sourceFixtureDir, `${task}.md`);
-  if (!fs.existsSync(file)) throw new Error(`source fixture not found for task ${task}: ${file}`);
+function fixtureSource(fixtureName: string, sourceFixtureDir: string): string {
+  const file = path.join(sourceFixtureDir, `${fixtureName}.md`);
+  if (!fs.existsSync(file)) throw new Error(`source fixture not found for ${fixtureName}: ${file}`);
   return fs.readFileSync(file, "utf8");
 }
 
-const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
+// capital-market-daily 不在此表：它按 marketSegment 取 source，见 sourceForTask。
+const SOURCE_BUILDERS: Partial<Record<Task, (date: string) => Promise<string>>> = {
   "hn-top10": () => buildHnSource(),
-  "asia-market-daily": date => generateAsiaMarketDaily(date),
-  "crypto-market-daily": () => generateCryptoMarketDaily(),
-  "us-market-daily": date => generateUsMarketDaily(date),
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),
@@ -237,9 +240,20 @@ const SOURCE_BUILDERS: Record<Task, (date: string) => Promise<string>> = {
   "tech-business-daily": date => buildDailyDigestSource(date),
 };
 
-async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): Promise<string> {
-  if (sourceFixtureDir) return fixtureSource(task, sourceFixtureDir);
-  return SOURCE_BUILDERS[task](date);
+// capital-market-daily 的 source fixture 按段命名：capital-market-daily-{segment}.md。
+function fixtureKey(task: Task, marketSegment: MarketSegment | ""): string {
+  return task === "capital-market-daily" && marketSegment ? `${task}-${marketSegment}` : task;
+}
+
+async function sourceForTask(task: Task, date: string, sourceFixtureDir = "", marketSegment: MarketSegment | "" = ""): Promise<string> {
+  if (sourceFixtureDir) return fixtureSource(fixtureKey(task, marketSegment), sourceFixtureDir);
+  if (task === "capital-market-daily") {
+    if (!marketSegment) throw new Error("capital-market-daily requires a marketSegment");
+    return buildCapitalSegmentSource(marketSegment, date);
+  }
+  const builder = SOURCE_BUILDERS[task];
+  if (!builder) throw new Error(`no source builder for task: ${task}`);
+  return builder(date);
 }
 
 function writeArtifact(artifactsDir: string, task: string, name: string, content: string): string {
@@ -250,11 +264,12 @@ function writeArtifact(artifactsDir: string, task: string, name: string, content
   return file;
 }
 
-async function callAi(prompt: string, model: string): Promise<AiCallResult> {
+async function callAi(prompt: string, model: string, jsonMode = false): Promise<AiCallResult> {
   const result = await callBlogAiWithFailover({
     prompt,
     primaryConfig: envAiConfig({ model }),
     fallbackConfig: envFallbackAiConfig(),
+    jsonMode,
   });
   if (result.usedFallback) {
     writeStderr(`WARN: primary AI request failed; using fallback model ${result.config.model} via ${result.config.baseUrl}`);
@@ -721,14 +736,39 @@ function shouldRetryWithValidationFeedback(error: string): boolean {
   return !/^(AI request timed out after|AI request failed:)/.test(error);
 }
 
-export function validateGeneratedMarkdownForTask(markdown: string, task: Task, date: string): string {
+export function validateGeneratedMarkdownForTask(markdown: string, task: Task, date: string, marketSegment: MarketSegment | "" = ""): string {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-task-validation-"));
   try {
-    archivePost({ task, date, repo: sandbox, body: markdown, force: true });
+    archivePost({ task, date, repo: sandbox, body: markdown, force: true, marketSegment });
     return markdown;
   } finally {
     fs.rmSync(sandbox, { recursive: true, force: true });
   }
+}
+
+// JSON 组装家族：模型只返回语义字段，事实由 source 提供，规则层确定性组装成既有中间契约 Markdown。
+// 新增任务只需在此登记一个 composer；其余任务保持模型直接产出 Markdown 的原路径。
+const JSON_COMPOSERS: Partial<Record<Task, (rawJson: string, source: string) => string>> = {
+  "hn-top10": hnMarkdownFromModelJson,
+  "github-trending-daily": githubTrendingMarkdownFromModelJson,
+  "mdblist-weekly": mdblistMarkdownFromModelJson,
+  "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src, "tech-daily"),
+  "ai-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src, "ai-daily"),
+  "tech-business-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src, "tech-business-daily"),
+};
+
+export function usesJsonComposer(task: Task): boolean {
+  return task in JSON_COMPOSERS || task === "capital-market-daily";
+}
+
+function contentToMarkdown(content: string, source: string, task: Task, marketSegment: MarketSegment | "" = ""): string {
+  if (task === "capital-market-daily") {
+    if (!marketSegment) throw new Error("capital-market-daily requires a marketSegment");
+    return capitalMarketMarkdownFromModelJson(content, source, marketSegment);
+  }
+  const composer = JSON_COMPOSERS[task];
+  if (composer) return composer(content, source);
+  return normalizeMarkdownLinksFromSourceTitles(validateMarkdown(content), source, task);
 }
 
 async function renderLiveAiMarkdownWithSourceValidation(
@@ -739,18 +779,20 @@ async function renderLiveAiMarkdownWithSourceValidation(
   artifactsDir: string,
   source: string,
   artifactKey: string = task,
+  marketSegment: MarketSegment | "" = "",
 ): Promise<{ markdown: string; ai: AiCallResult }> {
   const attempts = retryAttempts();
+  const jsonMode = usesJsonComposer(task);
   let lastError = "";
   let attemptPrompt = prompt;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     await sleep(retryDelayMs(attempt));
     if (attempt > 1) writeArtifact(artifactsDir, artifactKey, `retry-prompt-attempt-${attempt}.md`, attemptPrompt);
     try {
-      const ai = await callAi(attemptPrompt, model);
-      const markdown = normalizeMarkdownLinksFromSourceTitles(validateMarkdown(ai.content), source, task);
+      const ai = await callAi(attemptPrompt, model, jsonMode);
+      const markdown = contentToMarkdown(ai.content, source, task, marketSegment);
       assertMarkdownUsesOnlySourceLinks(markdown, source, task);
-      validateGeneratedMarkdownForTask(markdown, task, date);
+      validateGeneratedMarkdownForTask(markdown, task, date, marketSegment);
       return { markdown, ai };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
@@ -774,6 +816,7 @@ async function renderWithAi({
   mockResponseDir,
   artifactsDir,
   artifactKey = task,
+  marketSegment = "",
 }: {
   task: Task;
   date: string;
@@ -784,22 +827,27 @@ async function renderWithAi({
   mockResponseDir: string;
   artifactsDir: string;
   artifactKey?: string;
+  marketSegment?: MarketSegment | "";
 }): Promise<{ markdown: string; metadata: NonNullable<ResultItem["generation"]> }> {
   const sourceArtifact = writeArtifact(artifactsDir, artifactKey, "source.md", source);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const prompt = renderPrompt({ task, date, sourceText: source, promptDir: resolvedPromptDir });
+  // capital-market-daily 每段一个 prompt / mock fixture：capital-market-{segment}。
+  const promptName = task === "capital-market-daily" && marketSegment ? `capital-market-${marketSegment}` : task;
+  const fixtureName = task === "capital-market-daily" && marketSegment ? `${task}-${marketSegment}` : task;
+  const prompt = renderPrompt({ task: promptName, date, sourceText: source, promptDir: resolvedPromptDir });
   const promptArtifact = writeArtifact(artifactsDir, artifactKey, "prompt.md", prompt);
-  const mockFile = mockResponseDir ? path.join(mockResponseDir, `${task}.md`) : "";
+  const mockExt = usesJsonComposer(task) ? "json" : "md";
+  const mockFile = mockResponseDir ? path.join(mockResponseDir, `${fixtureName}.${mockExt}`) : "";
   const rendered = mockFile
     ? {
-        markdown: validateMarkdown(fs.readFileSync(mockFile, "utf8")),
+        markdown: contentToMarkdown(fs.readFileSync(mockFile, "utf8"), source, task, marketSegment),
         ai: {
           content: "",
           config: envAiConfig({ model }),
           usedFallback: false,
         },
       }
-    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, date, artifactsDir, source, artifactKey);
+    : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, date, artifactsDir, source, artifactKey, marketSegment);
   const responseArtifact = writeArtifact(artifactsDir, artifactKey, "ai-response.md", rendered.markdown);
   return {
     markdown: rendered.markdown,
@@ -826,6 +874,7 @@ type GenerateTaskOptions = {
   sourceFixtureDir: string;
   mockResponseDir: string;
   artifactsDir: string;
+  marketSegment?: MarketSegment | "";
 };
 
 async function fetchPodcastArticleEpisodes(task: Task, date: string, force: boolean): Promise<Episode[]> {
@@ -879,13 +928,14 @@ async function generatePodcastArticles({ task, repo, date, force, promptDir, art
 }
 
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
-  const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
+  const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir, marketSegment = "" } = options;
   if (isPodcastArticleTask(task) && useAi && !sourceFixtureDir && !mockResponseDir) return generatePodcastArticles(options);
-  if (!force) {
+  // capital-market-daily 增量拼一篇：每段独立文件不做 skip，force 由归档层按段合并处理。
+  if (!force && task !== "capital-market-daily") {
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];
   }
-  let source = await sourceForTask(task, date, sourceFixtureDir);
+  let source = await sourceForTask(task, date, sourceFixtureDir, marketSegment);
   if (useAi && task === "tech-business-weekly" && !mockResponseDir) {
     source = await selectTechBusinessSource({ source, date, repo, model, promptDir, artifactsDir });
   }
@@ -899,14 +949,15 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     const itemCount = countNumberedBlocks(source);
     if (itemCount < 1) return [skippedLowQuality(task, date, `${task} has no high-quality daily items`)];
   }
+  const artifactKey = task === "capital-market-daily" && marketSegment ? `${task}-${marketSegment}` : task;
   let body = source;
   let generation: ResultItem["generation"];
   if (useAi) {
-    const rendered = await renderWithAi({ task, date, source, repo, model, promptDir, mockResponseDir, artifactsDir });
+    const rendered = await renderWithAi({ task, date, source, repo, model, promptDir, mockResponseDir, artifactsDir, artifactKey, marketSegment });
     body = rendered.markdown;
     generation = rendered.metadata;
   }
-  const result: ResultItem = archivePost({ task, date, repo, body, force });
+  const result: ResultItem = archivePost({ task, date, repo, body, force, marketSegment });
   if (generation) result.generation = generation;
   return [result];
 }
@@ -938,6 +989,7 @@ async function main(): Promise<void> {
           sourceFixtureDir: stringArg(args, "source-fixture-dir"),
           mockResponseDir: stringArg(args, "mock-response-dir"),
           artifactsDir: stringArg(args, "artifacts-dir"),
+          marketSegment: (stringArg(args, "market-segment", scheduled.marketSegment || "") as MarketSegment | ""),
         })),
       );
     } catch (error) {

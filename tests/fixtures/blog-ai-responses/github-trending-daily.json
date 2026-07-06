@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "rank": 1,
+      "project_summary": "面向开发者的本地 AI Agent 工作台，把任务编排、工具执行、记忆和会话状态整合在本地运行环境里。",
+      "tech_stack": "TypeScript",
+      "use_case": "适合需要在本地搭建、调试开发者智能体工作流的工程团队。"
+    },
+    {
+      "rank": 2,
+      "project_summary": "面向现代应用的高性能组件体系，提供可访问组件、设计令牌和应用外壳模式。",
+      "tech_stack": "TypeScript",
+      "use_case": "适合需要统一设计规范、快速搭建前端界面的产品团队。"
+    },
+    {
+      "rank": 3,
+      "project_summary": "代码库索引与依赖图可视化工具，解析仓库并渲染代码之间的依赖关系。",
+      "tech_stack": "Rust",
+      "use_case": "适合需要梳理大型代码库结构、做架构分析的工程师。"
+    },
+    {
+      "rank": 4,
+      "project_summary": "构建可扩展命令行工具的套件，内置配置加载、插件、命令路由和发布辅助。",
+      "tech_stack": "Go",
+      "use_case": "适合需要开发带插件生态的 CLI 工具的开发者。"
+    },
+    {
+      "rank": 5,
+      "project_summary": "Markdown 文档同步与发布管线，在仓库、网站和内部知识库之间保持文档一致。",
+      "tech_stack": "Python",
+      "use_case": "适合需要跨平台维护技术文档的团队。"
+    }
+  ]
+}
