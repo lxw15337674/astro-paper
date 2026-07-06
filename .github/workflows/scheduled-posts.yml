@@ -94,7 +94,7 @@ jobs:
           cache: pip
       - name: "Install AkShare for market table"
         if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
-        run: pip install akshare
+        run: pip install -r requirements.txt
 
       - name: "Generate scheduled content"
         env:
