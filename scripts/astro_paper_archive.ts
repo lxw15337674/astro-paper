@@ -159,9 +159,10 @@ function rejectMarketGuidance(markdown: string): void {
   }
 }
 
-// 资本市场日报一篇三段，按固定顺序增量拼合；每次调度只写自己那一段。
-export const MARKET_SEGMENT_HEADINGS: Record<string, string> = { us: "美股", asia: "亚洲", crypto: "比特币" };
-const CAPITAL_SECTION_ORDER = ["美股", "亚洲", "比特币"];
+// 资本市场日报一篇多段，按固定顺序增量拼合；每次调度只写自己那一段。
+// 市场速览是顶部纯数据表格（由亚洲那次跑生成），美股/亚洲/比特币是三段叙事。
+export const MARKET_SEGMENT_HEADINGS: Record<string, string> = { table: "市场速览", us: "美股", asia: "亚洲", crypto: "比特币" };
+const CAPITAL_SECTION_ORDER = ["市场速览", "美股", "亚洲", "比特币"];
 
 // crypto 段位于 `## 比特币` 之下，必须含 4 个普通人 `###` 小节，且不残留技术小节标题。
 function assertCryptoSegment(block: string): void {

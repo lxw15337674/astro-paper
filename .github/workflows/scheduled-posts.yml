@@ -15,6 +15,10 @@ on:
         description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today or scheduled offset."
         required: false
         type: string
+      market_segment:
+        description: "capital-market-daily only: which segment to generate (us | asia | crypto). asia also builds the 市场速览 table."
+        required: false
+        type: string
       force:
         description: "Overwrite an existing post for the same date"
         required: false
@@ -82,11 +86,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg ca-certificates
 
+      - name: "Setup Python for market table"
+        if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: "Install AkShare for market table"
+        if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
+        run: pip install -r requirements.txt
+
       - name: "Generate scheduled content"
         env:
           INPUT_TASK: ${{ github.event.inputs.task || '' }}
           INPUT_DATE: ${{ github.event.inputs.date || '' }}
           INPUT_FORCE: ${{ github.event.inputs.force || 'false' }}
+          INPUT_MARKET_SEGMENT: ${{ github.event.inputs.market_segment || '' }}
           EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
@@ -129,6 +144,9 @@ jobs:
           fi
           if [ -n "$INPUT_DATE" ]; then
             args+=(--date "$INPUT_DATE")
+          fi
+          if [ -n "$INPUT_MARKET_SEGMENT" ]; then
+            args+=(--market-segment "$INPUT_MARKET_SEGMENT")
           fi
           if [ -n "$AI_MODEL" ]; then
             args+=(--model "$AI_MODEL")

@@ -17,6 +17,7 @@ import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcast
 import { appendSummarizedEpisode } from "./podcast_ledger.ts";
 import { MarketSourceUnavailableError, buildCapitalSegmentSource } from "./market_daily_source.ts";
 import { capitalMarketMarkdownFromModelJson } from "./market_compose.ts";
+import { buildMarketTable } from "./market_table_source.ts";
 import { buildTechWeeklySource } from "./tech_weekly_source.ts";
 import { buildAiWeeklySource } from "./ai_weekly_source.ts";
 import { buildTechBusinessWeeklySource } from "./tech_business_weekly_source.ts";
@@ -959,6 +960,16 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
   }
   const result: ResultItem = archivePost({ task, date, repo, body, force, marketSegment });
   if (generation) result.generation = generation;
+  // 顶部「市场速览」纯数据表格由亚洲那次跑生成，增量并入同一篇（不过大模型）。
+  // 取数失败（Python/AkShare 不可用或网络异常）时降级：保留占位段，不让整篇日报失败。
+  if (task === "capital-market-daily" && marketSegment === "asia") {
+    try {
+      const tableBlock = buildMarketTable(date, { fixtureDir: sourceFixtureDir });
+      archivePost({ task, date, repo, body: tableBlock, force, marketSegment: "table" });
+    } catch (error) {
+      writeStderr(`WARN: capital-market-daily market table skipped: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   return [result];
 }
 
