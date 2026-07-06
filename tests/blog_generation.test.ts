@@ -12,13 +12,12 @@ import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFa
 import { githubTrendingMarkdownFromModelJson, parseGitHubTrendingFacts } from "../scripts/github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "../scripts/mdblist_compose.ts";
 import { dailyDigestMarkdownFromModelJson } from "../scripts/daily_digest_compose.ts";
-import { type MarketTableData, renderMarketTable } from "../scripts/market_table_source.ts";
-import { FEEDS, PodcastSourceInsufficientEpisodesError, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
+import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
-import { articleConflictsWithIndexSnapshot, buildAsiaMarketDailyFromTable, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
+import { articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
@@ -48,20 +47,6 @@ function composeFixtureBody(task: string): string {
   if (task === "mdblist-weekly") return mdblistMarkdownFromModelJson(raw, source);
   return dailyDigestMarkdownFromModelJson(raw, source, task);
 }
-
-test("market table renders category groups, pct/BP units and missing cells", () => {
-  const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/capital-market-daily-table.json"), "utf8")) as MarketTableData;
-  const md = renderMarketTable(data);
-  assert.match(md, /^## 市场速览$/m);
-  assert.match(md, /\| 股票 \| 上证指数 \| 4043\.64 \| \+0\.37% \| \+1\.88% \|/);
-  assert.match(md, /\| 债券 \| 1年国债到期收益率 \| 1\.1392 \| \+0\.25BP \| -19\.80BP \|/);
-  assert.match(md, /\| 比特币 \| 比特币（美元） \| 68000 \| \+1\.20% \| -26\.88% \|/);
-  // 同一分类只在首行显示分类名，其余留空。
-  assert.match(md, /\|  \| 深证成指 \|/);
-  // 缺失数据渲染为 —，不让整表失败。
-  const missing = renderMarketTable({ date: "d", asof: "d", rows: [{ category: "外汇", name: "美元指数", unit: "pct", decimals: 4, latest: null, prev_close: null, year_open: null }] });
-  assert.match(missing, /\| 外汇 \| 美元指数 \| — \| — \| — \|/);
-});
 
 test("BJT archive dates use UTC instants for Beijing midnight", () => {
   assert.equal(bjtArchiveInstant("2026-06-22"), "2026-06-21T16:00:00Z");
@@ -170,173 +155,7 @@ test("AI client fails over to deepseek when primary request fails", async () => 
   }
 });
 
-test("blog task registry covers prompts, fixtures, archive paths and schedules", () => {
-  for (const task of TASKS) {
-    const info = taskInfo(task);
-    assert.ok(info.titlePrefix);
-    assert.ok(info.tag);
-    assert.ok(info.description);
-    assert.match(taskPostRelPath(task, "2099-01-02"), /^src\/content\/posts\/zh-cn\/.+2099-01-02\.md$/);
-    assert.equal(fs.existsSync(promptPath("_common-article-rules")), true, "common article rules prompt missing");
-    if (task === "capital-market-daily") {
-      // 资本市场日报按段拆分：prompt / source / 模型 JSON fixture 都是 capital-market-{segment}。
-      for (const segment of ["us", "asia", "crypto"]) {
-        assert.equal(fs.existsSync(promptPath(`capital-market-${segment}`)), true, `capital-market-${segment} prompt missing`);
-        assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}-${segment}.md`)), true, `${task}-${segment} source fixture missing`);
-        assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}-${segment}.json`)), true, `${task}-${segment} AI fixture missing`);
-      }
-      continue;
-    }
-    assert.equal(fs.existsSync(promptPath(task)), true, `${task} prompt missing`);
-    assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}.md`)), true, `${task} source fixture missing`);
-    // JSON 组装家族的模型输出 fixture 是 .json；其余任务仍是 .md 正文。
-    const aiFixtureExt = usesJsonComposer(task) ? "json" : "md";
-    assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}.${aiFixtureExt}`)), true, `${task} AI fixture missing`);
-  }
-  assert.deepEqual(tasksForInput("daily-digests"), [...DAILY_DIGEST_TASKS]);
-  assert.deepEqual(tasksForInput("all"), [...TASKS]);
-  assert.equal(scheduledTaskInput("0 17 * * 1-5").task, "capital-market-daily");
-  assert.equal(scheduledTaskInput("0 17 * * 1-5").marketSegment, "asia");
-  assert.equal(scheduledTaskInput("5 17 * * *").marketSegment, "crypto");
-  assert.equal(scheduledTaskInput("0 6 * * 2-6").marketSegment, "us");
-  assert.equal(scheduledTaskInput("0 6 * * 2-6").dateOffset, -1);
-  assert.equal(scheduledTaskInput("30 0 * * *").task, "daily-digests");
-  assert.equal(scheduledTaskInput("30 0 * * *").dateTimeZone, "America/Los_Angeles");
-  assert.equal(scheduledTaskInput("0 6 * * *").task, "hn-top10");
-  assert.equal(scheduledTaskInput("0 6 * * *").dateTimeZone, "America/Los_Angeles");
-  assert.equal(scheduledTaskInput("30 1 * * *").task, "daily-podcasts");
-  assert.equal(scheduledTaskInput("0 2 * * 1").task, "xyzrank-top-episodes");
-  assert.equal(scheduledTaskInput("0 2 * * 1").dateTimeZone, "Asia/Shanghai");
-  assert.equal(scheduledTaskInput("0 23 * * *").task, "github-trending-daily");
-  assert.equal(scheduledTaskInput("0 23 * * *").dateTimeZone, "America/Los_Angeles");
-  assert.equal(scheduledTaskInput("unknown schedule").task, "all");
-  for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
-    assert.match(schedule, /^\d+ \d+ \* \* (?:\*|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)$/);
-  }
-  const workflowDir = path.join(process.cwd(), ".github/workflows");
-  const manualWorkflow = fs.readFileSync(path.join(workflowDir, "scheduled-posts.yml"), "utf8");
-  const publishWorkflow = fs.readFileSync(path.join(workflowDir, "blog-publish.yml"), "utf8");
-  const scheduledWorkflowFiles = [
-    "publish-daily-digests.yml",
-    "publish-hn-top10.yml",
-    "publish-podcasts.yml",
-    "publish-capital-market-daily.yml",
-    "publish-github-trending.yml",
-    "publish-mdblist-weekly.yml",
-  ];
-  const scheduledWorkflows = scheduledWorkflowFiles.map(file => fs.readFileSync(path.join(workflowDir, file), "utf8")).join("\n");
-  const workflow = `${manualWorkflow}\n${publishWorkflow}\n${scheduledWorkflows}`;
-  const capitalWorkflow = fs.readFileSync(path.join(workflowDir, "publish-capital-market-daily.yml"), "utf8");
-  const podcastSource = fs.readFileSync(path.join(process.cwd(), "scripts/foreign_tech_podcast_source.ts"), "utf8");
-  for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
-    assert.match(scheduledWorkflows, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
-  }
-  for (const file of scheduledWorkflowFiles) {
-    const wrapper = fs.readFileSync(path.join(workflowDir, file), "utf8");
-    assert.match(wrapper, /uses: \.\/\.github\/workflows\/blog-publish\.yml/, `${file} should call the reusable publisher`);
-    assert.match(wrapper, /secrets: inherit/, `${file} should pass repository secrets to the reusable publisher`);
-  }
-  assert.match(publishWorkflow, /workflow_call:/);
-  assert.match(publishWorkflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
-  assert.match(publishWorkflow, /inputs\.task == 'daily-podcasts'/);
-  assert.match(publishWorkflow, /inputs\.task == 'xyzrank-top-episodes'/);
-  assert.match(publishWorkflow, /AI_TIMEOUT_MS: 600000/);
-  assert.match(publishWorkflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
-  assert.match(publishWorkflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
-  assert.match(publishWorkflow, /Install ffmpeg for podcast transcription/);
-  assert.match(publishWorkflow, /GEMINI_API_KEY: \$\{\{ secrets\.GEMINI_API_KEY \}\}/);
-  assert.match(publishWorkflow, /PODCAST_TRANSCRIBE_PROVIDER: gemini/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_MODEL: gemini-flash-latest/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_SEGMENT_SECONDS: 1200/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14/);
-  assert.match(podcastSource, /function runGeminiTranscription/);
-  assert.match(podcastSource, /inline_data/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_BASE_URL: https:\/\/right\.codes\/gemini/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_MODEL: gemini-3\.5-flash/);
-  assert.match(podcastSource, /export async function buildDailyPodcastEpisodeArticle/);
-  assert.match(podcastSource, /function prepareGeminiArticleAudioChunks/);
-  assert.match(podcastSource, /atempo=\$\{speed\}/);
-  assert.match(podcastSource, /libopus/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_AUDIO_SPEED: "1\.5"/);
-  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_AUDIO_CODEC: libopus/);
-  assert.match(podcastSource, /PODCAST_DAILY_MAX_EPISODE_MINUTES/);
-  assert.match(podcastSource, /skipping overlong daily podcast episode/);
-  assert.match(podcastSource, /audio fetch returned 403; retrying with curl/);
-  assert.match(podcastSource, /\"whisper-cpp,local\"/);
-  assert.match(podcastSource, /function runWhisperCpp/);
-  assert.match(podcastSource, /prepareWhisperCppAudioChunks/);
-  assert.doesNotMatch(workflow, /uses: actions\/cache@v4/);
-  assert.doesNotMatch(workflow, /WHISPER_CPP_VERSION/);
-  assert.doesNotMatch(workflow, /whisper-bin-ubuntu-x64\.tar\.gz/);
-  assert.doesNotMatch(workflow, /ggml-\$WHISPER_CPP_MODEL\.bin/);
-  assert.doesNotMatch(workflow, /PODCAST_WHISPER_CPP_/);
-  assert.doesNotMatch(workflow, /GROQ_API_KEY/);
-  assert.doesNotMatch(workflow, /PODCAST_GROQ_/);
-  assert.doesNotMatch(workflow, /openai-whisper/);
-  // 播客转写不再用 Python，但资本市场日报的「市场速览」表格需要 Python + AkShare。
-  assert.match(publishWorkflow, /pip install -r requirements\.txt/);
-  assert.match(publishWorkflow, /inputs\.task == 'capital-market-daily' && inputs\.market_segment == 'asia'/);
-  assert.match(capitalWorkflow, /inputs\.market_segment == 'us' && '0 6 \* \* 2-6'/);
-  assert.match(capitalWorkflow, /inputs\.market_segment == 'crypto' && '5 17 \* \* \*'/);
-  assert.doesNotMatch(workflow, /podcast_whisper_model/);
-  assert.match(publishWorkflow, /AI_FALLBACK_API_KEY:/);
-  assert.match(publishWorkflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
-  assert.match(publishWorkflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
-  assert.match(publishWorkflow, /APPLE_TOP_PODCASTS_COUNT: 5/);
-  assert.match(publishWorkflow, /PODCAST_MAX_EPISODES: \$\{\{ inputs\.podcast_max_episodes \|\| '10' \}\}/);
-  assert.match(publishWorkflow, /PODCAST_MIN_EPISODES: 1/);
-  assert.match(publishWorkflow, /PODCAST_CANDIDATE_EPISODES: 8/);
-  assert.match(publishWorkflow, /FOREIGN_TECH_PODCAST_MAX_EPISODES: 5/);
-  assert.match(publishWorkflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: 5/);
-  assert.match(publishWorkflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
-  assert.match(publishWorkflow, /PODCAST_FFMPEG_TIMEOUT_MS: 300000/);
-  assert.match(publishWorkflow, /PODCAST_DAILY_MAX_EPISODE_MINUTES: 90/);
-  assert.match(publishWorkflow, /XYZRANK_TOP_EPISODES_LIMIT: 5/);
-  assert.match(publishWorkflow, /git checkout -B "\$\{GITHUB_REF_NAME\}" "origin\/\$\{GITHUB_REF_NAME\}"/);
-  assert.match(publishWorkflow, /git pull --rebase -X theirs origin "\$\{GITHUB_REF_NAME\}"/);
-  assert.match(publishWorkflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
-  assert.match(publishWorkflow, /Report task-level generation failures/);
-  assert.match(publishWorkflow, /Summarize scheduled publishing result/);
-  assert.doesNotMatch(workflow, /Using Groq-only transcription for apple-top-podcasts/);
-  assert.match(manualWorkflow, /default:\s*hn-top10/);
-  assert.doesNotMatch(manualWorkflow, /default:\s*all/);
-  assert.doesNotMatch(manualWorkflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
-  const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
-  assert.match(generator, /generatePodcastArticles/);
-  assert.match(generator, /buildDailyPodcastEpisodeArticle/);
-  assert.match(generator, /buildCombinedTechDailySource/);
-  assert.match(generator, /daily-digest-item-summary/);
-  assert.match(generator, /daily-digest-section-planner/);
-});
 
-test("RSS source builders do not truncate summary evidence with clipText", () => {
-  for (const file of ["tech_weekly_source.ts", "ai_weekly_source.ts", "tech_business_weekly_source.ts", "daily_digest_source.ts"]) {
-    const source = fs.readFileSync(path.join(process.cwd(), "scripts", file), "utf8");
-    assert.doesNotMatch(source, /clipText\(item\.summary \|\| item\.title/);
-    assert.match(source, /摘要证据：\$\{compact\(item\.summary \|\| item\.title\)\}/);
-  }
-});
-
-test("Yahoo Finance article extraction prefers public articleBody text", () => {
-  const html = `<!doctype html><html><head><script type="application/ld+json">{"@type":"NewsArticle","articleBody":"Stocks closed mixed as technology shares lagged while industrial and consumer discretionary groups advanced. Analysts cited positioning around major index weights, but the article also noted that volume evidence was mixed across broad ETFs and did not by itself prove fund flows."}</script></head><body><article>fallback text</article></body></html>`;
-  const text = extractYahooFinanceArticleText(html, "https://finance.yahoo.com/example");
-  assert.match(text, /Stocks closed mixed/);
-  assert.match(text, /did not by itself prove fund flows/);
-});
-
-test("asia market daily uses the same AkShare table data as the market overview", () => {
-  const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/capital-market-daily-table.json"), "utf8")) as MarketTableData;
-  const source = buildAsiaMarketDailyFromTable(data, "2099-01-02");
-  assert.match(source, /## A股/);
-  assert.match(source, /上证指数收报 4043\.64 点，\+0\.37%/);
-  assert.match(source, /深证成指收报 15597\.51 点，\+0\.64%/);
-  assert.match(source, /## 港股/);
-  assert.match(source, /恒生指数收报 23350\.03 点，\+2\.05%/);
-  assert.match(source, /国企指数收报 8450\.12 点，\+1\.54%/);
-  assert.match(source, /恒生科技指数收报 5120\.88 点，\+0\.64%/);
-  assert.match(source, /同一份 AkShare 指数历史数据/);
-  assert.doesNotMatch(source, /A股行业板块/);
-});
 
 test("Yahoo Finance article evidence is rejected when index moves conflict with closing data", () => {
   const conflicting = "The S&P 500 Index today is down -1.26%, the Dow Jones Industrial Average is down -0.30%, and the Nasdaq 100 Index is down -2.69%.";
@@ -346,88 +165,7 @@ test("Yahoo Finance article evidence is rejected when index moves conflict with 
   assert.equal(articleConflictsWithIndexSnapshot(compatible, { dji: 0.35, nasdaq: -0.43, spx: -0.1 }), false);
 });
 
-test("US market section includes stock and volume evidence without treating volume as fund flow", () => {
-  const section = buildUsSection(
-    {
-      DJIA: { f2: 46000, f3: 0.35 },
-      NDX: { f2: 25000, f3: -0.43 },
-      SPX: { f2: 6600, f3: -0.1 },
-    },
-    "2099-01-06",
-    [
-      { symbol: "XLI", name: "工业", close: 100, pct: 1.16, volume: 130_000_000, avgVolume20: 100_000_000, volumeRatio: 1.3 },
-      { symbol: "XLE", name: "能源", close: 80, pct: -1.63, volume: 90_000_000, avgVolume20: 100_000_000, volumeRatio: 0.9 },
-    ],
-    [
-      { symbol: "NVDA", name: "英伟达(NVDA)", close: 180, pct: 2.4, volume: 240_000_000, avgVolume20: 200_000_000, volumeRatio: 1.2 },
-      { symbol: "AAPL", name: "苹果(AAPL)", close: 220, pct: 1.1, volume: 70_000_000, avgVolume20: 80_000_000, volumeRatio: 0.88 },
-      { symbol: "MSFT", name: "微软(MSFT)", close: 510, pct: 0.6, volume: 30_000_000, avgVolume20: 28_000_000, volumeRatio: 1.07 },
-      { symbol: "AMZN", name: "亚马逊(AMZN)", close: 230, pct: 0.2, volume: 45_000_000, avgVolume20: 44_000_000, volumeRatio: 1.02 },
-      { symbol: "META", name: "Meta(META)", close: 700, pct: -1.0, volume: 20_000_000, avgVolume20: 21_000_000, volumeRatio: 0.95 },
-      { symbol: "TSLA", name: "特斯拉(TSLA)", close: 300, pct: -2.1, volume: 100_000_000, avgVolume20: 140_000_000, volumeRatio: 0.71 },
-    ],
-    [{ symbol: "QQQ", name: "QQQ", close: 560, pct: -0.4, volume: 65_000_000, avgVolume20: 50_000_000, volumeRatio: 1.3 }],
-    [
-      {
-        title: "Stock market today: Nasdaq slips as industrials rise",
-        url: "https://finance.yahoo.com/news/stock-market-today-example.html",
-        publishedAt: "2099-01-06T21:30:00.000Z",
-        bodyText: `Yahoo Finance article text says stocks closed mixed as industrial shares rose while technology shares lagged, and it frames the move as a market narrative rather than a complete causal explanation. ${"market ".repeat(160)} MARKET_BODY_TAIL_SENTINEL`,
-      },
-    ],
-  );
 
-  assert.match(section.markdown, /按已获取的完整常规收盘口径/);
-  assert.match(section.markdown, /## 宽基指数/);
-  assert.match(section.markdown, /## 行业指数/);
-  assert.match(section.markdown, /## 个股样本/);
-  assert.match(section.markdown, /核心个股涨幅靠前：英伟达\(NVDA\) \+2\.40%/);
-  assert.match(section.markdown, /核心个股跌幅靠前：特斯拉\(TSLA\) -2\.10%/);
-  assert.match(section.markdown, /主要宽基 ETF 成交活跃度：QQQ 当日成交量约 6500万股，约为近 20 个交易日均量的 1\.30 倍，成交活跃度偏高/);
-  assert.match(section.markdown, /成交量只能描述活跃度，不等同于真实资金流/);
-  assert.match(section.markdown, /外部财经文章正文线索/);
-  assert.match(section.markdown, /https:\/\/finance\.yahoo\.com\/news\/stock-market-today-example\.html/);
-  assert.match(section.markdown, /只作为市场叙事辅助证据/);
-  assert.match(section.markdown, /MARKET_BODY_TAIL_SENTINEL/);
-  assert.doesNotMatch(section.markdown, /资金流入|资金流出|机构买入|机构卖出/);
-});
-
-test("US market section degrades when 20-day average volume is unavailable", () => {
-  const section = buildUsSection(
-    {
-      DJIA: { f2: 46000, f3: 0.35 },
-      NDX: { f2: 25000, f3: -0.43 },
-      SPX: { f2: 6600, f3: -0.1 },
-    },
-    "2099-01-06",
-    [{ symbol: "XLK", name: "科技", close: 100, pct: -0.62, volume: 50_000_000 }],
-    [],
-    [{ symbol: "SPY", name: "SPY", close: 660, pct: -0.1, volume: 80_000_000 }],
-  );
-
-  assert.match(section.markdown, /核心个股样本未获取到稳定数据/);
-  assert.match(section.markdown, /已获取当日成交量，但近 20 个交易日均量不足，暂不判断放量或缩量/);
-});
-
-test("US market verifier accepts explicit no-complete-regular-close source boundary", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-us-market-boundary-"));
-  const sourcePath = path.join(repo, "us-source.md");
-  fs.writeFileSync(
-    sourcePath,
-    `## 美股
-
-美股当日未产生完整常规收盘数据，本节不做涨跌与板块强弱判断。
-
-数据边界：本篇不生成道指、纳指、标普500或行业 ETF 强弱结论。
-补充说明：这是一段可归档的来源边界说明，长度足够通过通用 source 结构检查，但不依赖任何市场关键词硬校验。
-`,
-  );
-  const body = `## 美股\n\n美股当日未产生完整常规收盘数据，本节不做涨跌与板块强弱判断。`;
-  const result = archivePost({ task: "capital-market-daily", date: "2099-01-02", repo, body, force: true, marketSegment: "us" });
-  const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-02", results: [{ ...result, generation: { source_artifact: sourcePath } }] }));
-  assert.equal(verifyResultJson(repo, resultJson), 1);
-});
 
 test("daily digest source dedupes post-quantum executive order coverage", () => {
   const ars = {

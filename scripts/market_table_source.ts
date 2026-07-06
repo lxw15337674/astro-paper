@@ -35,9 +35,7 @@ export function formatChange(latest: number | null, ref: number | null, unit: "p
 
 export function renderMarketTable(data: MarketTableData): string {
   const lines = [
-    "## 市场速览",
-    "",
-    `> 截至前一交易日 16:30 收盘（${data.asof || data.date}）。数据来源：AkShare（东财 / 新浪 / 中债 / 上金所）与 CoinGecko；行情缺失以 — 表示。`,
+    `## 市场速览（${data.date}）`,
     "",
     "| 分类 | 品种 | 最新 | 当日 | 今年以来 |",
     "| :-- | :-- | --: | --: | --: |",

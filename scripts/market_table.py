@@ -136,6 +136,15 @@ def hk_index_triple(symbol):
     )
 
 
+def us_index_triple(symbol: str):
+    # 美股主要指数：新浪美股指数优先，退回东财全球指数。
+    # 常用 symbol：道指 .DJI / 纳指 .IXIC / 标普 .INX
+    return chain(
+        lambda: df_triple(retry(lambda: ak.index_us_stock_sina(symbol=symbol)), _CLOSE_NAMES),
+        lambda: df_triple(retry(lambda: ak.index_global_hist_em(symbol=symbol)), _CLOSE_NAMES),
+    )
+
+
 def dxy_triple(date_str):
     # 美元指数：akshare 全球指数（东财）优先，退回新浪美股指数 .DXY。
     return chain(
@@ -196,19 +205,20 @@ def safe(fn, *args):
 def build_rows(date_str: str):
     rows = []
 
-    # —— 股票（% / 2 位）——
-    stock_indices = [
-        ("上证指数", "sh000001"),
-        ("深证成指", "sz399001"),
-        ("创业板指数", "sz399006"),
-        ("沪深300", "sh000300"),
-        ("中证500", "sh000905"),
-        ("科创50", "sh000688"),
-    ]
-    for name, symbol in stock_indices:
-        rows.append(row("股票", name, "pct", 2, *safe(a_index_triple, symbol)))
+    # —— A股（% / 2 位）——
+    for name, symbol in [
+        ("上证指数", "sh000001"), ("深证成指", "sz399001"), ("创业板指数", "sz399006"),
+        ("沪深300", "sh000300"), ("中证500", "sh000905"), ("科创50", "sh000688"),
+    ]:
+        rows.append(row("A股", name, "pct", 2, *safe(a_index_triple, symbol)))
+
+    # —— 港股（% / 2 位）——
     for name, symbol in [("恒生指数", "HSI"), ("国企指数", "HSCEI"), ("恒生科技指数", "HSTECH")]:
-        rows.append(row("股票", name, "pct", 2, *safe(hk_index_triple, symbol)))
+        rows.append(row("港股", name, "pct", 2, *safe(hk_index_triple, symbol)))
+
+    # —— 美股（% / 2 位）——
+    for name, symbol in [("道指", ".DJI"), ("纳指", ".IXIC"), ("标普500", ".INX")]:
+        rows.append(row("美股", name, "pct", 2, *safe(us_index_triple, symbol)))
 
     # —— 债券（BP / 4 位；数值是收益率 %）——
     for name, column in [("1年国债到期收益率", "1年"), ("10年国债到期收益率", "10年"), ("30年国债到期收益率", "30年")]:
