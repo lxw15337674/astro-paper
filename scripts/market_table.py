@@ -14,7 +14,20 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime
+
+
+def retry(fn, attempts=3, delay=2):
+    """对抓取函数做几次重试：CN 站点从境外 runner 访问常见瞬断（RemoteDisconnected）。"""
+    last = None
+    for _ in range(attempts):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            time.sleep(delay)
+    raise last if last else RuntimeError("retry failed")
 
 try:
     import akshare as ak
@@ -78,18 +91,25 @@ def row(category, name, unit, decimals, latest=None, prev_close=None, year_open=
     }
 
 
-def index_em_triple(symbol: str):
-    # 东财指数日线：列含 date/收盘。symbol 形如 sh000001 / sz399006。
-    df = ak.stock_zh_index_daily_em(symbol=symbol)
-    date_col = "date" if "date" in df.columns else df.columns[0]
-    close_col = "close" if "close" in df.columns else "收盘"
-    pairs = list(zip(df[date_col].astype(str), df[close_col]))
-    return triple_from_series(pairs)
+def a_index_triple(symbol: str):
+    # A股指数日线：东财优先、新浪兜底，均带重试（CN 站点从境外常瞬断）。symbol 形如 sh000001 / sz399006。
+    return chain(
+        lambda: df_triple(retry(lambda: ak.stock_zh_index_daily_em(symbol=symbol)), _CLOSE_NAMES),
+        lambda: df_triple(retry(lambda: ak.stock_zh_index_daily(symbol=symbol)), _CLOSE_NAMES),
+    )
 
 
 def bond_yield_triple(column: str, date_str: str):
     # 中债国债收益率曲线：列含 '日期' 与 '1年'/'10年'/'30年' 等（单位 %）。用 df_triple 保证按日期排序去空。
-    df = ak.bond_china_yield(start_date=year_start(date_str), end_date=date_str.replace("-", ""))
+    df = retry(lambda: ak.bond_china_yield(start_date=year_start(date_str), end_date=date_str.replace("-", "")))
+    # 诊断：打印列名与该列尾部 4 行，定位「当日 BP 异常偏大」的前收取值问题。
+    try:
+        cols = [str(c) for c in df.columns]
+        date_col = "日期" if "日期" in cols else cols[0]
+        tail = list(zip(df[date_col].astype(str).tolist()[-4:], df[column].tolist()[-4:]))
+        print(f"bond debug [{column}] cols={cols} tail={tail}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"bond debug failed: {exc}", file=sys.stderr)
     return df_triple(df, [column])
 
 
@@ -120,13 +140,10 @@ def hk_index_triple(symbol):
 
 
 def dxy_triple(date_str):
-    # 美元指数：investing 全球指数优先，退回新浪美股指数 .DXY。
+    # 美元指数：akshare 全球指数（东财）优先，退回新浪美股指数 .DXY。
     return chain(
-        lambda: df_triple(
-            ak.index_investing_global(country="美国", index_name="美元指数", period="每日", start_date=year_start(date_str), end_date=date_str.replace("-", "")),
-            _CLOSE_NAMES,
-        ),
-        lambda: df_triple(ak.index_us_stock_sina(symbol=".DXY"), _CLOSE_NAMES),
+        lambda: df_triple(retry(lambda: ak.index_global_hist_em(symbol="美元指数")), _CLOSE_NAMES),
+        lambda: df_triple(retry(lambda: ak.index_us_stock_sina(symbol=".DXY")), _CLOSE_NAMES),
     )
 
 
@@ -192,8 +209,7 @@ def build_rows(date_str: str):
         ("科创50", "sh000688"),
     ]
     for name, symbol in stock_indices:
-        latest, prev_close, year_open = safe(index_em_triple, symbol)
-        rows.append(row("股票", name, "pct", 2, latest, prev_close, year_open))
+        rows.append(row("股票", name, "pct", 2, *safe(a_index_triple, symbol)))
     rows.append(row("股票", "恒生指数", "pct", 2, *safe(hk_index_triple, "HSI")))
 
     # —— 债券（BP / 4 位；数值是收益率 %）——
