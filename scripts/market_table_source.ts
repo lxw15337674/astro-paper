@@ -61,6 +61,8 @@ function fetchMarketTableData(date: string): MarketTableData {
     encoding: "utf8",
     timeout: Number(process.env.MARKET_TABLE_TIMEOUT_MS || "180000"),
     maxBuffer: 16 * 1024 * 1024,
+    // stdout 取 JSON，stderr（各品种 candidate failed 诊断）透传到日志。
+    stdio: ["ignore", "pipe", "inherit"],
   });
   return JSON.parse(raw) as MarketTableData;
 }

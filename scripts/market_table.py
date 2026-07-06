@@ -88,11 +88,9 @@ def index_em_triple(symbol: str):
 
 
 def bond_yield_triple(column: str, date_str: str):
-    # 中债国债收益率曲线：列含 '日期' 与 '1年'/'10年'/'30年' 等（单位 %）。
+    # 中债国债收益率曲线：列含 '日期' 与 '1年'/'10年'/'30年' 等（单位 %）。用 df_triple 保证按日期排序去空。
     df = ak.bond_china_yield(start_date=year_start(date_str), end_date=date_str.replace("-", ""))
-    date_col = "日期" if "日期" in df.columns else df.columns[0]
-    pairs = list(zip(df[date_col].astype(str), df[column]))
-    return triple_from_series(pairs)
+    return df_triple(df, [column])
 
 
 def sge_gold_triple(symbol: str):
@@ -107,23 +105,38 @@ def sge_gold_triple(symbol: str):
 _CLOSE_NAMES = ["收盘", "close", "收盘价", "最新价", "收盘点位"]
 
 
-def dxy_triple():
-    # 美元指数：东财外汇历史优先，退回 investing 全球指数。
+def scale_triple(triple, scale):
+    if scale in (1, None):
+        return triple
+    return tuple(None if v is None else v / scale for v in triple)
+
+
+def hk_index_triple(symbol):
+    # 港股指数：新浪港股指数日线优先（symbol=HSI/HSCEI/HSTECH），退回东财。
     return chain(
-        lambda: df_triple(ak.forex_hist_em(symbol="美元指数"), _CLOSE_NAMES),
-        lambda: df_triple(ak.index_investing_global(country="美国", index_name="美元指数"), _CLOSE_NAMES),
+        lambda: df_triple(ak.stock_hk_index_daily_sina(symbol=symbol), _CLOSE_NAMES),
+        lambda: df_triple(ak.stock_hk_index_daily_em(symbol=symbol), _CLOSE_NAMES),
     )
 
 
-def cny_pair_triple(boc_symbol, em_symbol, date_str):
-    # 人民币汇率：中行牌价（新浪）优先，退回东财外汇历史。日元为每 100 单位报价。
+def dxy_triple(date_str):
+    # 美元指数：investing 全球指数优先，退回新浪美股指数 .DXY。
     return chain(
         lambda: df_triple(
-            ak.currency_boc_sina(symbol=boc_symbol, start_date=year_start(date_str), end_date=date_str.replace("-", "")),
-            ["央行中间价", "中行汇卖价", "中行汇买价", "现汇卖出价", "现汇买入价"],
+            ak.index_investing_global(country="美国", index_name="美元指数", period="每日", start_date=year_start(date_str), end_date=date_str.replace("-", "")),
+            _CLOSE_NAMES,
         ),
-        lambda: df_triple(ak.forex_hist_em(symbol=em_symbol), _CLOSE_NAMES),
+        lambda: df_triple(ak.index_us_stock_sina(symbol=".DXY"), _CLOSE_NAMES),
     )
+
+
+def cny_pair_triple(boc_symbol, date_str, scale=1):
+    # 人民币汇率：中行牌价（新浪）央行中间价。美元/欧元报价为「每 100 单位」，scale=100 折成每 1 单位；日元保持每 100。
+    triple = df_triple(
+        ak.currency_boc_sina(symbol=boc_symbol, start_date=year_start(date_str), end_date=date_str.replace("-", "")),
+        ["央行中间价", "中行汇卖价", "中行汇买价", "现汇卖出价", "现汇买入价"],
+    )
+    return scale_triple(triple, scale)
 
 
 def london_gold_triple():
@@ -181,20 +194,18 @@ def build_rows(date_str: str):
     for name, symbol in stock_indices:
         latest, prev_close, year_open = safe(index_em_triple, symbol)
         rows.append(row("股票", name, "pct", 2, latest, prev_close, year_open))
-    # 恒生指数：东财港股指数日线（TODO：确认 symbol，失败则 —）。
-    latest, prev_close, year_open = safe(lambda: index_em_triple("HSI"))
-    rows.append(row("股票", "恒生指数", "pct", 2, latest, prev_close, year_open))
+    rows.append(row("股票", "恒生指数", "pct", 2, *safe(hk_index_triple, "HSI")))
 
     # —— 债券（BP / 4 位；数值是收益率 %）——
     for name, column in [("1年国债到期收益率", "1年"), ("10年国债到期收益率", "10年"), ("30年国债到期收益率", "30年")]:
         latest, prev_close, year_open = safe(bond_yield_triple, column, date_str)
         rows.append(row("债券", name, "bp", 4, latest, prev_close, year_open))
 
-    # —— 外汇（% / 4 位）——
-    rows.append(row("外汇", "美元指数", "pct", 4, *safe(dxy_triple)))
-    rows.append(row("外汇", "美元兑人民币", "pct", 4, *safe(cny_pair_triple, "美元", "美元人民币", date_str)))
-    rows.append(row("外汇", "欧元兑人民币", "pct", 4, *safe(cny_pair_triple, "欧元", "欧元人民币", date_str)))
-    rows.append(row("外汇", "100日元兑人民币", "pct", 4, *safe(cny_pair_triple, "日元", "日元人民币", date_str)))
+    # —— 外汇（% / 4 位）—— 中行牌价按每 100 单位报价：美元/欧元 ÷100 折成每 1 单位，日元保持每 100。
+    rows.append(row("外汇", "美元指数", "pct", 4, *safe(dxy_triple, date_str)))
+    rows.append(row("外汇", "美元兑人民币", "pct", 4, *safe(cny_pair_triple, "美元", date_str, 100)))
+    rows.append(row("外汇", "欧元兑人民币", "pct", 4, *safe(cny_pair_triple, "欧元", date_str, 100)))
+    rows.append(row("外汇", "100日元兑人民币", "pct", 4, *safe(cny_pair_triple, "日元", date_str, 1)))
 
     # —— 黄金（% / 2 位）——
     rows.append(row("黄金", "伦敦金（美元/盎司）", "pct", 2, *safe(london_gold_triple)))

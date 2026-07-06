@@ -269,7 +269,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.doesNotMatch(workflow, /PODCAST_GROQ_/);
   assert.doesNotMatch(workflow, /openai-whisper/);
   // 播客转写不再用 Python，但资本市场日报的「市场速览」表格需要 Python + AkShare。
-  assert.match(workflow, /pip install akshare/);
+  assert.match(workflow, /pip install -r requirements\.txt/);
   assert.doesNotMatch(workflow, /podcast_whisper_model/);
   assert.match(workflow, /AI_FALLBACK_API_KEY:/);
   assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
