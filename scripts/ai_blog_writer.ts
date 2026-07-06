@@ -6,10 +6,25 @@ import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, DEFAULT_MAX_TOKENS, callBlogAiWi
 
 export { chatCompletionsUrl };
 
+// prompts/blog 下按 daily/weekly/market/podcast 分类到子目录；解析时先查根目录再查一层子目录，
+// 这样任务名与 promptDir 都不变，只有物理位置改变。找不到返回根目录路径，由调用方处理不存在。
+export function resolvePromptFile(promptDir: string, name: string): string {
+  const direct = path.join(promptDir, `${name}.md`);
+  if (fs.existsSync(direct)) return direct;
+  if (fs.existsSync(promptDir)) {
+    for (const entry of fs.readdirSync(promptDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const nested = path.join(promptDir, entry.name, `${name}.md`);
+      if (fs.existsSync(nested)) return nested;
+    }
+  }
+  return direct;
+}
+
 export function renderPrompt({ task, date, sourceText, promptDir }: { task: string; date: string; sourceText: string; promptDir: string }): string {
-  const file = path.join(promptDir, `${task}.md`);
+  const file = resolvePromptFile(promptDir, task);
   if (!fs.existsSync(file)) throw new Error(`prompt template not found for task ${task}: ${file}`);
-  const commonFile = path.join(promptDir, "_common-article-rules.md");
+  const commonFile = resolvePromptFile(promptDir, "_common-article-rules");
   const common = fs.existsSync(commonFile) ? `${fs.readFileSync(commonFile, "utf8").trim()}\n\n` : "";
   const taskPrompt = fs.readFileSync(file, "utf8").replaceAll("{task}", task).replaceAll("{date}", date).replaceAll("{source_text}", sourceText.trim());
   return `${common}${taskPrompt.trimStart()}`;

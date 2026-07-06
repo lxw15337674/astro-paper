@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { archivePost } from "./astro_paper_archive.ts";
-import { validateMarkdown, renderPrompt } from "./ai_blog_writer.ts";
+import { validateMarkdown, renderPrompt, resolvePromptFile } from "./ai_blog_writer.ts";
 import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
 import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { DAILY_DIGEST_TASKS, SOURCE_LINK_WHITELIST_TASKS, type MarketSegment, type Task, isDailyDigestTask, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
@@ -355,7 +355,7 @@ async function selectTechBusinessSource({
   artifactsDir: string;
 }): Promise<string> {
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const selectorPromptFile = path.join(resolvedPromptDir, "tech-business-weekly-selector.md");
+  const selectorPromptFile = resolvePromptFile(resolvedPromptDir, "tech-business-weekly-selector");
   const selectorTemplate = fs.readFileSync(selectorPromptFile, "utf8");
   const selectorPrompt = selectorTemplate.replaceAll("{task}", "tech-business-weekly").replaceAll("{date}", date).replaceAll("{source_text}", source.trim());
   writeArtifact(artifactsDir, "tech-business-weekly", "selector-source.raw.md", source);
@@ -414,7 +414,7 @@ async function classifyDailyDigestSources({
   artifactsDir: string;
 }): Promise<Record<string, string>> {
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const classifierPromptFile = path.join(resolvedPromptDir, "daily-digest-classifier.md");
+  const classifierPromptFile = resolvePromptFile(resolvedPromptDir, "daily-digest-classifier");
   const classifierTemplate = fs.readFileSync(classifierPromptFile, "utf8");
   const classifierPrompt = classifierTemplate.replaceAll("{date}", date).replaceAll("{source_text}", source.trim());
   writeArtifact(artifactsDir, "daily-digests", "classifier-source.raw.md", source);
@@ -552,7 +552,7 @@ async function summarizeDailyItem({
   artifactsDir: string;
 }): Promise<DailyItemSummary> {
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const template = fs.readFileSync(path.join(resolvedPromptDir, "daily-digest-item-summary.md"), "utf8");
+  const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "daily-digest-item-summary"), "utf8");
   const prompt = template.replaceAll("{date}", date).replaceAll("{item_id}", String(meta.id)).replaceAll("{item_text}", meta.block.trim());
   writeArtifact(artifactsDir, "daily-digests", `item-${String(meta.id).padStart(3, "0")}-prompt.md`, prompt);
   const response = await callAi(prompt, model);
@@ -662,7 +662,7 @@ async function buildCombinedTechDailySource({
   const summaryCards = formatDailyItemCards(summaries);
   writeArtifact(artifactsDir, "daily-digests", "item-summaries.md", summaryCards);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const plannerTemplate = fs.readFileSync(path.join(resolvedPromptDir, "daily-digest-section-planner.md"), "utf8");
+  const plannerTemplate = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "daily-digest-section-planner"), "utf8");
   const plannerPrompt = plannerTemplate.replaceAll("{date}", date).replaceAll("{item_summaries}", summaryCards);
   writeArtifact(artifactsDir, "daily-digests", "section-planner-prompt.md", plannerPrompt);
   const plannerResponse = await callAi(plannerPrompt, model);

@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
-import { chatCompletionsUrl, renderPrompt, validateMarkdown } from "../scripts/ai_blog_writer.ts";
+import { chatCompletionsUrl, renderPrompt, resolvePromptFile, validateMarkdown } from "../scripts/ai_blog_writer.ts";
 import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFacts } from "../scripts/hn_compose.ts";
@@ -24,6 +24,10 @@ import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_s
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import { type ResultItem, settleDailyPodcastArticleResults, usesJsonComposer, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
+
+// prompts 已按 daily/weekly/market/podcast 分类到子目录，用解析器按名查找（根目录 + 一层子目录）。
+const PROMPTS_DIR = path.join(process.cwd(), "prompts/blog");
+const promptPath = (name: string): string => resolvePromptFile(PROMPTS_DIR, name);
 
 const GITHUB_TRENDING_HTML_FIXTURE = `<!doctype html><html><body>
   <article class="Box-row">
@@ -173,12 +177,12 @@ test("AI client fails over to deepseek when primary request fails", async () => 
 });
 
 test("common article rules require knowledge and viewpoint extraction", () => {
-  const commonRules = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "_common-article-rules.md"), "utf8");
+  const commonRules = fs.readFileSync(promptPath("_common-article-rules"), "utf8");
   assert.match(commonRules, /提炼优先于描述/);
   assert.match(commonRules, /可迁移的知识/);
   assert.match(commonRules, /只回答“发生了什么”的段落不合格/);
 
-  const podcastPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-podcasts.md"), "utf8");
+  const podcastPrompt = fs.readFileSync(promptPath("daily-podcasts"), "utf8");
   assert.match(podcastPrompt, /把音频内容提炼成知识和观点/);
   assert.match(podcastPrompt, /不能只描述“聊了什么”/);
   assert.match(podcastPrompt, /### 核心观点/);
@@ -191,17 +195,17 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
     assert.ok(info.tag);
     assert.ok(info.description);
     assert.match(taskPostRelPath(task, "2099-01-02"), /^src\/content\/posts\/zh-cn\/.+2099-01-02\.md$/);
-    assert.equal(fs.existsSync(path.join(process.cwd(), "prompts/blog", "_common-article-rules.md")), true, "common article rules prompt missing");
+    assert.equal(fs.existsSync(promptPath("_common-article-rules")), true, "common article rules prompt missing");
     if (task === "capital-market-daily") {
       // 资本市场日报按段拆分：prompt / source / 模型 JSON fixture 都是 capital-market-{segment}。
       for (const segment of ["us", "asia", "crypto"]) {
-        assert.equal(fs.existsSync(path.join(process.cwd(), "prompts/blog", `capital-market-${segment}.md`)), true, `capital-market-${segment} prompt missing`);
+        assert.equal(fs.existsSync(promptPath(`capital-market-${segment}`)), true, `capital-market-${segment} prompt missing`);
         assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}-${segment}.md`)), true, `${task}-${segment} source fixture missing`);
         assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}-${segment}.json`)), true, `${task}-${segment} AI fixture missing`);
       }
       continue;
     }
-    assert.equal(fs.existsSync(path.join(process.cwd(), "prompts/blog", `${task}.md`)), true, `${task} prompt missing`);
+    assert.equal(fs.existsSync(promptPath(task)), true, `${task} prompt missing`);
     assert.equal(fs.existsSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}.md`)), true, `${task} source fixture missing`);
     // JSON 组装家族的模型输出 fixture 是 .json；其余任务仍是 .md 正文。
     const aiFixtureExt = usesJsonComposer(task) ? "json" : "md";
@@ -294,13 +298,13 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.doesNotMatch(workflow, /default:\s*all/);
   assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
   for (const task of ["ai-daily", "ai-weekly"]) {
-    const prompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", `${task}.md`), "utf8");
+    const prompt = fs.readFileSync(promptPath(task), "utf8");
     assert.match(prompt, /从零|入门教程|一文[读懂搞懂]/, `${task} prompt should mirror low-signal validator terms`);
   }
-  const itemSummaryPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-digest-item-summary.md"), "utf8");
-  const sectionPlannerPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "daily-digest-section-planner.md"), "utf8");
-  const hnPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "hn-top10.md"), "utf8");
-  const techDailyPrompt = fs.readFileSync(path.join(process.cwd(), "prompts/blog", "tech-daily.md"), "utf8");
+  const itemSummaryPrompt = fs.readFileSync(promptPath("daily-digest-item-summary"), "utf8");
+  const sectionPlannerPrompt = fs.readFileSync(promptPath("daily-digest-section-planner"), "utf8");
+  const hnPrompt = fs.readFileSync(promptPath("hn-top10"), "utf8");
+  const techDailyPrompt = fs.readFileSync(promptPath("tech-daily"), "utf8");
   assert.match(itemSummaryPrompt, /一次只处理一条候选/);
   assert.match(sectionPlannerPrompt, /动态规划《技术日报》的栏目/);
   assert.match(hnPrompt, /每个条目的主标题必须翻译成自然中文/);
@@ -314,8 +318,8 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.match(generator, /generatePodcastArticles/);
   assert.match(generator, /buildDailyPodcastEpisodeArticle/);
   assert.match(generator, /buildCombinedTechDailySource/);
-  assert.match(generator, /daily-digest-item-summary\.md/);
-  assert.match(generator, /daily-digest-section-planner\.md/);
+  assert.match(generator, /daily-digest-item-summary/);
+  assert.match(generator, /daily-digest-section-planner/);
 });
 
 test("RSS source builders do not truncate summary evidence with clipText", () => {
