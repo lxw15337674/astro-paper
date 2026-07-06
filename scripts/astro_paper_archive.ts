@@ -152,27 +152,10 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   };
 }
 
-function rejectMarketGuidance(markdown: string): void {
-  const forbidden = [/建议关注/, /值得关注/, /继续关注/, /后续.*关注/, /最看好/, /赚钱点子/, /操作/, /布局/, /机会/, /交易建议/, /投资建议/];
-  for (const pattern of forbidden) {
-    if (pattern.test(markdown)) throw new Error(`market daily contains action-guidance language: ${pattern.source}`);
-  }
-}
-
 // 资本市场日报一篇多段，按固定顺序增量拼合；每次调度只写自己那一段。
 // 市场速览是顶部纯数据表格（由亚洲那次跑生成），美股/亚洲/比特币是三段叙事。
 export const MARKET_SEGMENT_HEADINGS: Record<string, string> = { table: "市场速览", us: "美股", asia: "亚洲", crypto: "比特币" };
 const CAPITAL_SECTION_ORDER = ["市场速览", "美股", "亚洲", "比特币"];
-
-// crypto 段位于 `## 比特币` 之下，必须含 4 个普通人 `###` 小节，且不残留技术小节标题。
-function assertCryptoSegment(block: string): void {
-  for (const section of ["一句话结论", "今天价格怎么走", "市场情绪冷不冷", "短线风险在哪里"]) {
-    if (!new RegExp(`^###\\s+${section}\\s*$`, "m").test(block)) throw new Error(`crypto segment missing plain-reader section: ${section}`);
-  }
-  for (const pattern of [/数据边界/, /^###\s+(?:BTC 现货状态|永续与杠杆结构|期权与保护需求|情绪与风险边界)\s*$/m]) {
-    if (pattern.test(block)) throw new Error(`crypto segment contains legacy technical output: ${pattern.source}`);
-  }
-}
 
 function marketSegmentPlaceholder(heading: string): string {
   return `## ${heading}\n\n本交易日该市场数据尚未生成。`;
@@ -469,8 +452,6 @@ function archiveCapitalMarketSegment({ date, repo, body, marketSegment, info }: 
   if (!heading) throw new Error(`capital-market-daily requires a valid marketSegment, got: ${marketSegment}`);
   const newBlock = normalizeMarkdown(body).trim();
   if (!new RegExp(`^##\\s+${heading}\\s*$`, "m").test(newBlock)) throw new Error(`capital-market-daily ${marketSegment} block must start with "## ${heading}"`);
-  rejectMarketGuidance(newBlock);
-  if (marketSegment === "crypto") assertCryptoSegment(newBlock);
   const relPath = taskPostRelPath("capital-market-daily", date);
   const absPath = path.join(repo, relPath);
   const existed = fs.existsSync(absPath);

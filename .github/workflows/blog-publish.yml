@@ -134,14 +134,14 @@ jobs:
           sudo apt-get install -y ffmpeg ca-certificates
 
       - name: "Setup Python for market table"
-        if: ${{ inputs.install_market_deps || inputs.task == 'capital-market-daily' || inputs.task == 'all' }}
+        if: ${{ inputs.install_market_deps || inputs.task == 'all' || (inputs.task == 'capital-market-daily' && inputs.market_segment == 'asia') }}
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
 
       - name: "Install AkShare for market table"
-        if: ${{ inputs.install_market_deps || inputs.task == 'capital-market-daily' || inputs.task == 'all' }}
+        if: ${{ inputs.install_market_deps || inputs.task == 'all' || (inputs.task == 'capital-market-daily' && inputs.market_segment == 'asia') }}
         run: pip install -r requirements.txt
 
       - name: "Generate scheduled content"

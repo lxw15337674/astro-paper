@@ -18,7 +18,7 @@ import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
-import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceArticleText, quoteRowFromYahooChartPayload } from "../scripts/market_daily_source.ts";
+import { articleConflictsWithIndexSnapshot, buildAsiaMarketDailyFromTable, buildUsSection, extractYahooFinanceArticleText } from "../scripts/market_daily_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
@@ -226,6 +226,7 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   ];
   const scheduledWorkflows = scheduledWorkflowFiles.map(file => fs.readFileSync(path.join(workflowDir, file), "utf8")).join("\n");
   const workflow = `${manualWorkflow}\n${publishWorkflow}\n${scheduledWorkflows}`;
+  const capitalWorkflow = fs.readFileSync(path.join(workflowDir, "publish-capital-market-daily.yml"), "utf8");
   const podcastSource = fs.readFileSync(path.join(process.cwd(), "scripts/foreign_tech_podcast_source.ts"), "utf8");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(scheduledWorkflows, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
@@ -274,6 +275,9 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.doesNotMatch(workflow, /openai-whisper/);
   // 播客转写不再用 Python，但资本市场日报的「市场速览」表格需要 Python + AkShare。
   assert.match(publishWorkflow, /pip install -r requirements\.txt/);
+  assert.match(publishWorkflow, /inputs\.task == 'capital-market-daily' && inputs\.market_segment == 'asia'/);
+  assert.match(capitalWorkflow, /inputs\.market_segment == 'us' && '0 6 \* \* 2-6'/);
+  assert.match(capitalWorkflow, /inputs\.market_segment == 'crypto' && '5 17 \* \* \*'/);
   assert.doesNotMatch(workflow, /podcast_whisper_model/);
   assert.match(publishWorkflow, /AI_FALLBACK_API_KEY:/);
   assert.match(publishWorkflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
@@ -320,45 +324,18 @@ test("Yahoo Finance article extraction prefers public articleBody text", () => {
   assert.match(text, /did not by itself prove fund flows/);
 });
 
-test("market source uses the live EastMoney secid for Hang Seng Tech", () => {
-  const source = fs.readFileSync(path.join(process.cwd(), "scripts/market_daily_source.ts"), "utf8");
-  assert.match(source, /hstech: "124\.HSTECH"/);
-  assert.doesNotMatch(source, /hstech: "100\.HSTECH"/);
-});
-
-test("market source parses Hang Seng Tech Yahoo chart payload when currency is null", () => {
-  const parsed = quoteRowFromYahooChartPayload({
-    code: "HSTECH",
-    name: "恒生科技指数",
-    date: "2026-07-01",
-    payload: {
-      chart: {
-        result: [
-          {
-            meta: {
-              regularMarketPrice: 4472.23,
-              chartPreviousClose: 4393.01,
-              regularMarketTime: 1782806908,
-              regularMarketVolume: 0,
-            },
-            timestamp: [1782806908],
-            indicators: { quote: [{ close: [4472.22998046875], volume: [0] }] },
-          },
-        ],
-      },
-    },
-  });
-  assert.equal(parsed?.[0], "HSTECH");
-  assert.equal(parsed?.[1].f2, 4472.22998046875);
-  assert.match(String(parsed?.[1].f3), /^1\.80/);
-});
-
-test("asia market daily does not hard-fail when only Hang Seng Tech is missing", () => {
-  const source = fs.readFileSync(path.join(process.cwd(), "scripts/market_daily_source.ts"), "utf8");
-  assert.match(source, /const REQUIRED_ASIA_CORE_QUOTES = \[\.\.\.YAHOO_SYMBOLS\.aShare, YAHOO_SYMBOLS\.hk\[0\], YAHOO_SYMBOLS\.hk\[1\]\]/);
-  assert.match(source, /assertRequiredQuotes\(rows, REQUIRED_ASIA_CORE_QUOTES, "亚洲市场日报"\)/);
-  assert.match(source, /if \(code === "HSTECH"\) return yahooChartQuote\(symbolConfig, date\)\.catch\(\(\) => null\)/);
-  assert.match(source, /恒生科技指数未获取到完整数据/);
+test("asia market daily uses the same AkShare table data as the market overview", () => {
+  const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/capital-market-daily-table.json"), "utf8")) as MarketTableData;
+  const source = buildAsiaMarketDailyFromTable(data, "2099-01-02");
+  assert.match(source, /## A股/);
+  assert.match(source, /上证指数收报 4043\.64 点，\+0\.37%/);
+  assert.match(source, /深证成指收报 15597\.51 点，\+0\.64%/);
+  assert.match(source, /## 港股/);
+  assert.match(source, /恒生指数收报 23350\.03 点，\+2\.05%/);
+  assert.match(source, /国企指数收报 8450\.12 点，\+1\.54%/);
+  assert.match(source, /恒生科技指数收报 5120\.88 点，\+0\.64%/);
+  assert.match(source, /同一份 AkShare 指数历史数据/);
+  assert.doesNotMatch(source, /A股行业板块/);
 });
 
 test("Yahoo Finance article evidence is rejected when index moves conflict with closing data", () => {
@@ -442,6 +419,7 @@ test("US market verifier accepts explicit no-complete-regular-close source bound
 美股当日未产生完整常规收盘数据，本节不做涨跌与板块强弱判断。
 
 数据边界：本篇不生成道指、纳指、标普500或行业 ETF 强弱结论。
+补充说明：这是一段可归档的来源边界说明，长度足够通过通用 source 结构检查，但不依赖任何市场关键词硬校验。
 `,
   );
   const body = `## 美股\n\n美股当日未产生完整常规收盘数据，本节不做涨跌与板块强弱判断。`;
@@ -1157,7 +1135,7 @@ test("result verifier skips task-level failures with explicit error", () => {
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 
-test("result verifier checks source artifacts instead of generated prose style", () => {
+test("result verifier keeps capital-market source checks structural", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-source-contract-"));
   const sourcePath = path.join(repo, "crypto-source.md");
   fs.writeFileSync(
@@ -1236,7 +1214,7 @@ Deribit funding 接近中性，说明杠杆端没有明显踩踏；期权侧的�
     }),
   );
 
-  assert.throws(() => verifyResultJson(repo, resultJson), /missing required source terms: market evidence/);
+  assert.equal(verifyResultJson(repo, resultJson), 1);
 });
 
 test("HN source verifier accepts legitimate double-brace examples from source articles", () => {

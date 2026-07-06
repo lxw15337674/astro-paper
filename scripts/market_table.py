@@ -207,7 +207,8 @@ def build_rows(date_str: str):
     ]
     for name, symbol in stock_indices:
         rows.append(row("股票", name, "pct", 2, *safe(a_index_triple, symbol)))
-    rows.append(row("股票", "恒生指数", "pct", 2, *safe(hk_index_triple, "HSI")))
+    for name, symbol in [("恒生指数", "HSI"), ("国企指数", "HSCEI"), ("恒生科技指数", "HSTECH")]:
+        rows.append(row("股票", name, "pct", 2, *safe(hk_index_triple, symbol)))
 
     # —— 债券（BP / 4 位；数值是收益率 %）——
     for name, column in [("1年国债到期收益率", "1年"), ("10年国债到期收益率", "10年"), ("30年国债到期收益率", "30年")]:

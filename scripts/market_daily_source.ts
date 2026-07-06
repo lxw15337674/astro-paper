@@ -5,6 +5,7 @@ import { JSDOM } from "jsdom";
 import YahooFinance from "yahoo-finance2";
 import { bjtDateString, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import type { MarketSegment } from "./blog_tasks.ts";
+import { buildMarketTableData, formatChange as formatMarketChange, formatLatest as formatMarketLatest, type MarketTableData, type MarketTableRow } from "./market_table_source.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
@@ -13,12 +14,6 @@ const EASTMONEY_INDEX_SECS = {
   dji: "100.DJIA",
   nasdaq: "100.NDX",
   spx: "100.SPX",
-  sh: "1.000001",
-  sz: "0.399001",
-  cyb: "0.399006",
-  hsi: "100.HSI",
-  hscei: "100.HSCEI",
-  hstech: "124.HSTECH",
 };
 
 const CLOSED_TEXT = {
@@ -90,7 +85,6 @@ type MarketSection = {
   summary: string;
 };
 
-type BoardRow = { name: string; pct: number; amount?: number };
 type InstrumentRow = { symbol: string; name: string; pct: number; close: number; volume?: number; avgVolume20?: number; volumeRatio?: number };
 type SectorRow = InstrumentRow;
 type YahooHistoryRow = { date?: Date; close?: number | null; volume?: number | null };
@@ -114,7 +108,7 @@ type YahooChartPayload = {
   };
 };
 
-type YahooSymbol = { symbol: string; code: string; name: string; sina?: string; sinaMarket?: "cn" | "hk" };
+type YahooSymbol = { symbol: string; code: string; name: string };
 
 export class MarketSourceUnavailableError extends Error {
   constructor(
@@ -127,16 +121,6 @@ export class MarketSourceUnavailableError extends Error {
 }
 
 const YAHOO_SYMBOLS = {
-  aShare: [
-    { symbol: "000001.SS", code: "000001", name: "上证指数", sina: "sh000001", sinaMarket: "cn" },
-    { symbol: "399001.SZ", code: "399001", name: "深证成指", sina: "sz399001", sinaMarket: "cn" },
-    { symbol: "399006.SZ", code: "399006", name: "创业板指", sina: "sz399006", sinaMarket: "cn" },
-  ],
-  hk: [
-    { symbol: "^HSI", code: "HSI", name: "恒生指数", sina: "rt_hkHSI", sinaMarket: "hk" },
-    { symbol: "^HSCE", code: "HSCEI", name: "国企指数", sina: "rt_hkHSCEI", sinaMarket: "hk" },
-    { symbol: "HSTECH.HK", code: "HSTECH", name: "恒生科技指数", sina: "rt_hkHSTECH", sinaMarket: "hk" },
-  ],
   us: [
     { symbol: "^DJI", code: "DJIA", name: "道指" },
     { symbol: "^IXIC", code: "NDX", name: "纳指" },
@@ -144,8 +128,6 @@ const YAHOO_SYMBOLS = {
   ],
 } satisfies Record<string, YahooSymbol[]>;
 
-const REQUIRED_ASIA_QUOTES = [...YAHOO_SYMBOLS.aShare, ...YAHOO_SYMBOLS.hk];
-const REQUIRED_ASIA_CORE_QUOTES = [...YAHOO_SYMBOLS.aShare, YAHOO_SYMBOLS.hk[0], YAHOO_SYMBOLS.hk[1]];
 const YAHOO_CHART_HOSTS = ["query2.finance.yahoo.com", "query1.finance.yahoo.com"];
 
 function pct(value: unknown): string {
@@ -165,12 +147,6 @@ function usd(value: unknown, digits = 0): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return "";
   return `${num.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits })} 美元`;
-}
-
-function amountYi(value: unknown): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "";
-  return `${(num / 100_000_000).toFixed(0)}亿元`;
 }
 
 function compactVolume(value: unknown): string {
@@ -466,45 +442,6 @@ async function yahooQuotes(symbols: YahooSymbol[], date: string): Promise<QuoteR
   return Object.fromEntries(entries.filter((entry): entry is [string, QuoteRow] => Boolean(entry)));
 }
 
-function parseSinaDate(value: string): string {
-  return value.replaceAll("/", "-");
-}
-
-function parseSinaRow(symbol: YahooSymbol, raw: string, date: string): [string, QuoteRow] | null {
-  const parts = raw.split(",");
-  if (symbol.sinaMarket === "cn") {
-    const previousClose = Number(parts[2]);
-    const close = Number(parts[3]);
-    const volume = Number(parts[8] || 0);
-    const rowDate = parseSinaDate(parts[30] || "");
-    if (!Number.isFinite(close) || !Number.isFinite(previousClose) || close <= 0 || previousClose <= 0 || rowDate !== date) return null;
-    const change = close - previousClose;
-    return [symbol.code, { f12: symbol.code, f14: symbol.name, f2: close, f3: (change / previousClose) * 100, f4: change, f6: volume }];
-  }
-  const close = Number(parts[6]);
-  const change = Number(parts[7]);
-  const pctChange = Number(parts[8]);
-  const volume = Number(parts[10] || 0);
-  const rowDate = parseSinaDate(parts[17] || "");
-  if (!Number.isFinite(close) || !Number.isFinite(pctChange) || close <= 0 || rowDate !== date) return null;
-  return [symbol.code, { f12: symbol.code, f14: symbol.name, f2: close, f3: pctChange, f4: change, f6: volume }];
-}
-
-async function sinaQuotes(symbols: YahooSymbol[], date: string): Promise<QuoteRows> {
-  const sinaSymbols = symbols.filter(symbol => symbol.sina);
-  if (!sinaSymbols.length) return {};
-  const url = `https://hq.sinajs.cn/list=${sinaSymbols.map(symbol => symbol.sina).join(",")}`;
-  const text = await fetchText(url, { timeoutMs: 20_000, headers: { Referer: "https://finance.sina.com.cn/" } });
-  const entries: [string, QuoteRow][] = [];
-  for (const symbol of sinaSymbols) {
-    const match = new RegExp(`var hq_str_${symbol.sina}="([^"]*)"`).exec(text);
-    if (!match) continue;
-    const parsed = parseSinaRow(symbol, match[1], date);
-    if (parsed) entries.push(parsed);
-  }
-  return Object.fromEntries(entries);
-}
-
 async function quoteRowsForDate(date: string, secids: string[]): Promise<QuoteRows> {
   if (!isWeekday(date)) return {};
   try {
@@ -518,28 +455,7 @@ async function quoteRowsWithFallback(date: string, secids: string[], yahooSymbol
   const rows = await quoteRowsForDate(date, secids);
   const yahooMissing = yahooSymbols.filter(symbol => isMissingQuote(byCode(rows, symbol.code)));
   const yahooFallback = yahooMissing.length ? await yahooQuotes(yahooMissing, date) : {};
-  const withYahoo = { ...rows, ...yahooFallback };
-  const sinaMissing = yahooSymbols.filter(symbol => isMissingQuote(byCode(withYahoo, symbol.code)));
-  if (!sinaMissing.length) return withYahoo;
-  const sinaFallback = await sinaQuotes(sinaMissing, date).catch(() => ({}));
-  return { ...withYahoo, ...sinaFallback };
-}
-
-async function eastmoneyBoards(fs: string, limit = 8): Promise<BoardRow[]> {
-  const fields = "f12,f14,f3,f20";
-  const url = `https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=${limit}&po=1&np=1&fltt=2&invt=2&fid=f3&fs=${encodeURIComponent(fs)}&fields=${fields}`;
-  const payload = await fetchJson<{ data?: { diff?: QuoteRow[] } }>(url, { timeoutMs: 20_000 });
-  return (payload.data?.diff || [])
-    .map(row => ({ name: String(row.f14 || row.f12 || ""), pct: Number(row.f3), amount: Number(row.f20 || 0) }))
-    .filter(row => row.name && Number.isFinite(row.pct));
-}
-
-async function safeBoards(fs: string, limit = 8): Promise<BoardRow[]> {
-  try {
-    return await eastmoneyBoards(fs, limit);
-  } catch {
-    return [];
-  }
+  return { ...rows, ...yahooFallback };
 }
 
 function byCode(rows: QuoteRows, code: string): QuoteRow {
@@ -551,11 +467,6 @@ function isMissingQuote(row: QuoteRow): boolean {
   return value === undefined || value === null || value === "-" || value === 0 || Number.isNaN(Number(value));
 }
 
-function assertRequiredQuotes(rows: QuoteRows, required: YahooSymbol[], context: string): void {
-  const missing = required.filter(item => isMissingQuote(byCode(rows, item.code))).map(item => item.name);
-  if (missing.length) throw new Error(`${context}核心指数数据未完整获取，停止生成：${missing.join("、")}`);
-}
-
 function closedSection(key: EquityKey, title: string, text: string): MarketSection {
   return {
     key,
@@ -564,11 +475,6 @@ function closedSection(key: EquityKey, title: string, text: string): MarketSecti
     summary: text.split("，")[0].replace(/。$/, ""),
     markdown: [`## ${title}`, "", text].join("\n"),
   };
-}
-
-function boardLine(label: string, rows: BoardRow[]): string {
-  if (!rows.length) return `${label}：未获取到稳定板块数据。`;
-  return `${label}：${rows.map(row => `${row.name} ${pct(row.pct)}`).join("、")}。`;
 }
 
 function leadingLabel(base: string, rows: { pct: number }[]): string {
@@ -644,65 +550,59 @@ function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T
   return { top, bottom: bottomPool.slice(-limit).reverse() };
 }
 
-function buildAShareSection(rows: QuoteRows, date: string, industryRows: BoardRow[]): MarketSection {
-  if (!isWeekday(date)) return closedSection("aShare", "A股", CLOSED_TEXT.aShare);
-  const quotes = [
-    { name: "上证指数", row: byCode(rows, "000001") },
-    { name: "深证成指", row: byCode(rows, "399001") },
-    { name: "创业板指", row: byCode(rows, "399006") },
-  ];
-  const available = quotes.filter(item => !isMissingQuote(item.row));
-  if (!available.length) return closedSection("aShare", "A股", UNAVAILABLE_TEXT.aShare);
-  const missingNames = quotes.filter(item => isMissingQuote(item.row)).map(item => item.name);
-  const sorted = available.toSorted((a, b) => Number(b.row.f3 || 0) - Number(a.row.f3 || 0));
-  const indexText = available.map(({ name, row }) => `${row.f14 || name}收报 ${number(row.f2)} 点，${pct(row.f3)}`).join("；");
-  const turnoverText = "成交额口径未获取到完整可比数据。";
-  const missingText = missingNames.length ? `未获取到完整数据的指数：${missingNames.join("、")}。` : "";
-  const { top, bottom } = topAndBottom(industryRows);
-  const boardBoundary = industryRows.length ? "当前板块口径来自公开行业板块涨跌排行，用于描述市场结构，不替代个股分布或资金流向。" : "未获取到稳定行业板块数据时，本节只保留板块数据边界，不外推行业强弱。";
+function marketTableRowsByName(data: MarketTableData): Map<string, MarketTableRow> {
+  return new Map(data.rows.filter(row => row.category === "股票").map(row => [row.name, row]));
+}
+
+function isAvailableMarketTableRow(row: MarketTableRow | undefined): row is MarketTableRow {
+  return Boolean(row && row.latest !== null && Number.isFinite(row.latest) && row.prev_close !== null && Number.isFinite(row.prev_close));
+}
+
+function tablePct(row: MarketTableRow): number {
+  return row.latest !== null && row.prev_close !== null && Number.isFinite(row.latest) && Number.isFinite(row.prev_close) && row.prev_close !== 0
+    ? (row.latest / row.prev_close - 1) * 100
+    : 0;
+}
+
+function tableIndexLine(row: MarketTableRow): string {
+  return `${row.name}收报 ${formatMarketLatest(row.latest, row.decimals)} 点，${formatMarketChange(row.latest, row.prev_close, row.unit)}`;
+}
+
+function tableIndexSummary(row: MarketTableRow): string {
+  return `${row.name} ${formatMarketChange(row.latest, row.prev_close, row.unit)}`;
+}
+
+function buildAsiaSectionFromMarketTable(data: MarketTableData, date: string, names: string[], key: "aShare" | "hk", title: string, closedText: string, unavailableText: string): MarketSection {
+  if (!isWeekday(date)) return closedSection(key, title, closedText);
+  const byName = marketTableRowsByName(data);
+  const rows = names.map(name => byName.get(name)).filter(isAvailableMarketTableRow);
+  if (!rows.length) return closedSection(key, title, unavailableText);
+  const missing = names.filter(name => !isAvailableMarketTableRow(byName.get(name)));
+  const sorted = rows.toSorted((a, b) => tablePct(b) - tablePct(a));
+  const missingText = missing.length ? `未获取到完整数据的指数：${missing.join("、")}。` : "";
   return {
-    key: "aShare",
-    title: "A股",
+    key,
+    title,
     open: true,
-    summary: `A股可用宽基指数为${available.map(({ name, row }) => `${row.f14 || name} ${pct(row.f3)}`).join("、")}`,
+    summary: `${title}可用指数为${rows.map(tableIndexSummary).join("、")}`,
     markdown: [
-      "## A股",
+      `## ${title}`,
       "",
-      `A股最近一个交易日，${indexText}。${turnoverText}${missingText}`,
+      `${title}最近一个交易日，${rows.map(tableIndexLine).join("；")}。${missingText}`,
       "",
-      `从已获取的宽基指数强弱看，${sorted[0].row.f14 || sorted[0].name}相对占优，${sorted.at(-1)?.row.f14 || sorted.at(-1)?.name}表现偏弱。`,
+      `从已获取的宽基指数强弱看，${sorted[0].name}相对占优，${sorted.at(-1)?.name || sorted[0].name}表现偏弱。`,
       "",
-      "## A股行业板块",
-      "",
-      boardLine(leadingLabel("涨幅靠前行业", top), top),
-      boardLine(laggingLabel("跌幅靠前行业", bottom), bottom),
-      boardBoundary,
+      `数据口径：本节与顶部市场速览使用同一份 AkShare 指数历史数据，日期为 ${data.asof || data.date}；缺失项不由其它行情源补数。`,
     ].join("\n"),
   };
 }
 
-function buildHkSection(rows: QuoteRows, date: string): MarketSection {
-  if (!isWeekday(date)) return closedSection("hk", "港股", CLOSED_TEXT.hk);
-  const hsi = byCode(rows, "HSI");
-  const hscei = byCode(rows, "HSCEI");
-  const hstech = byCode(rows, "HSTECH");
-  if ([hsi, hscei].some(isMissingQuote)) return closedSection("hk", "港股", UNAVAILABLE_TEXT.hk);
-  const totalTurnover = Number(hsi.f6 || 0) + Number(hscei.f6 || 0) + Number(hstech.f6 || 0);
-  const turnoverText = totalTurnover > 0 ? `主要指数口径成交额合计约 ${amountYi(totalTurnover)}。` : "成交额口径未获取到完整可比数据。";
-  const techText = isMissingQuote(hstech) ? "恒生科技指数未获取到完整数据" : `恒生科技指数收报 ${number(hstech.f2)} 点，${pct(hstech.f3)}`;
-  return {
-    key: "hk",
-    title: "港股",
-    open: true,
-    summary: `港股主要指数分别为恒生指数 ${pct(hsi.f3)}、国企指数 ${pct(hscei.f3)}${isMissingQuote(hstech) ? "" : `、恒生科技指数 ${pct(hstech.f3)}`}`,
-    markdown: [
-      "## 港股",
-      "",
-      `港股最近一个交易日，恒生指数收报 ${number(hsi.f2)} 点，${pct(hsi.f3)}；国企指数收报 ${number(hscei.f2)} 点，${pct(hscei.f3)}；${techText}。${turnoverText}`,
-      "",
-      "当前港股部分使用主要指数与成交额数据描述大盘方向；若未获取到稳定行业板块数据，本节不外推行业强弱、南向资金或个别成分股影响。",
-    ].join("\n"),
-  };
+export function buildAsiaMarketDailyFromTable(data: MarketTableData, date = data.date): string {
+  const sections = [
+    buildAsiaSectionFromMarketTable(data, date, ["上证指数", "深证成指", "创业板指数", "沪深300", "中证500", "科创50"], "aShare", "A股", CLOSED_TEXT.aShare, UNAVAILABLE_TEXT.aShare),
+    buildAsiaSectionFromMarketTable(data, date, ["恒生指数", "国企指数", "恒生科技指数"], "hk", "港股", CLOSED_TEXT.hk, UNAVAILABLE_TEXT.hk),
+  ];
+  return `${[buildSummary(sections, "A股与港股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
 
 function indexStructure(rows: { name: string; pct: number }[]): string {
@@ -1092,19 +992,7 @@ function buildSummary(sections: MarketSection[], scope: string): string {
 }
 
 export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<string> {
-  const coreRows = isWeekday(date) ? await sinaQuotes(REQUIRED_ASIA_QUOTES, date) : {};
-  const fallbackRows = REQUIRED_ASIA_QUOTES.some(symbol => isMissingQuote(byCode(coreRows, symbol.code)))
-    ? await quoteRowsWithFallback(
-        date,
-        [EASTMONEY_INDEX_SECS.sh, EASTMONEY_INDEX_SECS.sz, EASTMONEY_INDEX_SECS.cyb, EASTMONEY_INDEX_SECS.hsi, EASTMONEY_INDEX_SECS.hscei, EASTMONEY_INDEX_SECS.hstech],
-        REQUIRED_ASIA_QUOTES,
-      )
-    : {};
-  const rows = { ...fallbackRows, ...coreRows };
-  if (isWeekday(date)) assertRequiredQuotes(rows, REQUIRED_ASIA_CORE_QUOTES, "亚洲市场日报");
-  const industryRows = isWeekday(date) ? await safeBoards("m:90+t:2", 20) : [];
-  const sections = [buildAShareSection(rows, date, industryRows), buildHkSection(rows, date)];
-  return `${[buildSummary(sections, "A股与港股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
+  return buildAsiaMarketDailyFromTable(buildMarketTableData(date), date);
 }
 
 export async function generateUsMarketDaily(date = bjtDateString()): Promise<string> {

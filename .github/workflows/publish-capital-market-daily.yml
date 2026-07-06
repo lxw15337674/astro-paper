@@ -42,7 +42,7 @@ jobs:
     with:
       task: capital-market-daily
       date: ${{ inputs.date || '' }}
-      event_schedule: ${{ github.event.schedule || '' }}
+      event_schedule: "${{ github.event.schedule || (inputs.market_segment == 'us' && '0 6 * * 2-6') || (inputs.market_segment == 'crypto' && '5 17 * * *') || '0 17 * * 1-5' }}"
       market_segment: ${{ inputs.market_segment || '' }}
       force: ${{ inputs.force || false }}
       ai_model: ${{ inputs.ai_model || '' }}

@@ -9,6 +9,8 @@
     { "category": "股票", "name": "中证500", "unit": "pct", "decimals": 2, "latest": 8745.26, "prev_close": 8693.98, "year_open": 7465.65 },
     { "category": "股票", "name": "科创50", "unit": "pct", "decimals": 2, "latest": 1975.60, "prev_close": 1987.32, "year_open": 1344.22 },
     { "category": "股票", "name": "恒生指数", "unit": "pct", "decimals": 2, "latest": 23350.03, "prev_close": 22881.95, "year_open": 25631.72 },
+    { "category": "股票", "name": "国企指数", "unit": "pct", "decimals": 2, "latest": 8450.12, "prev_close": 8322.18, "year_open": 9120.44 },
+    { "category": "股票", "name": "恒生科技指数", "unit": "pct", "decimals": 2, "latest": 5120.88, "prev_close": 5088.32, "year_open": 5580.10 },
     { "category": "债券", "name": "1年国债到期收益率", "unit": "bp", "decimals": 4, "latest": 1.1392, "prev_close": 1.1367, "year_open": 1.3372 },
     { "category": "债券", "name": "10年国债到期收益率", "unit": "bp", "decimals": 4, "latest": 1.7463, "prev_close": 1.7410, "year_open": 1.8473 },
     { "category": "债券", "name": "30年国债到期收益率", "unit": "bp", "decimals": 4, "latest": 2.2685, "prev_close": 2.2580, "year_open": 2.2674 },

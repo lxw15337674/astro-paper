@@ -21,12 +21,12 @@ export type MarketTableData = {
   rows: MarketTableRow[];
 };
 
-function formatLatest(value: number | null, decimals: number): string {
+export function formatLatest(value: number | null, decimals: number): string {
   return value === null || !Number.isFinite(value) ? "—" : value.toFixed(decimals);
 }
 
 // 股票/外汇/黄金/原油/比特币按百分比，国债收益率按 BP（1% = 100BP）。
-function formatChange(latest: number | null, ref: number | null, unit: "pct" | "bp"): string {
+export function formatChange(latest: number | null, ref: number | null, unit: "pct" | "bp"): string {
   if (latest === null || ref === null || !Number.isFinite(latest) || !Number.isFinite(ref) || ref === 0) return "—";
   const value = unit === "bp" ? (latest - ref) * 100 : (latest / ref - 1) * 100;
   const suffix = unit === "bp" ? "BP" : "%";
@@ -67,10 +67,15 @@ function fetchMarketTableData(date: string): MarketTableData {
   return JSON.parse(raw) as MarketTableData;
 }
 
-// 生成顶部 `## 市场速览` 表格块；fixtureDir 提供时读取本地 JSON，否则实时调 Python/AkShare。
-export function buildMarketTable(date = bjtDateString(), { fixtureDir = "" }: { fixtureDir?: string } = {}): string {
-  const data = fixtureDir
+// fixtureDir 提供时读取本地 JSON，否则实时调 Python/AkShare。
+export function buildMarketTableData(date = bjtDateString(), { fixtureDir = "" }: { fixtureDir?: string } = {}): MarketTableData {
+  return fixtureDir
     ? (JSON.parse(fs.readFileSync(path.join(fixtureDir, "capital-market-daily-table.json"), "utf8")) as MarketTableData)
     : fetchMarketTableData(date);
+}
+
+// 生成顶部 `## 市场速览` 表格块。
+export function buildMarketTable(date = bjtDateString(), { fixtureDir = "" }: { fixtureDir?: string } = {}): string {
+  const data = buildMarketTableData(date, { fixtureDir });
   return renderMarketTable(data);
 }
