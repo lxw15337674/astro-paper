@@ -1,0 +1,52 @@
+name: Publish Podcasts
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "30 1 * * *"
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Podcast task to generate."
+        type: choice
+        required: true
+        default: daily-podcasts
+        options:
+          - daily-podcasts
+          - xyzrank-top-episodes
+      date:
+        description: "Archive date, YYYY-MM-DD. Empty = today."
+        required: false
+        type: string
+      force:
+        description: "Overwrite an existing post for the same date"
+        required: false
+        type: boolean
+        default: false
+      ai_model:
+        description: "Optional AI_MODEL override. Empty = repository secret/default."
+        required: false
+        type: string
+      podcast_max_episodes:
+        description: "Final daily-podcasts safety cap after merging Apple Top 5 + 5 foreign tech episodes. Empty = 10."
+        required: false
+        type: string
+
+jobs:
+  publish:
+    name: Publish podcasts
+    permissions:
+      contents: write
+    uses: ./.github/workflows/blog-publish.yml
+    with:
+      task: ${{ inputs.task || (github.event.schedule == '0 2 * * 1' && 'xyzrank-top-episodes' || 'daily-podcasts') }}
+      date: ${{ inputs.date || '' }}
+      event_schedule: ${{ github.event.schedule || '' }}
+      force: ${{ inputs.force || false }}
+      ai_model: ${{ inputs.ai_model || '' }}
+      podcast_max_episodes: ${{ inputs.podcast_max_episodes || '10' }}
+      install_ffmpeg: true
+    secrets: inherit

@@ -1,0 +1,37 @@
+name: Publish HN Top 10
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Archive date in America/Los_Angeles, YYYY-MM-DD. Empty = today."
+        required: false
+        type: string
+      force:
+        description: "Overwrite an existing post for the same date"
+        required: false
+        type: boolean
+        default: false
+      ai_model:
+        description: "Optional AI_MODEL override. Empty = repository secret/default."
+        required: false
+        type: string
+
+jobs:
+  publish:
+    name: Publish HN Top 10
+    permissions:
+      contents: write
+    uses: ./.github/workflows/blog-publish.yml
+    with:
+      task: hn-top10
+      date: ${{ inputs.date || '' }}
+      event_schedule: ${{ github.event.schedule || '0 6 * * *' }}
+      force: ${{ inputs.force || false }}
+      ai_model: ${{ inputs.ai_model || '' }}
+    secrets: inherit

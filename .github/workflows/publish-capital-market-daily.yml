@@ -1,0 +1,50 @@
+name: Publish Capital Market Daily
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 17 * * 1-5"
+    - cron: "5 17 * * *"
+    - cron: "0 6 * * 2-6"
+  workflow_dispatch:
+    inputs:
+      market_segment:
+        description: "Segment to generate."
+        type: choice
+        required: true
+        default: asia
+        options:
+          - asia
+          - crypto
+          - us
+      date:
+        description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today or scheduled offset."
+        required: false
+        type: string
+      force:
+        description: "Overwrite an existing post for the same date"
+        required: false
+        type: boolean
+        default: false
+      ai_model:
+        description: "Optional AI_MODEL override. Empty = repository secret/default."
+        required: false
+        type: string
+
+jobs:
+  publish:
+    name: Publish capital market daily
+    permissions:
+      contents: write
+    uses: ./.github/workflows/blog-publish.yml
+    with:
+      task: capital-market-daily
+      date: ${{ inputs.date || '' }}
+      event_schedule: ${{ github.event.schedule || '' }}
+      market_segment: ${{ inputs.market_segment || '' }}
+      force: ${{ inputs.force || false }}
+      ai_model: ${{ inputs.ai_model || '' }}
+      install_market_deps: ${{ github.event.schedule == '0 17 * * 1-5' || inputs.market_segment == 'asia' }}
+    secrets: inherit

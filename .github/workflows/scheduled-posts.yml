@@ -1,4 +1,4 @@
-name: Automated Blog Publishing
+name: Manual Blog Publishing
 
 permissions:
   contents: write
@@ -15,8 +15,12 @@ on:
         description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today or scheduled offset."
         required: false
         type: string
+      event_schedule:
+        description: "Optional cron string to reuse scheduled date/segment mapping."
+        required: false
+        type: string
       market_segment:
-        description: "capital-market-daily only: which segment to generate (us | asia | crypto). asia also builds the 市场速览 table."
+        description: "capital-market-daily only: which segment to generate (us | asia | crypto). asia also builds the market table."
         required: false
         type: string
       force:
@@ -32,222 +36,21 @@ on:
         description: "Final daily-podcasts safety cap after merging Apple Top 5 + 5 foreign tech episodes. Empty = 10."
         required: false
         type: string
-  schedule:
-    - cron: "30 0 * * *"
-    - cron: "30 1 * * *"
-    - cron: "0 6 * * *"
-    - cron: "0 2 * * 1"
-    - cron: "0 17 * * 1-5"
-    - cron: "5 17 * * *"
-    - cron: "0 6 * * 2-6"
-    - cron: "0 23 * * *"
-    - cron: "0 2 * * 5"
-
-concurrency:
-  group: scheduled-posts-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
-  generate:
-    name: Publish scheduled blog posts
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-
-    steps:
-      - name: "Checkout repository"
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: "Sync to latest branch head"
-        run: |
-          set -euo pipefail
-          git fetch origin "${GITHUB_REF_NAME}"
-          git checkout -B "${GITHUB_REF_NAME}" "origin/${GITHUB_REF_NAME}"
-
-      - name: "Install pnpm"
-        uses: pnpm/action-setup@v6
-        with:
-          version: "11.3.0"
-
-      - name: Use Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: "pnpm"
-
-      - name: "Install dependencies"
-        run: pnpm install --frozen-lockfile
-
-      - name: "Install ffmpeg for podcast transcription"
-        if: ${{ github.event.inputs.task == 'daily-podcasts' || github.event.inputs.task == 'xyzrank-top-episodes' || github.event.inputs.task == 'all' || github.event.schedule == '30 1 * * *' || github.event.schedule == '0 2 * * 1' }}
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg ca-certificates
-
-      - name: "Setup Python for market table"
-        if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: pip
-      - name: "Install AkShare for market table"
-        if: ${{ github.event.inputs.task == 'capital-market-daily' || github.event.inputs.task == 'all' || github.event.schedule == '0 17 * * 1-5' }}
-        run: pip install -r requirements.txt
-
-      - name: "Generate scheduled content"
-        env:
-          INPUT_TASK: ${{ github.event.inputs.task || '' }}
-          INPUT_DATE: ${{ github.event.inputs.date || '' }}
-          INPUT_FORCE: ${{ github.event.inputs.force || 'false' }}
-          INPUT_MARKET_SEGMENT: ${{ github.event.inputs.market_segment || '' }}
-          EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
-          AI_MODEL: ${{ github.event.inputs.ai_model || secrets.AI_MODEL }}
-          AI_FALLBACK_API_KEY: ${{ secrets.AI_FALLBACK_API_KEY }}
-          AI_FALLBACK_BASE_URL: ${{ secrets.AI_FALLBACK_BASE_URL || 'https://api.deepseek.com' }}
-          AI_FALLBACK_MODEL: ${{ secrets.AI_FALLBACK_MODEL || 'deepseek-v4-flash' }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
-          PODCAST_TRANSCRIBE_PROVIDER: gemini
-          PODCAST_GEMINI_MODEL: gemini-flash-latest
-          PODCAST_GEMINI_ARTICLE_BASE_URL: https://right.codes/gemini
-          PODCAST_GEMINI_ARTICLE_MODEL: gemini-3.5-flash
-          PODCAST_GEMINI_ARTICLE_API_KEY: ${{ secrets.PODCAST_GEMINI_ARTICLE_API_KEY }}
-          PODCAST_GEMINI_SEGMENT_SECONDS: 1200
-          PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14
-          PODCAST_GEMINI_ARTICLE_AUDIO_SPEED: "1.5"
-          PODCAST_GEMINI_ARTICLE_AUDIO_BITRATE: 24k
-          PODCAST_GEMINI_ARTICLE_AUDIO_CODEC: libopus
-          PODCAST_GEMINI_TIMEOUT_MS: 600000
-          AI_TIMEOUT_MS: 600000
-          PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000
-          PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000
-          PODCAST_MAX_EPISODES: ${{ github.event.inputs.podcast_max_episodes || '10' }}
-          PODCAST_MIN_EPISODES: 1
-          PODCAST_CANDIDATE_EPISODES: 8
-          FOREIGN_TECH_PODCAST_MAX_EPISODES: 5
-          APPLE_TOP_PODCASTS_COUNT: 5
-          APPLE_TOP_PODCASTS_MAX_EPISODES: 5
-          APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000
-          PODCAST_FFMPEG_TIMEOUT_MS: 300000
-          PODCAST_DAILY_MAX_EPISODE_MINUTES: 90
-          XYZRANK_TOP_EPISODES_LIMIT: 5
-        run: |
-          set -euo pipefail
-          args=(--ai --artifacts-dir blog-generation-artifacts)
-          if [ -n "$INPUT_TASK" ]; then
-            args+=(--task "$INPUT_TASK")
-          fi
-          if [ -n "$INPUT_DATE" ]; then
-            args+=(--date "$INPUT_DATE")
-          fi
-          if [ -n "$INPUT_MARKET_SEGMENT" ]; then
-            args+=(--market-segment "$INPUT_MARKET_SEGMENT")
-          fi
-          if [ -n "$AI_MODEL" ]; then
-            args+=(--model "$AI_MODEL")
-          fi
-          if [ "$INPUT_FORCE" = "true" ]; then
-            args+=(--force)
-          fi
-          node --import tsx scripts/generate_scheduled_post.ts "${args[@]}" --result-json scheduled-posts-result.json
-          cat scheduled-posts-result.json
-
-      - name: "Upload generation artifacts"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: scheduled-posts-generation-artifacts
-          path: |
-            scheduled-posts-result.json
-            blog-generation-artifacts/
-          if-no-files-found: ignore
-
-      - name: "Summarize scheduled publishing result"
-        if: always()
-        run: |
-          set -euo pipefail
-          if [ ! -f scheduled-posts-result.json ]; then
-            echo "### Scheduled blog publishing" >> "$GITHUB_STEP_SUMMARY"
-            echo "scheduled-posts-result.json was not produced." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const payload = JSON.parse(fs.readFileSync("scheduled-posts-result.json", "utf8"));
-          const lines = ["### Scheduled blog publishing", "", `Archive date: ${payload.date || "unknown"}`, "", "| Task | Status | Path | Detail |", "| --- | --- | --- | --- |"];
-          for (const item of payload.results || []) {
-            const status = item.failed ? "failed" : item.skipped ? "skipped" : item.created ? "created" : "updated";
-            const detail = String(item.error || item.skip_reason || item.title || "")
-              .replaceAll("|", "\\|")
-              .replaceAll("\r", " ")
-              .replaceAll("\n", " ");
-            lines.push(`| ${item.task || "unknown"} | ${status} | ${item.path || "-"} | ${detail} |`);
-          }
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
-          NODE
-
-      - name: "Verify generated content contract"
-        env:
-          PODCAST_MIN_EPISODES: 1
-        run: node --import tsx scripts/verify_blog_generation.ts --result-json scheduled-posts-result.json
-
-      - name: "Format generated content"
-        run: pnpm exec prettier --write "src/content/posts/zh-cn/*.md"
-
-      - name: "Detect publishable changes"
-        id: diff
-        run: |
-          if [ -z "$(git status --porcelain -- src/content/posts data public/images/podcast)" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-          git status --short
-
-      - name: "Build site with generated content"
-        run: pnpm run build
-
-      - name: "Commit and push generated content"
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/content/posts data public/images/podcast
-          git commit -m "feat(posts): archive scheduled posts"
-          for attempt in 1 2 3; do
-            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}"
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              exit 0
-            fi
-            echo "push attempt ${attempt}/3 failed; retrying after remote refresh"
-            sleep $((attempt * 5))
-          done
-          echo "failed to push generated posts after 3 attempts" >&2
-          exit 1
-
-      - name: "Report task-level generation failures"
-        if: always()
-        run: |
-          set -euo pipefail
-          if [ ! -f scheduled-posts-result.json ]; then
-            echo "scheduled-posts-result.json was not produced"
-            exit 0
-          fi
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          const payload = JSON.parse(fs.readFileSync("scheduled-posts-result.json", "utf8"));
-          const failures = (payload.results || []).filter((item) => item.failed);
-          if (!failures.length) {
-            console.log("No task-level generation failures.");
-            process.exit(0);
-          }
-          console.error("Task-level generation failures:");
-          for (const item of failures) console.error(`- ${item.task}: ${item.error}`);
-          process.exit(1);
-          NODE
+  publish:
+    name: Publish selected blog task
+    permissions:
+      contents: write
+    uses: ./.github/workflows/blog-publish.yml
+    with:
+      task: ${{ inputs.task }}
+      date: ${{ inputs.date || '' }}
+      event_schedule: ${{ inputs.event_schedule || '' }}
+      market_segment: ${{ inputs.market_segment || '' }}
+      force: ${{ inputs.force || false }}
+      ai_model: ${{ inputs.ai_model || '' }}
+      podcast_max_episodes: ${{ inputs.podcast_max_episodes || '10' }}
+      install_ffmpeg: ${{ inputs.task == 'daily-podcasts' || inputs.task == 'xyzrank-top-episodes' || inputs.task == 'all' }}
+      install_market_deps: ${{ inputs.task == 'capital-market-daily' || inputs.task == 'all' }}
+    secrets: inherit

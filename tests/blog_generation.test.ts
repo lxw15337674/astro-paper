@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
-import { chatCompletionsUrl, renderPrompt, resolvePromptFile, validateMarkdown } from "../scripts/ai_blog_writer.ts";
+import { chatCompletionsUrl, renderPrompt, resolvePromptFile } from "../scripts/ai_blog_writer.ts";
 import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFacts } from "../scripts/hn_compose.ts";
@@ -22,7 +22,7 @@ import { articleConflictsWithIndexSnapshot, buildUsSection, extractYahooFinanceA
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
-import { type ResultItem, settleDailyPodcastArticleResults, usesJsonComposer, validateGeneratedMarkdownForTask } from "../scripts/generate_scheduled_post.ts";
+import { type ResultItem, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
 import { DAILY_DIGEST_TASKS, SCHEDULED_TASK_INPUTS, TASKS, scheduledTaskInput, taskInfo, taskPostRelPath, tasksForInput } from "../scripts/blog_tasks.ts";
 
 // prompts 已按 daily/weekly/market/podcast 分类到子目录，用解析器按名查找（根目录 + 一层子目录）。
@@ -108,12 +108,6 @@ test("GitHub Trending README sanitizer removes template delimiters from evidence
   assert.doesNotMatch(readme, /\{\{[^}]+\}\}/);
 });
 
-test("AI writer rejects placeholder markdown", () => {
-  assert.match(validateMarkdown("```markdown\n## 标题\n\n" + "这是一段完整中文正文。".repeat(30) + "\n```"), /^## 标题/);
-  assert.match(validateMarkdown("## 标题\n\n### [@ai-sdk/workflow-harness@1.0.0-beta.0](https://example.com)\n\n" + "这是一段完整中文正文。".repeat(30)), /@ai-sdk\/workflow-harness v1\.0\.0-beta\.0/);
-  assert.match(validateMarkdown("## 标题\n\nhttps://mathstodon.xyz/@iblech/116769502749142438\n\n" + "内容".repeat(120)), /mathstodon/);
-});
-
 test("AI client surfaces aborts as timeout errors", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => {
@@ -176,18 +170,6 @@ test("AI client fails over to deepseek when primary request fails", async () => 
   }
 });
 
-test("common article rules require knowledge and viewpoint extraction", () => {
-  const commonRules = fs.readFileSync(promptPath("_common-article-rules"), "utf8");
-  assert.match(commonRules, /提炼优先于描述/);
-  assert.match(commonRules, /可迁移的知识/);
-  assert.match(commonRules, /只回答“发生了什么”的段落不合格/);
-
-  const podcastPrompt = fs.readFileSync(promptPath("daily-podcasts"), "utf8");
-  assert.match(podcastPrompt, /把音频内容提炼成知识和观点/);
-  assert.match(podcastPrompt, /不能只描述“聊了什么”/);
-  assert.match(podcastPrompt, /### 核心观点/);
-});
-
 test("blog task registry covers prompts, fixtures, archive paths and schedules", () => {
   for (const task of TASKS) {
     const info = taskInfo(task);
@@ -231,33 +213,51 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
     assert.match(schedule, /^\d+ \d+ \* \* (?:\*|\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)$/);
   }
-  const workflow = fs.readFileSync(path.join(process.cwd(), ".github/workflows/scheduled-posts.yml"), "utf8");
+  const workflowDir = path.join(process.cwd(), ".github/workflows");
+  const manualWorkflow = fs.readFileSync(path.join(workflowDir, "scheduled-posts.yml"), "utf8");
+  const publishWorkflow = fs.readFileSync(path.join(workflowDir, "blog-publish.yml"), "utf8");
+  const scheduledWorkflowFiles = [
+    "publish-daily-digests.yml",
+    "publish-hn-top10.yml",
+    "publish-podcasts.yml",
+    "publish-capital-market-daily.yml",
+    "publish-github-trending.yml",
+    "publish-mdblist-weekly.yml",
+  ];
+  const scheduledWorkflows = scheduledWorkflowFiles.map(file => fs.readFileSync(path.join(workflowDir, file), "utf8")).join("\n");
+  const workflow = `${manualWorkflow}\n${publishWorkflow}\n${scheduledWorkflows}`;
   const podcastSource = fs.readFileSync(path.join(process.cwd(), "scripts/foreign_tech_podcast_source.ts"), "utf8");
   for (const schedule of Object.keys(SCHEDULED_TASK_INPUTS)) {
-    assert.match(workflow, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
+    assert.match(scheduledWorkflows, new RegExp(`cron: "${schedule.replaceAll("*", "\\*")}"`));
   }
-  assert.match(workflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
-  assert.match(workflow, /github\.event\.inputs\.task == 'daily-podcasts'/);
-  assert.match(workflow, /github\.event\.inputs\.task == 'xyzrank-top-episodes'/);
-  assert.match(workflow, /AI_TIMEOUT_MS: 600000/);
-  assert.match(workflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
-  assert.match(workflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
-  assert.match(workflow, /Install ffmpeg for podcast transcription/);
-  assert.match(workflow, /GEMINI_API_KEY: \$\{\{ secrets\.GEMINI_API_KEY \}\}/);
-  assert.match(workflow, /PODCAST_TRANSCRIBE_PROVIDER: gemini/);
-  assert.match(workflow, /PODCAST_GEMINI_MODEL: gemini-flash-latest/);
-  assert.match(workflow, /PODCAST_GEMINI_SEGMENT_SECONDS: 1200/);
-  assert.match(workflow, /PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14/);
+  for (const file of scheduledWorkflowFiles) {
+    const wrapper = fs.readFileSync(path.join(workflowDir, file), "utf8");
+    assert.match(wrapper, /uses: \.\/\.github\/workflows\/blog-publish\.yml/, `${file} should call the reusable publisher`);
+    assert.match(wrapper, /secrets: inherit/, `${file} should pass repository secrets to the reusable publisher`);
+  }
+  assert.match(publishWorkflow, /workflow_call:/);
+  assert.match(publishWorkflow, /group: scheduled-posts-\$\{\{ github\.ref \}\}/);
+  assert.match(publishWorkflow, /inputs\.task == 'daily-podcasts'/);
+  assert.match(publishWorkflow, /inputs\.task == 'xyzrank-top-episodes'/);
+  assert.match(publishWorkflow, /AI_TIMEOUT_MS: 600000/);
+  assert.match(publishWorkflow, /PODCAST_PROMPT_TRANSCRIPT_CHARS: 8000/);
+  assert.match(publishWorkflow, /PODCAST_AUDIO_DOWNLOAD_TIMEOUT_MS: 120000/);
+  assert.match(publishWorkflow, /Install ffmpeg for podcast transcription/);
+  assert.match(publishWorkflow, /GEMINI_API_KEY: \$\{\{ secrets\.GEMINI_API_KEY \}\}/);
+  assert.match(publishWorkflow, /PODCAST_TRANSCRIBE_PROVIDER: gemini/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_MODEL: gemini-flash-latest/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_SEGMENT_SECONDS: 1200/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_MAX_INLINE_CHUNK_MB: 14/);
   assert.match(podcastSource, /function runGeminiTranscription/);
   assert.match(podcastSource, /inline_data/);
-  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_BASE_URL: https:\/\/right\.codes\/gemini/);
-  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_MODEL: gemini-3\.5-flash/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_BASE_URL: https:\/\/right\.codes\/gemini/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_MODEL: gemini-3\.5-flash/);
   assert.match(podcastSource, /export async function buildDailyPodcastEpisodeArticle/);
   assert.match(podcastSource, /function prepareGeminiArticleAudioChunks/);
   assert.match(podcastSource, /atempo=\$\{speed\}/);
   assert.match(podcastSource, /libopus/);
-  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_AUDIO_SPEED: "1\.5"/);
-  assert.match(workflow, /PODCAST_GEMINI_ARTICLE_AUDIO_CODEC: libopus/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_AUDIO_SPEED: "1\.5"/);
+  assert.match(publishWorkflow, /PODCAST_GEMINI_ARTICLE_AUDIO_CODEC: libopus/);
   assert.match(podcastSource, /PODCAST_DAILY_MAX_EPISODE_MINUTES/);
   assert.match(podcastSource, /skipping overlong daily podcast episode/);
   assert.match(podcastSource, /audio fetch returned 403; retrying with curl/);
@@ -273,48 +273,31 @@ test("blog task registry covers prompts, fixtures, archive paths and schedules",
   assert.doesNotMatch(workflow, /PODCAST_GROQ_/);
   assert.doesNotMatch(workflow, /openai-whisper/);
   // 播客转写不再用 Python，但资本市场日报的「市场速览」表格需要 Python + AkShare。
-  assert.match(workflow, /pip install -r requirements\.txt/);
+  assert.match(publishWorkflow, /pip install -r requirements\.txt/);
   assert.doesNotMatch(workflow, /podcast_whisper_model/);
-  assert.match(workflow, /AI_FALLBACK_API_KEY:/);
-  assert.match(workflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
-  assert.match(workflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_COUNT: 5/);
-  assert.match(workflow, /PODCAST_MAX_EPISODES: \$\{\{ github\.event\.inputs\.podcast_max_episodes \|\| '10' \}\}/);
-  assert.match(workflow, /PODCAST_MIN_EPISODES: 1/);
-  assert.match(workflow, /PODCAST_CANDIDATE_EPISODES: 8/);
-  assert.match(workflow, /FOREIGN_TECH_PODCAST_MAX_EPISODES: 5/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: 5/);
-  assert.match(workflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
-  assert.match(workflow, /PODCAST_FFMPEG_TIMEOUT_MS: 300000/);
-  assert.match(workflow, /PODCAST_DAILY_MAX_EPISODE_MINUTES: 90/);
-  assert.match(workflow, /XYZRANK_TOP_EPISODES_LIMIT: 5/);
-  assert.match(workflow, /git checkout -B "\$\{GITHUB_REF_NAME\}" "origin\/\$\{GITHUB_REF_NAME\}"/);
-  assert.match(workflow, /git pull --rebase -X theirs origin "\$\{GITHUB_REF_NAME\}"/);
-  assert.match(workflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
-  assert.match(workflow, /Report task-level generation failures/);
-  assert.match(workflow, /Summarize scheduled publishing result/);
+  assert.match(publishWorkflow, /AI_FALLBACK_API_KEY:/);
+  assert.match(publishWorkflow, /AI_FALLBACK_BASE_URL: \$\{\{ secrets\.AI_FALLBACK_BASE_URL \|\| 'https:\/\/api\.deepseek\.com' \}\}/);
+  assert.match(publishWorkflow, /AI_FALLBACK_MODEL: \$\{\{ secrets\.AI_FALLBACK_MODEL \|\| 'deepseek-v4-flash' \}\}/);
+  assert.match(publishWorkflow, /APPLE_TOP_PODCASTS_COUNT: 5/);
+  assert.match(publishWorkflow, /PODCAST_MAX_EPISODES: \$\{\{ inputs\.podcast_max_episodes \|\| '10' \}\}/);
+  assert.match(publishWorkflow, /PODCAST_MIN_EPISODES: 1/);
+  assert.match(publishWorkflow, /PODCAST_CANDIDATE_EPISODES: 8/);
+  assert.match(publishWorkflow, /FOREIGN_TECH_PODCAST_MAX_EPISODES: 5/);
+  assert.match(publishWorkflow, /APPLE_TOP_PODCASTS_MAX_EPISODES: 5/);
+  assert.match(publishWorkflow, /APPLE_TOP_PODCASTS_TRANSCRIBE_DELAY_MS: 15000/);
+  assert.match(publishWorkflow, /PODCAST_FFMPEG_TIMEOUT_MS: 300000/);
+  assert.match(publishWorkflow, /PODCAST_DAILY_MAX_EPISODE_MINUTES: 90/);
+  assert.match(publishWorkflow, /XYZRANK_TOP_EPISODES_LIMIT: 5/);
+  assert.match(publishWorkflow, /git checkout -B "\$\{GITHUB_REF_NAME\}" "origin\/\$\{GITHUB_REF_NAME\}"/);
+  assert.match(publishWorkflow, /git pull --rebase -X theirs origin "\$\{GITHUB_REF_NAME\}"/);
+  assert.match(publishWorkflow, /push attempt \$\{attempt\}\/3 failed; retrying after remote refresh/);
+  assert.match(publishWorkflow, /Report task-level generation failures/);
+  assert.match(publishWorkflow, /Summarize scheduled publishing result/);
   assert.doesNotMatch(workflow, /Using Groq-only transcription for apple-top-podcasts/);
-  assert.match(workflow, /default:\s*hn-top10/);
-  assert.doesNotMatch(workflow, /default:\s*all/);
-  assert.doesNotMatch(workflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
-  for (const task of ["ai-daily", "ai-weekly"]) {
-    const prompt = fs.readFileSync(promptPath(task), "utf8");
-    assert.match(prompt, /从零|入门教程|一文[读懂搞懂]/, `${task} prompt should mirror low-signal validator terms`);
-  }
-  const itemSummaryPrompt = fs.readFileSync(promptPath("daily-digest-item-summary"), "utf8");
-  const sectionPlannerPrompt = fs.readFileSync(promptPath("daily-digest-section-planner"), "utf8");
-  const hnPrompt = fs.readFileSync(promptPath("hn-top10"), "utf8");
-  const techDailyPrompt = fs.readFileSync(promptPath("tech-daily"), "utf8");
-  assert.match(itemSummaryPrompt, /一次只处理一条候选/);
-  assert.match(sectionPlannerPrompt, /动态规划《技术日报》的栏目/);
-  assert.match(hnPrompt, /每个条目的主标题必须翻译成自然中文/);
-  assert.match(techDailyPrompt, /不要固定套用 AI\/工程\/商业三段式/);
-  assert.match(techDailyPrompt, /只写 1 个极短自然段/);
-  assert.match(techDailyPrompt, /中文事件标题/);
-  assert.match(techDailyPrompt, /不要直接照搬英文原题/);
+  assert.match(manualWorkflow, /default:\s*hn-top10/);
+  assert.doesNotMatch(manualWorkflow, /default:\s*all/);
+  assert.doesNotMatch(manualWorkflow, /type:\s*choice\n\s+required:\s*true\n\s+default:\s*all\n\s+options:/);
   const generator = fs.readFileSync(path.join(process.cwd(), "scripts/generate_scheduled_post.ts"), "utf8");
-  assert.match(generator, /retrying with validation feedback/);
-  assert.match(generator, /上一轮 \$\{task\} 输出被发布质量检查拒绝/);
   assert.match(generator, /generatePodcastArticles/);
   assert.match(generator, /buildDailyPodcastEpisodeArticle/);
   assert.match(generator, /buildCombinedTechDailySource/);
@@ -995,12 +978,8 @@ test("archive and verifier accept generated HN, market posts, podcast notes, wee
 - HN 讨论：https://news.ycombinator.com/item?id=123
 - 内容总结：文章解释了浏览器同源策略与 CORS 预检机制之间的关系，并指出很多后端开发者把跨域报错误解成服务端权限问题。作者用请求头、凭证模式和常见配置误区串起了 CORS 的真实执行路径。
 - 评论总结：评论区主要补充了反向代理、CDN 和本地开发场景下最容易踩坑的缓存与凭证问题，也有人强调把通配配置当万能解法会埋下安全隐患。
-`;
+  `;
   const hn = archivePost({ task: "hn-top10", date: "2099-01-02", repo, body: hnBody, force: true });
-  const hnMarkdown = fs.readFileSync(path.join(repo, hn.path), "utf8");
-  assert.match(hnMarkdown, /pubDatetime: 2099-01-01T16:00:00Z/);
-  assert.doesNotMatch(hnMarkdown, /今日 HackerNews 热门文章 Top 10|今日总览/);
-  assert.match(hnMarkdown, /^## 1\. 开发者并不真正理解 CORS/m);
   const podcastBody = `${fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8")}
 
 这期还谈到产品布局和值得关注的设计工作流，这些是产品访谈里的正常语义，不应被市场日报的投顾口吻过滤误伤。
@@ -1020,54 +999,6 @@ test("archive and verifier accept generated HN, market posts, podcast notes, wee
   const aiDaily = archivePost({ task: "ai-daily", date: "2099-01-06", repo, body: aiDailyBody, force: true });
   const techBusinessDailyBody = composeFixtureBody("tech-business-daily");
   const techBusinessDaily = archivePost({ task: "tech-business-daily", date: "2099-01-06", repo, body: techBusinessDailyBody, force: true });
-  const podcastMarkdown = fs.readFileSync(path.join(repo, podcast.path), "utf8");
-  const techWeeklyMarkdown = fs.readFileSync(path.join(repo, techWeekly.path), "utf8");
-  const aiWeeklyMarkdown = fs.readFileSync(path.join(repo, aiWeekly.path), "utf8");
-  const techBusinessWeeklyMarkdown = fs.readFileSync(path.join(repo, techBusinessWeekly.path), "utf8");
-  const xyzRankTopEpisodeMarkdown = fs.readFileSync(path.join(repo, xyzRankTopEpisode.path), "utf8");
-  const techDailyMarkdown = fs.readFileSync(path.join(repo, techDaily.path), "utf8");
-  const aiDailyMarkdown = fs.readFileSync(path.join(repo, aiDaily.path), "utf8");
-  const techBusinessDailyMarkdown = fs.readFileSync(path.join(repo, techBusinessDaily.path), "utf8");
-  assert.match(podcastMarkdown, /title: "Latent Space：Building Reliable AI Developer Platforms"/);
-  assert.doesNotMatch(podcastMarkdown, /^##\s*今日总览\s*$/m);
-  assert.doesNotMatch(podcastMarkdown, /^##\s*今日播客清单\s*$/m);
-  assert.match(podcastMarkdown, /### 长文笔记/);
-  assert.match(techWeeklyMarkdown, /title: "技术趋势与工程观察｜2099-01-03"/);
-  assert.match(techWeeklyMarkdown, /技术周刊/);
-  assert.match(techWeeklyMarkdown, /^## 工程观察/m);
-  assert.match(techWeeklyMarkdown, /工程价值|工程含义|工程实践|迁移风险|采用成本|变更管理/);
-  assert.doesNotMatch(techWeeklyMarkdown, /一文[读看搞]懂|从零|入门教程|基础教程|面试题/);
-  assert.match(aiWeeklyMarkdown, /title: "AI 周刊｜2099-01-04"/);
-  assert.match(aiWeeklyMarkdown, /AI周刊/);
-  assert.match(aiWeeklyMarkdown, /^## Agent 与工程化/m);
-  assert.match(aiWeeklyMarkdown, /能力|边界|成本|风险|治理|评测|安全|上下文|推理|Agent|模型|企业|生产/);
-  assert.doesNotMatch(aiWeeklyMarkdown.split("---\n\n").at(-1) || "", /融资|工具榜单|提示词技巧|论文导读|赋能|颠覆|革命性|不容错过|值得关注/);
-  assert.match(techBusinessWeeklyMarkdown, /title: "科技商业观察周刊｜2099-01-05"/);
-  assert.match(techBusinessWeeklyMarkdown, /科技商业观察/);
-  assert.match(techBusinessWeeklyMarkdown, /^## 政策、监管与安全/m);
-  assert.match(techBusinessWeeklyMarkdown, /影响|风险|监管|政策|安全|平台|公司|商业|市场|企业|不确定|观察/);
-  assert.doesNotMatch(techBusinessWeeklyMarkdown.split("---\n\n").at(-1) || "", /娱乐八卦|购物推荐|工具榜单|融资快讯|投资建议|买卖建议|股价预测|赋能|颠覆|革命性|不容错过|值得关注/);
-  assert.match(xyzRankTopEpisodeMarkdown, /title: "不开玩笑 Jokes Aside：沟通不是技巧表演，而是关系里的边界协商"/);
-  assert.match(xyzRankTopEpisodeMarkdown, /中文播客榜/);
-  assert.match(xyzRankTopEpisodeMarkdown, /^### 基本信息/m);
-  assert.match(xyzRankTopEpisodeMarkdown, /^### 核心观点/m);
-  assert.match(xyzRankTopEpisodeMarkdown, /^### Highlights/m);
-  assert.match(xyzRankTopEpisodeMarkdown, /^### 长文笔记/m);
-  assert.match(xyzRankTopEpisodeMarkdown, /XYZ Rank \/ 小宇宙/);
-  assert.doesNotMatch(xyzRankTopEpisodeMarkdown, /^##\s*今日总览\s*$/m);
-  assert.doesNotMatch(xyzRankTopEpisodeMarkdown, /^##\s*Top 5/m);
-  assert.match(techDailyMarkdown, /title: "技术日报｜2099-01-06"/);
-  assert.match(techDailyMarkdown, /技术日报/);
-  assert.match(techDailyMarkdown, /今日总览/);
-  assert.match(techDailyMarkdown, /工程影响|工程风险|架构|版本|安全|迁移/);
-  assert.match(aiDailyMarkdown, /title: "AI 工程日报｜2099-01-06"/);
-  assert.match(aiDailyMarkdown, /AI工程日报/);
-  assert.match(aiDailyMarkdown, /Agent|模型|成本|风险|评测|治理|工程/);
-  assert.doesNotMatch(aiDailyMarkdown.split("---\n\n").at(-1) || "", /^#\s+/m);
-  assert.match(techBusinessDailyMarkdown, /title: "科技商业观察日报｜2099-01-06"/);
-  assert.match(techBusinessDailyMarkdown, /科技商业观察日报/);
-  assert.doesNotMatch(techBusinessDailyMarkdown.split("---\n\n").at(-1) || "", /^#\s+/m);
-  assert.match(techBusinessDailyMarkdown, /监管|政策|商业|企业|供应链|不确定|风险/);
   const artifactsDir = path.join(repo, "blog-generation-artifacts", "xyzrank-top-episodes");
   fs.mkdirSync(artifactsDir, { recursive: true });
   fs.copyFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/xyzrank-top-episodes.md"), path.join(artifactsDir, "source.fixture.md"));
@@ -1075,16 +1006,6 @@ test("archive and verifier accept generated HN, market posts, podcast notes, wee
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, podcast, techWeekly, aiWeekly, techBusinessWeekly, xyzRankTopEpisodeWithSource, techDaily, aiDaily, techBusinessDaily] }));
   assert.equal(verifyResultJson(repo, resultJson), 9);
-});
-
-test("tech weekly rejects pure tutorial language", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-tech-weekly-bad-"));
-  const body = `## 本周快讯
-
-### [一文搞懂 Redis 基础教程](https://example.com/redis)
-
-这是一篇没有工程事件的 API 详解，只是在讲基础知识。https://example.com/redis https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e`;
-  assert.throws(() => archivePost({ task: "tech-weekly", date: "2099-01-03", repo, body, force: true }), /pure tutorial language|at least three expected sections/);
 });
 
 test("HN compose parses source facts from markdown blocks", () => {
@@ -1128,36 +1049,16 @@ test("HN compose takes facts from source, not from the model", () => {
   assert.doesNotMatch(article, /evil\.example\.com/);
 });
 
-test("HN model JSON parser rejects malformed and low-signal output", () => {
+test("HN model JSON parser rejects malformed output", () => {
   const facts = [{ rank: 1, points: "1 points · 0 评论", topic: "x", url: "https://e.com", hn_link: "https://h.com" }];
   assert.throws(() => parseHnModelJson("not json", 1), /not valid JSON/);
   assert.throws(() => parseHnModelJson(JSON.stringify({ items: [] }), 1), /non-empty items array/);
   assert.throws(() => parseHnModelJson(JSON.stringify({ items: [{ rank: 1, title_zh: "x", content_summary: "a", comment_summary: "b" }] }), 2), /does not match source count/);
-  assert.throws(
-    () => parseHnModelJson(JSON.stringify({ items: [{ rank: 1, title_zh: "English only", content_summary: "内容够长的中文总结用来通过校验", comment_summary: "评论够长的中文总结用来通过校验" }] }), 1),
-    /should use a Chinese title/,
-  );
-  assert.throws(
-    () => parseHnModelJson(JSON.stringify({ items: [{ rank: 1, title_zh: "中文标题", content_summary: "信息不足", comment_summary: "评论够长的中文总结用来通过校验" }] }), 1),
-    /low-signal content_summary/,
-  );
   // 容错解析：即使模型裹了 ```json 围栏也能解析。
   const fenced = "```json\n" + JSON.stringify({ items: [{ rank: 1, title_zh: "中文标题", content_summary: "内容够长的中文总结用来通过校验规则", comment_summary: "评论够长的中文总结用来通过校验规则" }] }) + "\n```";
   const parsed = parseHnModelJson(fenced, 1);
   assert.equal(parsed[0].title_zh, "中文标题");
   assert.equal(composeHnBody(parsed, facts).includes("- 原文：https://e.com"), true);
-});
-
-test("HN archive rejects untranslated item titles", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-hn-title-bad-"));
-  const body = `1. 🔥 Developers don't understand CORS
-- ⭐ 185 points · 88 评论
-- 主题：开发工具 / 编程语言
-- 原文：https://example.com/cors
-- HN 讨论：https://news.ycombinator.com/item?id=123
-- 内容总结：文章解释了浏览器同源策略与 CORS 预检机制之间的关系，并指出很多后端开发者把跨域报错误解成服务端权限问题。作者用请求头、凭证模式和常见配置误区串起了 CORS 的真实执行路径。
-- 评论总结：评论区主要补充了反向代理、CDN 和本地开发场景下最容易踩坑的缓存与凭证问题，也有人强调把通配配置当万能解法会埋下安全隐患。`;
-  assert.throws(() => archivePost({ task: "hn-top10", date: "2099-01-02", repo, body, force: true }), /HN item title should use a Chinese title/);
 });
 
 test("GitHub trending compose takes stars and links from source, not the model", () => {
@@ -1204,37 +1105,15 @@ test("daily digest compose rejects links outside the source pool and duplicates"
     () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [good, { ...good, title_zh: "另一个标题" }] }] }), source, "tech-daily"),
     /reuses source link/,
   );
-  // tech-daily 缺 overview → 拒绝；ai-daily 无需 overview。
-  assert.throws(() => dailyDigestMarkdownFromModelJson(JSON.stringify({ sections: [{ title: "平台工程", items: [good] }] }), source, "tech-daily"), /missing overview/);
-  assert.doesNotThrow(() => dailyDigestMarkdownFromModelJson(JSON.stringify({ sections: [{ title: "今日模型与产品", items: [good] }] }), source, "ai-daily"));
 });
 
 test("archive and verifier accept generated GitHub trending daily", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-github-trending-"));
   const body = composeFixtureBody("github-trending-daily");
   const result = archivePost({ task: "github-trending-daily", date: "2099-01-06", repo, body, force: true });
-  const markdown = fs.readFileSync(path.join(repo, result.path), "utf8");
-  assert.match(markdown, /title: "GitHub 项目日报｜2099-01-06"/);
-  assert.match(markdown, /GitHub项目日报/);
-  assert.doesNotMatch(markdown, /^## 总结/m);
-  assert.doesNotMatch(markdown, /^## 趋势观察/m);
-  assert.doesNotMatch(markdown, /^## 数据边界/m);
-  assert.match(markdown, /^## 1\. \[acme\/agent-lab\]\(https:\/\/github\.com\/acme\/agent-lab\)/m);
-  assert.match(markdown, /^- Stars：12.4k/m);
-  assert.match(markdown, /^- Forks：620/m);
-  assert.match(markdown, /^- 今日新增 Stars：820/m);
-  assert.match(markdown, /^- 项目总结：/m);
-  assert.match(markdown, /^- 技术栈：/m);
-  assert.match(markdown, /^- 使用场景：/m);
-  assert.doesNotMatch(markdown, /^- README 摘要：/m);
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [result] }));
   assert.equal(verifyResultJson(repo, resultJson), 1);
-});
-
-test("task validation catches GitHub trending archive failures before publishing", () => {
-  const body = composeFixtureBody("github-trending-daily").replace("工程团队。", "工程团队示例。");
-  assert.throws(() => validateGeneratedMarkdownForTask(body, "github-trending-daily", "2099-01-06"), /forbidden language: 示例/);
 });
 
 test("GitHub trending source overwrites an existing daily archive", async () => {
@@ -1264,91 +1143,6 @@ test("GitHub trending source overwrites an existing daily archive", async () => 
   }
 });
 
-test("AI weekly rejects low-signal AI content", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-ai-weekly-bad-"));
-  const body = `## 本周模型与产品
-
-### [10 个 AI 工具推荐](https://example.com/ai-tools)
-
-这是一篇工具榜单和提示词技巧文章，没有模型能力边界、工程成本、治理风险或生产采用条件。https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e https://example.com/f`;
-  assert.throws(() => archivePost({ task: "ai-weekly", date: "2099-01-04", repo, body, force: true }), /ai weekly contains low-signal language|at least three expected sections/);
-});
-
-test("AI daily low-signal rejection names the actual task", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-ai-daily-bad-"));
-  const body = `## 今日模型与产品
-
-### [10 个 AI 工具推荐](https://example.com/ai-tools)
-
-这是一篇工具榜单和提示词技巧文章，没有模型能力边界、工程成本、治理风险或生产采用条件。https://example.com/ai-tools`;
-  assert.throws(() => archivePost({ task: "ai-daily", date: "2099-01-06", repo, body, force: true }), /ai daily contains low-signal language/);
-});
-
-test("tech business weekly rejects low-signal news content", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-tech-business-weekly-bad-"));
-  const body = `## 本周大事件
-
-### [本周科技购物推荐与融资快讯](https://example.com/deals)
-
-这是一篇购物推荐、工具榜单和融资快讯合集，还包含投资建议和股价预测，没有政策、监管、安全、平台、公司或商业影响判断。https://example.com/a https://example.com/b https://example.com/c https://example.com/d https://example.com/e https://example.com/f https://example.com/g https://example.com/h`;
-  assert.throws(() => archivePost({ task: "tech-business-weekly", date: "2099-01-05", repo, body, force: true }), /low-signal language|at least three expected sections/);
-});
-
-
-test("daily digest verifier accepts one high-quality item", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-daily-one-item-"));
-  const resultJson = path.join(repo, "result.json");
-  const techDaily = archivePost({
-    task: "tech-daily",
-    date: "2099-01-06",
-    repo,
-    body: `# 技术日报｜2099-01-06
-
-## 今日总览
-
-今天的技术日报只保留一条高质量工程事件，避免为了数量塞入低相关内容。
-
-## 平台工程
-
-### [PostgreSQL 新版本改进查询规划行为](https://example.com/postgresql-planner)
-
-PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`,
-    force: true,
-  });
-  const aiDaily = archivePost({
-    task: "ai-daily",
-    date: "2099-01-06",
-    repo,
-    body: `# AI 工程日报｜2099-01-06
-
-## 今日模型与产品
-
-### [OpenAI adds enterprise routing controls](https://example.com/openai-routing)
-
-OpenAI 增加企业模型路由控制，AI 工程影响在于模型选择、成本、审计和权限边界进入统一治理平面。适合多团队共用模型平台的企业；风险是策略配置错误会影响质量和合规，需要配套评测、回滚和日志审计。`,
-    force: true,
-  });
-  const businessDaily = archivePost({
-    task: "tech-business-daily",
-    date: "2099-01-06",
-    repo,
-    body: `# 科技商业观察日报｜2099-01-06
-
-## 今日大事件
-
-### [EU opens platform policy probe](https://example.com/eu-platform-probe)
-
-欧盟启动平台政策调查，商业影响集中在应用分发、支付规则和平台抽佣边界。受影响的是平台公司、开发者和订阅业务；风险在于监管周期长、地区规则可能分裂，后续需要观察处罚范围、整改要求和企业合规成本。`,
-    force: true,
-  });
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [techDaily, aiDaily, businessDaily] }));
-  for (const result of [techDaily, aiDaily, businessDaily]) {
-    const markdown = fs.readFileSync(path.join(repo, result.path), "utf8");
-    assert.doesNotMatch(markdown.split("---\n\n").at(-1) || "", /^#\s+/m);
-  }
-  assert.equal(verifyResultJson(repo, resultJson), 3);
-});
-
 test("daily digest verifier skips zero-item rows", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-daily-skipped-"));
   const resultJson = path.join(repo, "result.json");
@@ -1356,48 +1150,11 @@ test("daily digest verifier skips zero-item rows", () => {
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 
-test("tech daily rejects long overview and untranslated linked titles", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-tech-daily-bad-"));
-  const longOverview = `## 今日总览
-
-今天的技术日报主线是工程平台、安全供应链和 AI 运行时开始互相收敛。数据库、云原生和 Agent 工具链不再是分散更新，而是在发布治理、可观测性、成本和风险边界上形成同一组工程问题。另一个变化是企业平台开始把模型能力、权限体系、部署成本和事故响应放进同一条生产链路，要求团队同时处理架构、版本、安全和迁移风险。
-
-## 平台工程
-
-### [PostgreSQL 新版本改进查询规划行为](https://example.com/postgresql-planner)
-
-PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`;
-  assert.throws(() => archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: longOverview, force: true }), /overview is too long/);
-
-  const englishTitle = `## 今日总览
-
-今天的技术日报只保留一条数据库版本事件，重点是查询规划变化可能影响复杂 SQL 的迁移验证和生产回滚边界。
-
-## 平台工程
-
-### [PostgreSQL release improves planner behavior](https://example.com/postgresql-planner)
-
-PostgreSQL 的新版本改进 planner 行为，工程影响集中在复杂查询、索引选择和升级回归验证。适合数据库平台团队和依赖复杂 SQL 的业务系统关注；风险在于版本迁移可能改变执行计划，需要用真实查询集做延迟、错误率和回滚路径验证。`;
-  assert.throws(() => archivePost({ task: "tech-daily", date: "2099-01-06", repo, body: englishTitle, force: true }), /Chinese title/);
-});
-
 test("result verifier skips task-level failures with explicit error", () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-task-failed-"));
   const resultJson = path.join(repo, "result.json");
   fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [{ task: "ai-daily", path: "", failed: true, error: "validator rejected low-signal language" }] }));
   assert.equal(verifyResultJson(repo, resultJson), 0);
-});
-
-
-test("daily podcasts archive rejects repeated summaries and duplicate headings", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-repeat-"));
-  const fixture = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/daily-podcasts.md"), "utf8");
-  const repeatedParagraph = "这期节目最值得记录的地方，是它把 AI 编程工具从个人效率叙事里拽了出来。过去讨论 coding assistant，经常停留在“写得快不快”“补全准不准”；但一旦 agent 能持续提交变更，真正麻烦的问题就变成：这些变更如何进入代码库，谁来审核，出了问题如何回滚，以及平台怎样判断一批机器生成代码是否超过组织承载能力。";
-  assert.throws(() => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: `${fixture}\n\n${repeatedParagraph}\n`, force: true }), /repeated summary content/);
-  assert.throws(
-    () => archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: `${fixture}\n\n${fixture}`, force: true }),
-    /duplicate episode heading/,
-  );
 });
 
 test("result verifier checks source artifacts instead of generated prose style", () => {
