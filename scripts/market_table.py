@@ -102,14 +102,11 @@ def a_index_triple(symbol: str):
 def bond_yield_triple(column: str, date_str: str):
     # 中债国债收益率曲线：列含 '日期' 与 '1年'/'10年'/'30年' 等（单位 %）。用 df_triple 保证按日期排序去空。
     df = retry(lambda: ak.bond_china_yield(start_date=year_start(date_str), end_date=date_str.replace("-", "")))
-    # 诊断：打印列名与该列尾部 4 行，定位「当日 BP 异常偏大」的前收取值问题。
-    try:
-        cols = [str(c) for c in df.columns]
-        date_col = "日期" if "日期" in cols else cols[0]
-        tail = list(zip(df[date_col].astype(str).tolist()[-4:], df[column].tolist()[-4:]))
-        print(f"bond debug [{column}] cols={cols} tail={tail}", file=sys.stderr)
-    except Exception as exc:  # noqa: BLE001
-        print(f"bond debug failed: {exc}", file=sys.stderr)
+    # bond_china_yield 每个日期含多条曲线（国债/地方债/金融债…），只保留「国债」曲线，
+    # 否则「前收」会取到同一天的另一条曲线，导致当日 BP 异常偏大。
+    if "曲线名称" in df.columns:
+        name = df["曲线名称"].astype(str)
+        df = df[name.str.contains("国债") & ~name.str.contains("地方") & ~name.str.contains("政策") & ~name.str.contains("政金")]
     return df_triple(df, [column])
 
 
