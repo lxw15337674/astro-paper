@@ -550,8 +550,10 @@ function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T
   return { top, bottom: bottomPool.slice(-limit).reverse() };
 }
 
+const EQUITY_CATEGORIES = new Set(["股票", "A股", "港股"]);
+
 function marketTableRowsByName(data: MarketTableData): Map<string, MarketTableRow> {
-  return new Map(data.rows.filter(row => row.category === "股票").map(row => [row.name, row]));
+  return new Map(data.rows.filter(row => EQUITY_CATEGORIES.has(row.category)).map(row => [row.name, row]));
 }
 
 function isAvailableMarketTableRow(row: MarketTableRow | undefined): row is MarketTableRow {

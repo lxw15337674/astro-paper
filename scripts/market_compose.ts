@@ -33,7 +33,6 @@ function composeCryptoSegment(raw: string): string {
   const conclusion = requireProse(parsed.conclusion, "capital crypto conclusion");
   const priceMove = requireProse(parsed.price_move, "capital crypto price_move");
   const sentiment = requireProse(parsed.sentiment, "capital crypto sentiment");
-  const shortTermRisk = requireProse(parsed.short_term_risk, "capital crypto short_term_risk");
   const block = [
     "## 比特币",
     "",
@@ -48,10 +47,6 @@ function composeCryptoSegment(raw: string): string {
     "### 市场情绪冷不冷",
     "",
     sentiment,
-    "",
-    "### 短线风险在哪里",
-    "",
-    shortTermRisk,
   ].join("\n");
   return `${block}\n`;
 }
