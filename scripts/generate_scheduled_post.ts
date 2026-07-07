@@ -10,7 +10,7 @@ import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, e
 import { type Task, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { hnMarkdownFromModelJson } from "./hn_compose.ts";
-import { buildRedditTop20Source } from "./reddit_top20_source.ts";
+import { readRedditSource, REDDIT_DATA_DIR } from "./reddit_top20_source.ts";
 import { redditMarkdownFromModelJson } from "./reddit_top20_compose.ts";
 import { githubTrendingMarkdownFromModelJson } from "./github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "./mdblist_compose.ts";
@@ -227,7 +227,7 @@ function fixtureSource(fixtureName: string, sourceFixtureDir: string): string {
 // capital-market-daily 不在此表：见 JSON_COMPOSERS 里的 composeFullCapitalMarket。
 const SOURCE_BUILDERS: Partial<Record<Task, (date: string) => Promise<string>>> = {
   "hn-top10": () => buildHnSource(),
-  "reddit-top20": () => buildRedditTop20Source(),
+  "reddit-top20": date => Promise.resolve(readRedditSource(date, path.join(repoRoot(), "data/reddit-top20"))),
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),

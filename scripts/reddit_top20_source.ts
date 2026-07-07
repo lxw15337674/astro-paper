@@ -1,8 +1,12 @@
 #!/usr/bin/env tsx
+import fs from "node:fs";
+import path from "node:path";
 import https from "node:https";
 import http from "node:http";
 import { JSDOM } from "jsdom";
-import { compact, writeStderr, writeStdout } from "./blog_common.ts";
+import { bjtDateString, compact, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+
+export const REDDIT_DATA_DIR = path.join(repoRoot(), "data/reddit-top20");
 
 const OLD_REDDIT = "https://old.reddit.com";
 const REDDIT_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
@@ -179,9 +183,30 @@ export async function buildRedditTop20Source(): Promise<string> {
   return `${body.trim()}\n\n===ARCHIVE_PAYLOAD===\n${JSON.stringify({ items: payloadItems }, null, 2)}\n`;
 }
 
+// 读取预先抓取的 source 文件（CI 模式，不做 live fetch）
+export function readRedditSource(date: string, dataDir = REDDIT_DATA_DIR): string {
+  const file = path.join(dataDir, `${date}.md`);
+  if (!fs.existsSync(file)) throw new Error(`Reddit top20 source file not found for ${date}: ${file}`);
+  return fs.readFileSync(file, "utf8");
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const args = parseArgs();
+  const date = stringArg(args, "date", bjtDateString());
+  const save = args.save === true;
+  const dataDir = stringArg(args, "data-dir", REDDIT_DATA_DIR);
+
   buildRedditTop20Source()
-    .then(text => writeStdout(text))
+    .then(text => {
+      if (save) {
+        ensureDir(dataDir);
+        const file = path.join(dataDir, `${date}.md`);
+        fs.writeFileSync(file, text, "utf8");
+        writeStderr(`Saved to ${file}`);
+      } else {
+        writeStdout(text);
+      }
+    })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       writeStderr(`ERROR: ${message}`);
