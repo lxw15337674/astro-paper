@@ -64,7 +64,8 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "0 6 * * *": { task: "hn-top10", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 1": { task: "xyzrank-top-episodes", dateTimeZone: "Asia/Shanghai" },
   // 资本市场日报：UTC 22:00 美股收盘后，一次性拉取全部市场数据、一次 AI 调用生成完整日报。
-  "0 22 * * 1-5": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai" },
+  // dateOffset: -1 是因为 UTC 22:00 在上海已是次日 06:00，-1 天才能得到当天交易日的日期。
+  "0 22 * * 1-5": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", dateOffset: -1 },
   "0 23 * * *": { task: "github-trending-daily", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 5": { task: "mdblist-weekly", dateTimeZone: "Asia/Shanghai" },
 };
