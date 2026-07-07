@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import YahooFinance from "yahoo-finance2";
 import { bjtDateString, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import type { MarketSegment } from "./blog_tasks.ts";
-import { buildMarketTableData, formatChange as formatMarketChange, formatLatest as formatMarketLatest, type MarketTableData, type MarketTableRow } from "./market_table_source.ts";
+import { buildMarketTableData, renderMarketTable, formatChange as formatMarketChange, formatLatest as formatMarketLatest, type MarketTableData, type MarketTableRow } from "./market_table_source.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
@@ -1028,11 +1028,15 @@ export const CAPITAL_MARKET_SOURCE_SEP = "\n\n<!-- ===SECTION=== -->\n\n";
 
 // 一次性拉取全部市场数据（市场速览表、亚洲、美股、比特币），拼成统一 source 文本。
 // 各段顺序固定：table → asia → us → crypto，与 CAPITAL_MARKET_SOURCE_SEP 分隔。
+// 市场速览表格与亚洲段共享同一次 buildMarketTableData 调用，避免 Python/AkShare 被调用两次。
 // 美股数据不可用（休市）时抛 MarketSourceUnavailableError("capital-market-daily", ...)，触发任务级跳过。
 export async function buildAllCapitalMarketSource(date: string): Promise<string> {
-  const [tableResult, asiaResult, usResult, cryptoResult] = await Promise.allSettled([
-    Promise.resolve().then(() => buildMarketTable(date)),
-    generateAsiaMarketDaily(date).then(full => `${stripSummaryBlock(full)}\n`),
+  // 市场速览表与亚洲段共用一份 MarketTableData，只跑一次 Python 进程。
+  const tableData = buildMarketTableData(date);
+  const tableBlock = renderMarketTable(tableData);
+  const asiaFull = buildAsiaMarketDailyFromTable(tableData, date);
+
+  const [usResult, cryptoResult] = await Promise.allSettled([
     generateUsMarketDaily(date).then(full => `${stripSummaryBlock(full)}\n`),
     generateCryptoMarketDaily().then(full => `${stripSummaryBlock(full)}\n`),
   ]);
@@ -1050,7 +1054,8 @@ export async function buildAllCapitalMarketSource(date: string): Promise<string>
     return "";
   };
 
-  return [get(tableResult, "table"), get(asiaResult, "asia"), usResult.value.trim(), get(cryptoResult, "crypto")].join(CAPITAL_MARKET_SOURCE_SEP);
+  const asia = `${stripSummaryBlock(asiaFull)}\n`.trim();
+  return [tableBlock.trim(), asia, usResult.value.trim(), get(cryptoResult, "crypto")].join(CAPITAL_MARKET_SOURCE_SEP);
 }
 
 // 保留旧接口供 CLI 调试用（market_table.py / generateAsiaMarketDaily 等单独调用）。
