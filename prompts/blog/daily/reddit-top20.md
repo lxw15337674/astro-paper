@@ -7,7 +7,7 @@
 
 # 输入证据
 
-下面是脚本抓取并整理的结构化证据，涵盖 r/AskReddit、r/TIFU、r/TrueOffMyChest、r/confessions、r/explainlikeimfive、r/changemyview、r/GriefSupport 七个版块的热门帖子。只能依据这些信息写作；不允许编造不存在的评论内容、情节细节或讨论观点。
+下面是脚本抓取并整理的结构化热门帖子。只能依据这些信息写作；不允许编造不存在的评论内容、情节细节或讨论观点。
 
 ```md
 {source_text}
