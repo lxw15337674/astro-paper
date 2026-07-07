@@ -29,7 +29,7 @@ jobs:
       contents: write
     uses: ./.github/workflows/blog-publish.yml
     with:
-      task: daily-digests
+      task: tech-daily
       date: ${{ inputs.date || '' }}
       event_schedule: ${{ github.event.schedule || '30 0 * * *' }}
       force: ${{ inputs.force || false }}
