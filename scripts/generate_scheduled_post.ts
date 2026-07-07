@@ -17,7 +17,6 @@ import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcast
 import { appendSummarizedEpisode } from "./podcast_ledger.ts";
 import { MarketSourceUnavailableError, buildAllCapitalMarketSource } from "./market_daily_source.ts";
 import { composeFullCapitalMarket } from "./market_compose.ts";
-import { buildMarketTable } from "./market_table_source.ts";
 import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource, fetchXyzRankTopEpisodes } from "./xyzrank_top_episodes_source.ts";
