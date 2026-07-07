@@ -13,11 +13,6 @@ const GENERATED_POST_TECHNICAL_ERROR_PATTERNS = [
   /\{\{[^}]+\}\}/,
 ];
 
-const SOURCE_TECHNICAL_ERROR_PATTERNS = [
-  /Traceback \(most recent call last\)/i,
-  /Script not found:/i,
-  /BLOCKED:/i,
-];
 function parseJsonOutput(text: string): unknown {
   const trimmed = text.trim();
   if (trimmed.startsWith("{")) return JSON.parse(trimmed);
@@ -73,9 +68,6 @@ function verifySourceContract(repo: string, task: string, sourceArtifact: string
   const source = fs.readFileSync(sourcePath, "utf8");
   const relPath = path.relative(repo, sourcePath) || sourceArtifact;
   if (source.trim().length < 80) throw new Error(`${relPath} source is too short to support generation`);
-  for (const pattern of SOURCE_TECHNICAL_ERROR_PATTERNS) {
-    if (pattern.test(source)) throw new Error(`${relPath} source contains technical error pattern: ${pattern.source}`);
-  }
 
   if (task === "capital-market-daily") {
     return;

@@ -604,10 +604,20 @@ export function usesJsonComposer(task: Task): boolean {
   return task in JSON_COMPOSERS;
 }
 
-function contentToMarkdown(content: string, source: string, task: Task): string {
+function extractDescriptionFromJson(raw: string): string | undefined {
+  try {
+    const parsed = parseJsonObject(raw) as Record<string, unknown>;
+    const desc = typeof parsed.description === "string" ? parsed.description.trim().slice(0, 30) : undefined;
+    return desc || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function contentToMarkdown(content: string, source: string, task: Task): { markdown: string; description?: string } {
   const composer = JSON_COMPOSERS[task];
-  if (composer) return composer(content, source);
-  return normalizeMarkdownLinksFromSourceTitles(validateMarkdown(content), source, task);
+  if (composer) return { markdown: composer(content, source), description: extractDescriptionFromJson(content) };
+  return { markdown: normalizeMarkdownLinksFromSourceTitles(validateMarkdown(content), source, task) };
 }
 
 async function renderLiveAiMarkdownWithSourceValidation(
@@ -618,7 +628,7 @@ async function renderLiveAiMarkdownWithSourceValidation(
   artifactsDir: string,
   source: string,
   artifactKey: string = task,
-): Promise<{ markdown: string; ai: AiCallResult }> {
+): Promise<{ markdown: string; description?: string; ai: AiCallResult }> {
   const attempts = retryAttempts();
   const jsonMode = usesJsonComposer(task);
   let lastError = "";
@@ -628,10 +638,10 @@ async function renderLiveAiMarkdownWithSourceValidation(
     if (attempt > 1) writeArtifact(artifactsDir, artifactKey, `retry-prompt-attempt-${attempt}.md`, attemptPrompt);
     try {
       const ai = await callAi(attemptPrompt, model, jsonMode);
-      const markdown = contentToMarkdown(ai.content, source, task);
+      const { markdown, description } = contentToMarkdown(ai.content, source, task);
       assertMarkdownUsesOnlySourceLinks(markdown, source, task);
       validateGeneratedMarkdownForTask(markdown, task, date);
-      return { markdown, ai };
+      return { markdown, description, ai };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       writeArtifact(artifactsDir, artifactKey, `ai-error-attempt-${attempt}.txt`, lastError);
@@ -664,7 +674,7 @@ async function renderWithAi({
   mockResponseDir: string;
   artifactsDir: string;
   artifactKey?: string;
-}): Promise<{ markdown: string; metadata: NonNullable<ResultItem["generation"]> }> {
+}): Promise<{ markdown: string; description?: string; metadata: NonNullable<ResultItem["generation"]> }> {
   const sourceArtifact = writeArtifact(artifactsDir, artifactKey, "source.md", source);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const prompt = renderPrompt({ task, date, sourceText: source, promptDir: resolvedPromptDir });
@@ -673,17 +683,14 @@ async function renderWithAi({
   const mockFile = mockResponseDir ? path.join(mockResponseDir, `${task}.${mockExt}`) : "";
   const rendered = mockFile
     ? {
-        markdown: contentToMarkdown(fs.readFileSync(mockFile, "utf8"), source, task),
-        ai: {
-          content: "",
-          config: envAiConfig({ model }),
-          usedFallback: false,
-        },
+        ...contentToMarkdown(fs.readFileSync(mockFile, "utf8"), source, task),
+        ai: { content: "", config: envAiConfig({ model }), usedFallback: false },
       }
     : await renderLiveAiMarkdownWithSourceValidation(prompt, model, task, date, artifactsDir, source, artifactKey);
   const responseArtifact = writeArtifact(artifactsDir, artifactKey, "ai-response.md", rendered.markdown);
   return {
     markdown: rendered.markdown,
+    description: rendered.description,
     metadata: {
       ai_model: rendered.ai.config.model,
       ai_base_url: rendered.ai.config.baseUrl,
@@ -773,13 +780,15 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     if (itemCount < 1) return [skippedLowQuality(task, date, "tech-daily has no high-quality daily items")];
   }
   let body = source;
+  let description: string | undefined;
   let generation: ResultItem["generation"];
   if (useAi) {
     const rendered = await renderWithAi({ task, date, source, repo, model, promptDir, mockResponseDir, artifactsDir });
     body = rendered.markdown;
+    description = rendered.description;
     generation = rendered.metadata;
   }
-  const result: ResultItem = archivePost({ task, date, repo, body, force });
+  const result: ResultItem = archivePost({ task, date, repo, body, force, description });
   if (generation) result.generation = generation;
   return [result];
 }

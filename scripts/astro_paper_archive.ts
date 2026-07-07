@@ -178,16 +178,27 @@ function rejectRepeatedPodcastContent(markdown: string): void {
   }
 }
 
+const DESCRIPTION_MARKER = "DESCRIPTION:";
+
+function extractPodcastDescription(text: string): { text: string; description?: string } {
+  const newlineIndex = text.indexOf("\n");
+  const firstLine = newlineIndex >= 0 ? text.slice(0, newlineIndex) : text;
+  if (!firstLine.startsWith(DESCRIPTION_MARKER)) return { text, description: undefined };
+  const description = firstLine.slice(DESCRIPTION_MARKER.length).trim().slice(0, 30) || undefined;
+  return { text: newlineIndex >= 0 ? text.slice(newlineIndex + 1) : "", description };
+}
+
 // daily-podcasts 一篇只讲一期，校验保持最小集：禁止合辑小节、至少一个 ## 标题、无重复内容、长度下限。
-function formatPodcastEpisode(text: string): string {
-  const normalized = normalizeMarkdown(text);
+function formatPodcastEpisode(text: string): { markdown: string; description?: string } {
+  const { text: bodyText, description } = extractPodcastDescription(text);
+  const normalized = normalizeMarkdown(bodyText);
   for (const marker of ["## 今日总览", "## 今日播客清单"]) {
     if (normalized.includes(marker)) throw new Error(`daily podcasts contains forbidden section: ${marker}`);
   }
   if (!/^##\s+/m.test(normalized)) throw new Error("daily podcasts missing episode heading");
   rejectRepeatedPodcastContent(normalized);
   if (normalized.trim().length < 800) throw new Error(`daily podcasts note is too short (${normalized.trim().length} < 800)`);
-  return `${normalized.trim()}\n`;
+  return { markdown: `${normalized.trim()}\n`, description };
 }
 
 // 标题取「节目名：本期中文标题」，比通用「笔记｜日期」更具体。
@@ -323,6 +334,7 @@ export function archivePost({
   fileNameSuffix = "",
   titleSuffix = "",
   ogImage = "",
+  description: providedDescription,
 }: {
   task: string;
   date: string;
@@ -332,6 +344,7 @@ export function archivePost({
   fileNameSuffix?: string;
   titleSuffix?: string;
   ogImage?: string;
+  description?: string;
 }): ArchiveResult {
   if (!isTask(task)) throw new Error(`unsupported task: ${task}`);
   const info = taskInfo(task);
@@ -341,19 +354,20 @@ export function archivePost({
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
-  const formatted =
+  const formatted: { markdown: string; ogImage: string; description?: string } =
     task === "hn-top10" ? formatHnTop10(body) :
-    isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } :
+    isPodcastArticleTask(task) ? { ...formatPodcastEpisode(body), ogImage: "" } :
     task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } :
     task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } :
     task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } :
     task === "capital-market-daily" ? formatCapitalMarketDaily(body) :
     (() => { throw new Error(`no archive formatter for task: ${task}`); })();
+  const description = formatted.description ?? providedDescription ?? info.description;
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
   fs.writeFileSync(
     absPath,
-    `${frontmatter({ title, date, description: info.description, tags: taskTags(task), ogImage: formatted.ogImage || ogImage })}${formatted.markdown.trim()}\n`,
+    `${frontmatter({ title, date, description, tags: taskTags(task), ogImage: formatted.ogImage || ogImage })}${formatted.markdown.trim()}\n`,
     "utf8",
   );
   return { task, path: relPath, title, created: !existed, skipped: false, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
