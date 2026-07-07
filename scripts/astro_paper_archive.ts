@@ -152,6 +152,34 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   };
 }
 
+function formatRedditTop20(text: string): string {
+  const blocks = text
+    .split(/(?=^\d+\.\s*🔴\s+)/gm)
+    .map(block => block.trim())
+    .filter(block => /^\d+\.\s*🔴\s+/.test(block));
+  if (!blocks.length) throw new Error("Reddit Top 20 source produced no publishable items");
+  const formatted = blocks.map(block => {
+    const rank = Number(block.match(/^(\d+)\.\s*🔴/)?.[1] ?? "0");
+    const title = block.match(/^\d+\.\s*🔴\s+(.+)$/m)?.[1]?.trim() ?? `帖子 ${rank}`;
+    if (!hasChinese(title)) throw new Error(`Reddit Top 20 item title should use Chinese: ${title}`);
+    const bullets = extractBullets(block);
+    const points = bullets.find(b => b.startsWith("⭐"))?.replace(/^⭐\s*/, "") ?? "";
+    const subreddit = bulletValue(bullets, "来源");
+    const url = bulletValue(bullets, "帖子");
+    let summary = bulletValue(bullets, "总结");
+    summary = normalizeParagraph(summary);
+    if (!summary) return null;
+    const out = [`## ${rank}. ${title}`, ""];
+    if (points) out.push(`- **热度**：${points}`);
+    if (subreddit) out.push(`- **来源**：[${subreddit}](https://www.reddit.com/${subreddit}/)`);
+    if (url) out.push(`- **帖子**：${url}`);
+    out.push("", summary, "");
+    return out.join("\n").trim();
+  }).filter((b): b is string => b !== null);
+  if (!formatted.length) throw new Error("Reddit Top 20 produced no items after formatting");
+  return `${formatted.join("\n\n")}\n`;
+}
+
 function formatCapitalMarketDaily(body: string): { markdown: string; ogImage: string } {
   const normalized = normalizeMarkdown(body);
   for (const heading of ["## 今日总览", "## 美股", "## 亚洲", "## 比特币"]) {
@@ -356,6 +384,7 @@ export function archivePost({
   }
   const formatted: { markdown: string; ogImage: string; description?: string } =
     task === "hn-top10" ? formatHnTop10(body) :
+    task === "reddit-top20" ? { markdown: formatRedditTop20(body), ogImage: "" } :
     isPodcastArticleTask(task) ? { ...formatPodcastEpisode(body), ogImage: "" } :
     task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } :
     task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } :

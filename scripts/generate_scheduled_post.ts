@@ -10,6 +10,8 @@ import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, e
 import { type Task, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { hnMarkdownFromModelJson } from "./hn_compose.ts";
+import { buildRedditTop20Source } from "./reddit_top20_source.ts";
+import { redditMarkdownFromModelJson } from "./reddit_top20_compose.ts";
 import { githubTrendingMarkdownFromModelJson } from "./github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "./mdblist_compose.ts";
 import { dailyDigestMarkdownFromModelJson } from "./daily_digest_compose.ts";
@@ -225,6 +227,7 @@ function fixtureSource(fixtureName: string, sourceFixtureDir: string): string {
 // capital-market-daily 不在此表：见 JSON_COMPOSERS 里的 composeFullCapitalMarket。
 const SOURCE_BUILDERS: Partial<Record<Task, (date: string) => Promise<string>>> = {
   "hn-top10": () => buildHnSource(),
+  "reddit-top20": () => buildRedditTop20Source(),
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),
@@ -594,6 +597,7 @@ export function validateGeneratedMarkdownForTask(markdown: string, task: Task, d
 // 新增任务只需在此登记一个 composer；其余任务保持模型直接产出 Markdown 的原路径。
 const JSON_COMPOSERS: Partial<Record<Task, (rawJson: string, source: string) => string>> = {
   "hn-top10": hnMarkdownFromModelJson,
+  "reddit-top20": redditMarkdownFromModelJson,
   "github-trending-daily": githubTrendingMarkdownFromModelJson,
   "mdblist-weekly": mdblistMarkdownFromModelJson,
   "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src),
