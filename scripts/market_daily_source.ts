@@ -4,7 +4,6 @@ import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import YahooFinance from "yahoo-finance2";
 import { bjtDateString, compact, fetchJson, fetchText, parseArgs, stripHtml, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
-import type { MarketSegment } from "./blog_tasks.ts";
 import { buildMarketTableData, renderMarketTable, formatChange as formatMarketChange, formatLatest as formatMarketLatest, type MarketTableData, type MarketTableRow } from "./market_table_source.ts";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
