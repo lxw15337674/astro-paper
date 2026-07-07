@@ -1,15 +1,6 @@
-// 资本市场日报规则层：source 生成的行情数据由规则原样发布，模型只返回解读/普通人话（JSON）。
-// - 美股/亚洲：数据正文原样保留（降级为 ###），模型只写「小结 + 解读」。数字 100% 来自 source。
-// - 比特币：source 是技术证据，模型翻成 4 个普通人小节；规则层只保证 JSON 字段可组装。
-import type { MarketSegment } from "./blog_tasks.ts";
+// 资本市场日报规则层：全部三段数据一次性喂给 AI，模型返回 7 字段 JSON，规则层组装完整文章。
+import { CAPITAL_MARKET_SOURCE_SEP } from "./market_daily_source.ts";
 import { parseModelJsonObject } from "./compose_common.ts";
-
-const SEGMENT_HEADING: Record<MarketSegment, string> = { us: "美股", asia: "亚洲", crypto: "比特币" };
-
-function demoteHeadings(markdown: string): string {
-  // 数据段将嵌在 `## 美股|亚洲` 之下，把内部 `## 小节` 降为 `### 小节`。
-  return markdown.replace(/^(#{2})\s+/gm, "### ").trim();
-}
 
 function requireProse(value: unknown, label: string): string {
   const text = String(value || "").trim();
@@ -17,41 +8,39 @@ function requireProse(value: unknown, label: string): string {
   return text;
 }
 
-// 美股/亚洲：{ summary, interpretation }，数据来自 source。
-function composeDataSegment(segment: "us" | "asia", raw: string, source: string): string {
-  const heading = SEGMENT_HEADING[segment];
-  const parsed = parseModelJsonObject(raw, `capital ${segment}`);
-  const summary = requireProse(parsed.summary, `capital ${segment} summary`);
-  const interpretation = requireProse(parsed.interpretation, `capital ${segment} interpretation`);
-  const data = demoteHeadings(source);
-  if (!data) throw new Error(`capital ${segment} has no source data to publish`);
-  return `## ${heading}\n\n${summary}\n\n${data}\n\n${interpretation}\n`;
+function demoteHeadings(markdown: string): string {
+  return markdown.replace(/^(#{2})\s+/gm, "### ").trim();
 }
 
-function composeCryptoSegment(raw: string): string {
-  const parsed = parseModelJsonObject(raw, "capital crypto");
-  const conclusion = requireProse(parsed.conclusion, "capital crypto conclusion");
-  const priceMove = requireProse(parsed.price_move, "capital crypto price_move");
-  const sentiment = requireProse(parsed.sentiment, "capital crypto sentiment");
-  const block = [
-    "## 比特币",
-    "",
-    "### 一句话结论",
-    "",
-    conclusion,
-    "",
-    "### 今天价格怎么走",
-    "",
-    priceMove,
-    "",
-    "### 市场情绪冷不冷",
-    "",
-    sentiment,
-  ].join("\n");
-  return `${block}\n`;
+// 从 source 文本里按 SECTION 分隔符提取各块：[table, asia, us, crypto]
+function extractSourceSections(source: string): [string, string, string, string] {
+  const parts = source.split(CAPITAL_MARKET_SOURCE_SEP);
+  return [parts[0]?.trim() ?? "", parts[1]?.trim() ?? "", parts[2]?.trim() ?? "", parts[3]?.trim() ?? ""];
 }
 
-export function capitalMarketMarkdownFromModelJson(raw: string, source: string, segment: MarketSegment): string {
-  if (segment === "crypto") return composeCryptoSegment(raw);
-  return composeDataSegment(segment, raw, source);
+export function composeFullCapitalMarket(raw: string, source: string): string {
+  const parsed = parseModelJsonObject(raw, "capital market daily");
+  const overview = requireProse(parsed.overview, "overview");
+  const asiaSummary = requireProse(parsed.asia_summary, "asia_summary");
+  const asiaInterpretation = requireProse(parsed.asia_interpretation, "asia_interpretation");
+  const usSummary = requireProse(parsed.us_summary, "us_summary");
+  const usInterpretation = requireProse(parsed.us_interpretation, "us_interpretation");
+  const cryptoConclusion = requireProse(parsed.crypto_conclusion, "crypto_conclusion");
+  const cryptoPriceMove = requireProse(parsed.crypto_price_move, "crypto_price_move");
+
+  const [tableBlock, asiaBlock, usBlock] = extractSourceSections(source);
+
+  const blocks: string[] = [`## 今日总览\n\n${overview}`];
+
+  if (tableBlock) blocks.push(tableBlock);
+
+  const usData = demoteHeadings(usBlock);
+  blocks.push(usData ? `## 美股\n\n${usSummary}\n\n${usData}\n\n${usInterpretation}` : `## 美股\n\n${usSummary}\n\n${usInterpretation}`);
+
+  const asiaData = demoteHeadings(asiaBlock);
+  blocks.push(asiaData ? `## 亚洲\n\n${asiaSummary}\n\n${asiaData}\n\n${asiaInterpretation}` : `## 亚洲\n\n${asiaSummary}\n\n${asiaInterpretation}`);
+
+  blocks.push(["## 比特币", "", "### 一句话结论", "", cryptoConclusion, "", "### 今天价格怎么走", "", cryptoPriceMove].join("\n"));
+
+  return `${blocks.join("\n\n")}\n`;
 }

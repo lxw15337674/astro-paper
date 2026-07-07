@@ -1023,7 +1023,38 @@ function stripSummaryBlock(markdown: string): string {
   return markdown.replace(/^##\s+总结[\s\S]*?(?=\n##\s+)/, "").trim();
 }
 
-// 资本市场日报按段取 source：us/asia 返回可发布的数据正文，crypto 返回技术证据（供模型翻成人话）。
+// 各 source 段之间的分隔符，供 composeFullCapitalMarket 按序提取。
+export const CAPITAL_MARKET_SOURCE_SEP = "\n\n<!-- ===SECTION=== -->\n\n";
+
+// 一次性拉取全部市场数据（市场速览表、亚洲、美股、比特币），拼成统一 source 文本。
+// 各段顺序固定：table → asia → us → crypto，与 CAPITAL_MARKET_SOURCE_SEP 分隔。
+// 美股数据不可用（休市）时抛 MarketSourceUnavailableError("capital-market-daily", ...)，触发任务级跳过。
+export async function buildAllCapitalMarketSource(date: string): Promise<string> {
+  const [tableResult, asiaResult, usResult, cryptoResult] = await Promise.allSettled([
+    Promise.resolve().then(() => buildMarketTable(date)),
+    generateAsiaMarketDaily(date).then(full => `${stripSummaryBlock(full)}\n`),
+    generateUsMarketDaily(date).then(full => `${stripSummaryBlock(full)}\n`),
+    generateCryptoMarketDaily().then(full => `${stripSummaryBlock(full)}\n`),
+  ]);
+
+  if (usResult.status === "rejected") {
+    const err = usResult.reason;
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MarketSourceUnavailableError("capital-market-daily", msg);
+  }
+
+  const get = (r: PromiseSettledResult<string>, label: string): string => {
+    if (r.status === "fulfilled") return r.value.trim();
+    const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+    writeStderr(`WARN: capital-market-daily ${label} source fetch failed: ${msg}`);
+    return "";
+  };
+
+  return [get(tableResult, "table"), get(asiaResult, "asia"), usResult.value.trim(), get(cryptoResult, "crypto")].join(CAPITAL_MARKET_SOURCE_SEP);
+}
+
+// 保留旧接口供 CLI 调试用（market_table.py / generateAsiaMarketDaily 等单独调用）。
+export type MarketSegment = "us" | "asia" | "crypto";
 export async function buildCapitalSegmentSource(segment: MarketSegment, date = bjtDateString()): Promise<string> {
   const full = segment === "us" ? await generateUsMarketDaily(date) : segment === "asia" ? await generateAsiaMarketDaily(date) : await generateCryptoMarketDaily();
   return `${stripSummaryBlock(full)}\n`;

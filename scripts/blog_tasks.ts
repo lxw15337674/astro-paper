@@ -56,20 +56,15 @@ export const BLOG_TASKS = {
 export type Task = keyof typeof BLOG_TASKS;
 export type TaskInput = Task | "all";
 
-// 资本市场日报的三段：一篇文章由三次独立调度增量拼成，每次跑只写自己这一段。
-export type MarketSegment = "us" | "asia" | "crypto";
-
 export const TASKS = Object.keys(BLOG_TASKS) as Task[];
 
-export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number; dateTimeZone?: string; marketSegment?: MarketSegment }> = {
+export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset?: number; dateTimeZone?: string }> = {
   "30 0 * * *": { task: "tech-daily", dateTimeZone: "America/Los_Angeles" },
   "30 1 * * *": { task: "daily-podcasts" },
   "0 6 * * *": { task: "hn-top10", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 1": { task: "xyzrank-top-episodes", dateTimeZone: "Asia/Shanghai" },
-  // 资本市场日报：三段分三次跑，靠 dateOffset 对齐到同一交易日 D 的文件，增量拼一篇。
-  "0 17 * * 1-5": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", marketSegment: "asia" },
-  "5 17 * * *": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", marketSegment: "crypto" },
-  "0 6 * * 2-6": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", dateOffset: -1, marketSegment: "us" },
+  // 资本市场日报：UTC 22:00 美股收盘后，一次性拉取全部市场数据、一次 AI 调用生成完整日报。
+  "0 22 * * 1-5": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai" },
   "0 23 * * *": { task: "github-trending-daily", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 5": { task: "mdblist-weekly", dateTimeZone: "Asia/Shanghai" },
 };
@@ -104,7 +99,7 @@ export function tasksForInput(input: TaskInput): Task[] {
   return [input];
 }
 
-export function scheduledTaskInput(schedule: string): { task: TaskInput; dateOffset: number; dateTimeZone?: string; marketSegment?: MarketSegment } {
+export function scheduledTaskInput(schedule: string): { task: TaskInput; dateOffset: number; dateTimeZone?: string } {
   const mapped = SCHEDULED_TASK_INPUTS[schedule];
-  return { task: mapped?.task || "all", dateOffset: mapped?.dateOffset || 0, dateTimeZone: mapped?.dateTimeZone, marketSegment: mapped?.marketSegment };
+  return { task: mapped?.task || "all", dateOffset: mapped?.dateOffset || 0, dateTimeZone: mapped?.dateTimeZone };
 }

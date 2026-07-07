@@ -5,22 +5,11 @@ permissions:
 
 on:
   schedule:
-    - cron: "0 17 * * 1-5"
-    - cron: "5 17 * * *"
-    - cron: "0 6 * * 2-6"
+    - cron: "0 22 * * 1-5"
   workflow_dispatch:
     inputs:
-      market_segment:
-        description: "Segment to generate."
-        type: choice
-        required: true
-        default: asia
-        options:
-          - asia
-          - crypto
-          - us
       date:
-        description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today or scheduled offset."
+        description: "Archive date in Asia/Shanghai, YYYY-MM-DD. Empty = today."
         required: false
         type: string
       force:
@@ -42,9 +31,8 @@ jobs:
     with:
       task: capital-market-daily
       date: ${{ inputs.date || '' }}
-      event_schedule: "${{ github.event.schedule || (inputs.market_segment == 'us' && '0 6 * * 2-6') || (inputs.market_segment == 'crypto' && '5 17 * * *') || '0 17 * * 1-5' }}"
-      market_segment: ${{ inputs.market_segment || '' }}
+      event_schedule: "${{ github.event.schedule || '0 22 * * 1-5' }}"
       force: ${{ inputs.force || false }}
       ai_model: ${{ inputs.ai_model || '' }}
-      install_market_deps: ${{ github.event.schedule == '0 17 * * 1-5' || inputs.market_segment == 'asia' }}
+      install_market_deps: true
     secrets: inherit

@@ -18,6 +18,7 @@ import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
+import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
@@ -862,86 +863,21 @@ test("result verifier skips task-level failures with explicit error", () => {
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 
-test("result verifier keeps capital-market source checks structural", () => {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-source-contract-"));
-  const sourcePath = path.join(repo, "crypto-source.md");
-  fs.writeFileSync(
-    sourcePath,
-    `BTC source evidence.
+test("composeFullCapitalMarket rejects missing JSON fields", () => {
+  const validJson = JSON.stringify({
+    overview: "全球市场偏弱。",
+    asia_summary: "A股小幅下跌。",
+    asia_interpretation: "上证相对抗跌，创业板偏弱。",
+    us_summary: "美股窄幅收涨。",
+    us_interpretation: "科技板块领涨，行业分化明显。",
+    crypto_conclusion: "BTC 偏弱，约 62521 美元。",
+    crypto_price_move: "24h 跌约 2.2%，短线承压。",
+  });
+  const source = "## 市场速览\n\n| 品种 | 最新 |\n| :--- | ---: |\n| 比特币 | 62521 |";
+  assert.doesNotThrow(() => composeFullCapitalMarket(validJson, source));
 
-CoinGecko BTC 现货：62,521 美元；24h -2.19%；7d -5.09%。
-Deribit BTC-PERPETUAL 8h funding：-0.0010%；OI：6,159,000,000。
-Deribit BTC option book Put/Call：0.61；近端 ATM IV：65.20%；5% OTM Put IV：76.06%；5% OTM Call IV：56.08%。
-Alternative.me Fear & Greed：17（Extreme Fear）。
-`,
-  );
-  const body = `## 比特币
-
-### 一句话结论
-
-BTC 偏弱，价格约 62,521 美元，24 小时和 7 日都在下跌。
-
-### 今天价格怎么走
-
-BTC 跌回 6.3 万美元下方，短线压力比较直接。
-
-### 市场情绪冷不冷
-
-Fear & Greed 处在 Extreme Fear，说明市场情绪明显偏冷。
-
-### 短线风险在哪里
-
-Deribit funding 接近中性，说明杠杆端没有明显踩踏；期权侧的下跌保险更贵，说明短线防守需求更高。
-`;
-  const result = archivePost({ task: "capital-market-daily", date: "2099-01-02", repo, body, force: true, marketSegment: "crypto" });
-  const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(
-    resultJson,
-    JSON.stringify({
-      date: "2099-01-02",
-      results: [
-        {
-          ...result,
-          generation: {
-            ai_model: "mock",
-            source_artifact: sourcePath,
-            prompt_artifact: "",
-            ai_response_artifact: "",
-            mocked_ai: true,
-          },
-        },
-      ],
-    }),
-  );
-
-  assert.equal(verifyResultJson(repo, resultJson), 1);
-
-  const badSourcePath = path.join(repo, "bad-crypto-source.md");
-  fs.writeFileSync(
-    badSourcePath,
-    `这是一段与任何金融行情都完全无关的占位说明文本，它被刻意写得足够长，以便顺利通过来源最小长度检查（需要超过八十个字符），但是全文故意不包含任何股票指数名称或加密货币指标关键词，因此在来源契约校验阶段应当被判定为缺少市场证据而拒绝。
-`,
-  );
-  fs.writeFileSync(
-    resultJson,
-    JSON.stringify({
-      date: "2099-01-02",
-      results: [
-        {
-          ...result,
-          generation: {
-            ai_model: "mock",
-            source_artifact: badSourcePath,
-            prompt_artifact: "",
-            ai_response_artifact: "",
-            mocked_ai: true,
-          },
-        },
-      ],
-    }),
-  );
-
-  assert.equal(verifyResultJson(repo, resultJson), 1);
+  const missingField = JSON.stringify({ overview: "ok", asia_summary: "ok", asia_interpretation: "ok", us_summary: "ok", us_interpretation: "ok", crypto_conclusion: "ok" });
+  assert.throws(() => composeFullCapitalMarket(missingField, source), /crypto_price_move is empty/);
 });
 
 test("HN source verifier accepts legitimate double-brace examples from source articles", () => {

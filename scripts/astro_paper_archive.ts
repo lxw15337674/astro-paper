@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { bjtTimestamp, compact, frontmatter, parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
-import { type BlogTaskInfo, isTask, taskInfo, taskPostRelPath, taskTags, taskTitle } from "./blog_tasks.ts";
+import { isTask, taskInfo, taskPostRelPath, taskTags, taskTitle } from "./blog_tasks.ts";
 
 const HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg";
 export const ARCHIVE_PAYLOAD_MARKER = "===ARCHIVE_PAYLOAD===";
@@ -152,36 +152,12 @@ function formatHnTop10(text: string): { markdown: string; ogImage: string } {
   };
 }
 
-// 资本市场日报一篇多段，按固定顺序增量拼合；每次调度只写自己那一段。
-// 市场速览是顶部纯数据表格（由亚洲那次跑生成），美股/亚洲/比特币是三段叙事。
-export const MARKET_SEGMENT_HEADINGS: Record<string, string> = { table: "市场速览", us: "美股", asia: "亚洲", crypto: "比特币" };
-const CAPITAL_SECTION_ORDER = ["市场速览", "美股", "亚洲", "比特币"];
-
-function marketSegmentPlaceholder(heading: string): string {
-  return `## ${heading}\n\n本交易日该市场数据尚未生成。`;
-}
-
-// 把整篇正文按 `## 顶级标题` 切成 {heading -> block}。
-function splitCapitalSections(body: string): Map<string, string> {
-  const map = new Map<string, string>();
-  const blocks = body.split(/(?=^##\s+)/gm).map(block => block.trim()).filter(Boolean);
-  for (const block of blocks) {
-    const heading = block.match(/^##\s+(.+?)\s*$/m)?.[1]?.trim();
-    if (heading) map.set(heading, block);
+function formatCapitalMarketDaily(body: string): { markdown: string; ogImage: string } {
+  const normalized = normalizeMarkdown(body);
+  for (const heading of ["## 今日总览", "## 市场速览", "## 美股", "## 亚洲", "## 比特币"]) {
+    if (!normalized.includes(heading)) throw new Error(`capital-market-daily missing required section: ${heading}`);
   }
-  return map;
-}
-
-// 增量合并：把某段的新块并入已存在正文（只替换本段，保留其它段），返回按固定顺序拼好的整篇正文。
-function mergeCapitalSegment(existingBody: string, heading: string, newBlock: string): string {
-  const sections = existingBody ? splitCapitalSections(existingBody) : new Map<string, string>();
-  sections.set(heading, newBlock.trim());
-  return CAPITAL_SECTION_ORDER.map(item => sections.get(item) || marketSegmentPlaceholder(item)).join("\n\n");
-}
-
-function bodyWithoutFrontmatter(text: string): string {
-  const match = text.match(/^---\n[\s\S]*?\n---\n/);
-  return match ? text.slice(match[0].length).trim() : text.trim();
+  return { markdown: `${normalized.trim()}\n`, ogImage: "" };
 }
 
 function normalizedPodcastBlocks(markdown: string): string[] {
@@ -347,7 +323,6 @@ export function archivePost({
   fileNameSuffix = "",
   titleSuffix = "",
   ogImage = "",
-  marketSegment = "",
 }: {
   task: string;
   date: string;
@@ -357,18 +332,23 @@ export function archivePost({
   fileNameSuffix?: string;
   titleSuffix?: string;
   ogImage?: string;
-  marketSegment?: string;
 }): ArchiveResult {
   if (!isTask(task)) throw new Error(`unsupported task: ${task}`);
   const info = taskInfo(task);
-  if (task === "capital-market-daily") return archiveCapitalMarketSegment({ date, repo, body, marketSegment, info });
   const relPath = fileNameSuffix ? taskPostRelPath(task, `${date}-${fileNameSuffix}`) : taskPostRelPath(task, date);
   const title = isPodcastArticleTask(task) ? podcastEpisodeTitle(body) || taskTitle(task, date) : titleSuffix ? `${taskTitle(task, date)}｜${titleSuffix}` : taskTitle(task, date);
   const absPath = path.join(repo, relPath);
   if (!force && fs.existsSync(absPath)) {
     return { task, path: relPath, title, created: false, skipped: true, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
   }
-  const formatted = task === "hn-top10" ? formatHnTop10(body) : isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } : task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } : task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } : task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } : (() => { throw new Error(`no archive formatter for task: ${task}`); })();
+  const formatted =
+    task === "hn-top10" ? formatHnTop10(body) :
+    isPodcastArticleTask(task) ? { markdown: formatPodcastEpisode(body), ogImage: "" } :
+    task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } :
+    task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } :
+    task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } :
+    task === "capital-market-daily" ? formatCapitalMarketDaily(body) :
+    (() => { throw new Error(`no archive formatter for task: ${task}`); })();
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const existed = fs.existsSync(absPath);
   fs.writeFileSync(
@@ -377,27 +357,6 @@ export function archivePost({
     "utf8",
   );
   return { task, path: relPath, title, created: !existed, skipped: false, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags(task) };
-}
-
-// 资本市场日报：把当前 segment 的 `## 美股|亚洲|比特币` 块增量并入同日期文件，保留其它段。
-function archiveCapitalMarketSegment({ date, repo, body, marketSegment, info }: { date: string; repo: string; body: string; marketSegment: string; info: BlogTaskInfo }): ArchiveResult {
-  const heading = MARKET_SEGMENT_HEADINGS[marketSegment];
-  if (!heading) throw new Error(`capital-market-daily requires a valid marketSegment, got: ${marketSegment}`);
-  const newBlock = normalizeMarkdown(body).trim();
-  if (!new RegExp(`^##\\s+${heading}\\s*$`, "m").test(newBlock)) throw new Error(`capital-market-daily ${marketSegment} block must start with "## ${heading}"`);
-  const relPath = taskPostRelPath("capital-market-daily", date);
-  const absPath = path.join(repo, relPath);
-  const existed = fs.existsSync(absPath);
-  const existingBody = existed ? bodyWithoutFrontmatter(fs.readFileSync(absPath, "utf8")) : "";
-  const mergedBody = mergeCapitalSegment(existingBody, heading, newBlock);
-  const title = taskTitle("capital-market-daily", date);
-  fs.mkdirSync(path.dirname(absPath), { recursive: true });
-  fs.writeFileSync(
-    absPath,
-    `${frontmatter({ title, date, description: info.description, tags: taskTags("capital-market-daily") })}${mergedBody.trim()}\n`,
-    "utf8",
-  );
-  return { task: "capital-market-daily", path: relPath, title, created: !existed, skipped: false, updated_at_bjt: bjtTimestamp(), commit: "", push: "", tags: taskTags("capital-market-daily") };
 }
 
 async function main(): Promise<void> {
