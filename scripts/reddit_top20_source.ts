@@ -11,8 +11,8 @@ export const REDDIT_DATA_DIR = path.join(repoRoot(), "data/reddit-top20");
 const OLD_REDDIT = "https://old.reddit.com";
 const REDDIT_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 const SUBREDDITS = ["AskReddit", "TIFU", "offmychest", "confessions", "explainlikeimfive", "changemyview"];
-const POSTS_PER_SUB = 30;
-const TOP_N = 20;
+const POSTS_PER_SUB = 50;
+const TOP_N = 40;
 const COMMENTS_PER_POST = 5;
 const COMMENT_CONCURRENCY = 4;
 
@@ -154,7 +154,7 @@ export async function buildRedditTop20Source(): Promise<string> {
   writeStderr(`Reddit top20: top ${all.length} posts selected, fetching details...`);
   const details = await mapWithConcurrency(all, COMMENT_CONCURRENCY, post => fetchPostDetail(post.permalink));
 
-  const lines = ["1. 🔴 今日 Reddit 热门帖子 Top 20", ""];
+  const lines = ["1. 🔴 今日 Reddit 热门帖子 Top 40", ""];
   const payloadItems: RedditPayloadItem[] = [];
 
   for (const [i, post] of all.entries()) {
@@ -178,7 +178,7 @@ export async function buildRedditTop20Source(): Promise<string> {
 
   const body = lines.join("\n");
   const counts = evidenceCounts(body);
-  if (counts.withComments < 10) throw new Error(`Reddit top20 low-signal source: only ${counts.withComments} posts have comments`);
+  if (counts.withComments < 20) throw new Error(`Reddit top40 low-signal source: only ${counts.withComments} posts have comments`);
 
   return `${body.trim()}\n\n===ARCHIVE_PAYLOAD===\n${JSON.stringify({ items: payloadItems }, null, 2)}\n`;
 }

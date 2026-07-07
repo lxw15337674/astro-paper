@@ -54,7 +54,7 @@ export const BLOG_TASKS = {
   "reddit-top20": {
     titlePrefix: "Reddit 热门",
     tag: "Reddit热门",
-    description: "每日 Reddit 热门帖子 Top 20 中文整理，精选 AskReddit、TIFU、ELI5 等版块的有趣内容。",
+    description: "每日 Reddit 热门帖子 Top 40 中文整理，精选 AskReddit、TIFU、ELI5 等版块的有趣内容。",
     fileName: "reddit-{date}.md",
   },
 } as const satisfies Record<string, BlogTaskInfo>;

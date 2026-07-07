@@ -1,13 +1,13 @@
 # 任务
 
-你要根据脚本抓取的 Reddit 证据，生成可交给 Astro archive 层归档的中文 Reddit Top 20 Markdown。
+你要根据脚本抓取的 Reddit 证据，生成可交给 Astro archive 层归档的中文 Reddit Top 40 Markdown。
 
 - 任务：{task}
 - 日期：{date}
 
 # 输入证据
 
-下面是脚本抓取并整理的结构化证据，涵盖 r/AskReddit、r/TIFU、r/offmychest、r/confessions、r/explainlikeimfive、r/changemyview 六个版块的热门帖子。只能依据这些信息写作；不允许编造不存在的评论内容、情节细节或讨论观点。
+下面是脚本抓取并整理的结构化热门帖子。只能依据这些信息写作；不允许编造不存在的评论内容、情节细节或讨论观点。
 
 ```md
 {source_text}
