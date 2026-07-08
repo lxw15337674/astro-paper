@@ -564,51 +564,12 @@ function downloadAudioWithCurl(url: string, file: string, timeoutMs: number, max
   if (size > maxBytes) throw new Error(`audio exceeds ${Math.round(maxBytes / 1024 / 1024)}MB limit`);
 }
 
-function splitExtraArgs(value = ""): string[] {
-  return value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map(token => token.replace(/^['"]|['"]$/g, "")) || [];
-}
-
-function runLocalWhisper(audioFile: string, outDir: string): string {
-  const bin = process.env.PODCAST_WHISPER_BIN || "whisper";
-  const model = process.env.PODCAST_WHISPER_MODEL || "base.en";
-  const timeoutMs = envNumber("PODCAST_WHISPER_TIMEOUT_MS", 45 * 60 * 1000);
-  ensureDir(outDir);
-  const args = [
-    audioFile,
-    "--model",
-    model,
-    "--language",
-    "en",
-    "--task",
-    "transcribe",
-    "--output_format",
-    "txt",
-    "--output_dir",
-    outDir,
-    ...splitExtraArgs(process.env.PODCAST_WHISPER_EXTRA_ARGS || ""),
-  ];
-  const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
-  const transcript = readTranscriptTxtFiles(outDir);
-  if (transcript.length < minTranscriptChars()) throw new Error(`local whisper transcript too short (${transcript.length} chars)`);
-  return transcript;
-}
-
 function transcriptionProviders(): string[] {
-  const raw = process.env.PODCAST_TRANSCRIBE_PROVIDER || process.env.PODCAST_TRANSCRIBE_PROVIDERS || "whisper-cpp,local";
+  const raw = process.env.PODCAST_TRANSCRIBE_PROVIDER || "gemini";
   return raw
     .split(/[,>]/)
     .map(provider => provider.trim().toLowerCase())
     .filter(Boolean);
-}
-
-function groqApiKey(): string {
-  return process.env.GROQ_API_KEY || process.env.PODCAST_GROQ_API_KEY || "";
-}
-
-function groqModel(): string {
-  return process.env.PODCAST_GROQ_MODEL || "whisper-large-v3-turbo";
 }
 
 function geminiApiKey(): string {
@@ -642,106 +603,6 @@ function runFfmpeg(args: string[], timeoutMs: number): void {
   if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
 }
 
-function whisperCppModelPath(): string {
-  const explicit = process.env.PODCAST_WHISPER_CPP_MODEL_PATH || process.env.PODCAST_WHISPER_MODEL_PATH;
-  if (explicit) return explicit;
-  const model = process.env.PODCAST_WHISPER_CPP_MODEL || "small.en";
-  return path.join(repoRoot(), ".cache", "whisper.cpp", "models", `ggml-${model}.bin`);
-}
-
-function prepareWhisperCppAudioChunks(audioFile: string, outDir: string): string[] {
-  ensureDir(outDir);
-  const segmentSeconds = envNumber("PODCAST_WHISPER_CPP_SEGMENT_SECONDS", 20 * 60);
-  if (segmentSeconds <= 0) return [audioFile];
-  const bitrate = process.env.PODCAST_WHISPER_CPP_AUDIO_BITRATE || "64k";
-  const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
-  runFfmpeg(["-y", "-i", audioFile, "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate, "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1", path.join(outDir, "chunk-%03d.mp3")], timeoutMs);
-  const chunks = fs
-    .readdirSync(outDir)
-    .filter(file => file.endsWith(".mp3"))
-    .map(file => path.join(outDir, file))
-    .toSorted();
-  if (!chunks.length) throw new Error("ffmpeg produced no whisper.cpp audio chunks");
-  return chunks;
-}
-
-function readTranscriptTxtFiles(outDir: string): string {
-  const txtFiles = fs
-    .readdirSync(outDir)
-    .filter(file => file.endsWith(".txt"))
-    .map(file => path.join(outDir, file))
-    .toSorted((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
-  return compact(txtFiles.map(file => fs.readFileSync(file, "utf8")).join("\n"));
-}
-
-function runWhisperCpp(audioFile: string, outDir: string): string {
-  const bin = process.env.PODCAST_WHISPER_CPP_BIN || "whisper-cli";
-  const modelPath = whisperCppModelPath();
-  const timeoutMs = envNumber("PODCAST_WHISPER_CPP_TIMEOUT_MS", 45 * 60 * 1000);
-  const threads = process.env.PODCAST_WHISPER_CPP_THREADS;
-  ensureDir(outDir);
-  if (!fs.existsSync(modelPath)) throw new Error(`whisper.cpp model not found: ${modelPath}`);
-  const chunks = prepareWhisperCppAudioChunks(audioFile, path.join(outDir, "chunks"));
-  const parts: string[] = [];
-  for (const [index, chunk] of chunks.entries()) {
-    const chunkOutDir = path.join(outDir, `chunk-${String(index + 1).padStart(3, "0")}`);
-    ensureDir(chunkOutDir);
-    const outputBase = path.join(chunkOutDir, "transcript");
-    const args = [
-      "--model",
-      modelPath,
-      "--file",
-      chunk,
-      "--language",
-      "en",
-      "--output-txt",
-      "--output-file",
-      outputBase,
-      "--no-prints",
-      "--no-timestamps",
-      ...(threads ? ["--threads", threads] : []),
-      ...splitExtraArgs(process.env.PODCAST_WHISPER_CPP_EXTRA_ARGS || ""),
-    ];
-    writeStderr(`whisper.cpp transcribing chunk ${index + 1}/${chunks.length}: ${path.basename(chunk)}`);
-    const result = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
-    if (result.error) throw result.error;
-    if (result.status !== 0) throw new Error(`${bin} exited ${result.status}: ${(result.stderr || result.stdout || "").slice(0, 2000)}`);
-    parts.push(readTranscriptTxtFiles(chunkOutDir));
-  }
-  const transcript = compact(parts.join("\n"));
-  if (transcript.length < minTranscriptChars()) throw new Error(`whisper.cpp transcript too short (${transcript.length} chars)`);
-  return transcript;
-}
-
-function prepareGroqAudioChunks(audioFile: string, outDir: string): string[] {
-  ensureDir(outDir);
-  const segmentSeconds = envNumber("PODCAST_GROQ_SEGMENT_SECONDS", 20 * 60);
-  const bitrate = process.env.PODCAST_GROQ_AUDIO_BITRATE || "64k";
-  const timeoutMs = envNumber("PODCAST_FFMPEG_TIMEOUT_MS", 20 * 60 * 1000);
-  runFfmpeg(["-y", "-i", audioFile, "-vn", "-ac", "1", "-ar", "16000", "-b:a", bitrate, "-f", "segment", "-segment_time", String(segmentSeconds), "-reset_timestamps", "1", path.join(outDir, "chunk-%03d.mp3")], timeoutMs);
-  const maxBytes = envNumber("PODCAST_GROQ_MAX_CHUNK_MB", 24) * 1024 * 1024;
-  const chunks = fs
-    .readdirSync(outDir)
-    .filter(file => file.endsWith(".mp3"))
-    .map(file => path.join(outDir, file))
-    .toSorted();
-  if (!chunks.length) throw new Error("ffmpeg produced no Groq audio chunks");
-  const oversized = chunks.find(file => fs.statSync(file).size > maxBytes);
-  if (oversized) throw new Error(`Groq audio chunk exceeds ${Math.round(maxBytes / 1024 / 1024)}MB: ${path.basename(oversized)}`);
-  return chunks;
-}
-
-function groqRetryAttempts(): number {
-  return Math.max(1, envNumber("PODCAST_GROQ_RETRY_ATTEMPTS", 3));
-}
-
-function groqRetryDelayMs(attempt: number): number {
-  return envNumber("PODCAST_GROQ_RETRY_DELAY_MS", 30_000) * attempt;
-}
-
-function groqChunkDelayMs(): number {
-  return envNumber("PODCAST_GROQ_CHUNK_DELAY_MS", 0);
-}
 
 function retryAfterMs(value: string | null): number | null {
   if (!value) return null;
@@ -752,75 +613,6 @@ function retryAfterMs(value: string | null): number | null {
   return null;
 }
 
-function retryableGroqStatus(status: number): boolean {
-  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
-}
-
-class NonRetryableGroqError extends Error {}
-
-async function transcribeGroqChunk(chunkFile: string): Promise<string> {
-  const key = groqApiKey();
-  if (!key) throw new Error("GROQ_API_KEY is not configured");
-  const timeoutMs = envNumber("PODCAST_GROQ_TIMEOUT_MS", 10 * 60 * 1000);
-  let lastError = "";
-  for (let attempt = 1; attempt <= groqRetryAttempts(); attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const form = new FormData();
-      form.append("file", new Blob([new Uint8Array(fs.readFileSync(chunkFile))], { type: "audio/mpeg" }), path.basename(chunkFile));
-      form.append("model", groqModel());
-      form.append("response_format", "json");
-      form.append("temperature", "0");
-      const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}` },
-        body: form,
-        signal: controller.signal,
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        lastError = `Groq transcription HTTP ${response.status}: ${text.slice(0, 1000)}`;
-        if (attempt < groqRetryAttempts() && retryableGroqStatus(response.status)) {
-          const delayMs = retryAfterMs(response.headers.get("retry-after")) ?? groqRetryDelayMs(attempt);
-          writeStderr(`WARN: Groq transcription attempt ${attempt}/${groqRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
-          await sleep(delayMs);
-          continue;
-        }
-        throw new NonRetryableGroqError(lastError);
-      }
-      const payload = JSON.parse(text) as { text?: string };
-      return compact(payload.text || "");
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-      if (error instanceof NonRetryableGroqError) throw error;
-      if (attempt < groqRetryAttempts()) {
-        const delayMs = groqRetryDelayMs(attempt);
-        writeStderr(`WARN: Groq transcription attempt ${attempt}/${groqRetryAttempts()} failed; retrying after ${Math.round(delayMs / 1000)}s: ${lastError}`);
-        await sleep(delayMs);
-        continue;
-      }
-      throw new Error(lastError);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  throw new Error(lastError || "Groq transcription failed");
-}
-
-async function runGroqWhisper(audioFile: string, outDir: string): Promise<string> {
-  if (!groqApiKey()) throw new Error("GROQ_API_KEY is not configured");
-  const chunks = prepareGroqAudioChunks(audioFile, outDir);
-  const parts: string[] = [];
-  for (const [index, chunk] of chunks.entries()) {
-    if (index > 0) await sleep(groqChunkDelayMs());
-    writeStderr(`Groq transcribing chunk ${index + 1}/${chunks.length}: ${path.basename(chunk)}`);
-    parts.push(await transcribeGroqChunk(chunk));
-  }
-  const transcript = compact(parts.join("\n"));
-  if (transcript.length < minTranscriptChars()) throw new Error(`Groq transcript too short (${transcript.length} chars)`);
-  return transcript;
-}
 
 function prepareGeminiAudioChunks(audioFile: string, outDir: string): string[] {
   ensureDir(outDir);
@@ -952,9 +744,6 @@ async function transcribeAudio(audioFile: string, outDir: string): Promise<strin
   for (const provider of transcriptionProviders()) {
     try {
       if (provider === "gemini") return await runGeminiTranscription(audioFile, path.join(outDir, "gemini"));
-      if (provider === "groq") return await runGroqWhisper(audioFile, path.join(outDir, "groq"));
-      if (["whisper-cpp", "whisper.cpp", "cpp"].includes(provider)) return runWhisperCpp(audioFile, path.join(outDir, "whisper-cpp"));
-      if (["local", "local-whisper", "whisper"].includes(provider)) return runLocalWhisper(audioFile, path.join(outDir, "local"));
       errors.push(`${provider}: unsupported transcription provider`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
