@@ -250,6 +250,36 @@
       "date": "2026-07-06",
       "archivedAt": "2026-07-07",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-07-02-morbid.md"
+    },
+    {
+      "title": "Spite-Driven Engineering: A New Blueprint for Cloud Security in the AI Native Era",
+      "show": "The InfoQ Podcast",
+      "link": "https://soundcloud.com/infoq-channel/spite-driven-engineering-a-new",
+      "audioUrl": "http://dts.podtrac.com/redirect.mp3/feeds.soundcloud.com/stream/2347572065-infoq-channel-spite-driven-engineering-a-new.mp3",
+      "guid": "tag:soundcloud,2010:tracks/2347572065",
+      "date": "2026-07-06",
+      "archivedAt": "2026-07-08",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-08-01-the-infoq-podcast.md"
+    },
+    {
+      "title": "SED News: Restricted Models, IDE Wars, and the DeepMind Mafia",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/07/07/sed-news-restricted-models-ide-wars-and-the-deepmind-mafia/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=sed-news-restricted-models-ide-wars-and-the-deepmind-mafia",
+      "audioUrl": "https://traffic.megaphone.fm/SED4808597618.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=22362",
+      "date": "2026-07-07",
+      "archivedAt": "2026-07-08",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-08-02-software-engineering-daily.md"
+    },
+    {
+      "title": "Matt Damon",
+      "show": "Good Hang with Amy Poehler",
+      "link": "b467a4ee-7407-11f1-b031-b7645ce05b75",
+      "audioUrl": "https://traffic.megaphone.fm/GLT7692255755.mp3",
+      "guid": "b467a4ee-7407-11f1-b031-b7645ce05b75",
+      "date": "2026-07-07",
+      "archivedAt": "2026-07-08",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-08-03-good-hang-with-amy-poehler.md"
     }
   ]
 }
