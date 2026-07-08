@@ -239,7 +239,7 @@ function candidateEpisodes(): number {
 }
 
 function foreignTechPodcastMaxEpisodes(): number {
-  return envNumber("FOREIGN_TECH_PODCAST_MAX_EPISODES", maxEpisodes());
+  return envNumber("FOREIGN_TECH_PODCAST_MAX_EPISODES", 5);
 }
 
 function maxWindowDays(): number {
@@ -247,7 +247,7 @@ function maxWindowDays(): number {
 }
 
 function maxDailyEpisodeMinutes(): number {
-  return envNumber("PODCAST_DAILY_MAX_EPISODE_MINUTES", 90);
+  return envNumber("PODCAST_DAILY_MAX_EPISODE_MINUTES", 180);
 }
 
 function minTranscriptChars(): number {
@@ -375,7 +375,7 @@ async function fetchRssEpisodes(date: string): Promise<Episode[]> {
 
 
 function appleTopPodcastsCount(): number {
-  return envNumber("APPLE_TOP_PODCASTS_COUNT", 10);
+  return envNumber("APPLE_TOP_PODCASTS_COUNT", 5);
 }
 
 function appleTopPodcastsMaxEpisodes(): number {
@@ -878,11 +878,11 @@ async function fetchMergedPodcastEpisodes(date: string, force = false): Promise<
     for (const fingerprint of fingerprints) seen.add(fingerprint);
     merged.push(episode);
   }
-  return merged.slice(0, maxEpisodes());
+  return merged;
 }
 
 export async function buildDailyPodcastSource(date = bjtDateString()): Promise<string> {
-  const episodes = (await enrichWithTranscripts(await fetchMergedPodcastEpisodes(date), { tolerateFailures: true })).slice(0, maxEpisodes());
+  const episodes = await enrichWithTranscripts(await fetchMergedPodcastEpisodes(date), { tolerateFailures: true });
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", episodes.length, minEpisodes());
   return podcastSourceMarkdown(
     episodes,
