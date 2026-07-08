@@ -73,6 +73,28 @@ export const FEEDS: FeedSource[] = [
   { show: "The InfoQ Podcast", source: "InfoQ", url: "https://feeds.soundcloud.com/users/soundcloud:users:215740450/sounds.rss" },
   { show: "Changelog Interviews", source: "Changelog Media", url: "https://changelog.com/podcast/feed" },
   { show: "The Data Engineering Show", source: "Firebolt", url: "https://feeds.fame.so/the-data-engineering-show" },
+  { show: "Latent Space", source: "Substack", url: "https://api.substack.com/feed/podcast/1036440.rss" },
+  { show: "The Cognitive Revolution", source: "Turpentine", url: "https://feeds.megaphone.fm/RINTP3108857801" },
+  { show: "TWIML AI Podcast", source: "Megaphone", url: "https://feeds.megaphone.fm/MLN2155636147" },
+  { show: "AI Engineering Podcast", source: "Podhome", url: "https://serve.podhome.fm/rss/c9abdd38-a5dc-5eb2-96fd-f833f93208a7" },
+  { show: "No Priors", source: "Megaphone", url: "https://feeds.megaphone.fm/nopriors" },
+  { show: "Engineering with AI", source: "RSS.com", url: "https://media.rss.com/engineeringwithaipodcas/feed.xml" },
+  { show: "This Day in AI", source: "Transistor", url: "https://feeds.transistor.fm/this-day-in-ai" },
+  { show: "Lex Fridman Podcast", source: "Lex Fridman", url: "https://lexfridman.com/feed/podcast/" },
+  { show: "The Dwarkesh Podcast", source: "Substack", url: "https://api.substack.com/feed/podcast/104929.rss" },
+  { show: "The AI Daily Brief", source: "Libsyn", url: "https://feeds.libsyn.com/468519/rss" },
+  { show: "CoRecursive: Coding Stories", source: "CoRecursive", url: "https://corecursive.com/feed/" },
+  { show: "Hard Fork", source: "New York Times", url: "https://feeds.simplecast.com/6HKOhNgS" },
+  { show: "Tech Brew Ride Home", source: "Megaphone", url: "https://feeds.megaphone.fm/ridehome" },
+  { show: "Waveform: The MKBHD Podcast", source: "Megaphone", url: "https://feeds.megaphone.fm/STU4418364045" },
+  { show: "Radiolab", source: "WNYC Studios", url: "https://feeds.megaphone.fm/WNYC1482881651" },
+  { show: "Science Vs", source: "Spotify Studios", url: "https://feeds.megaphone.fm/sciencevs" },
+  { show: "Unexplainable", source: "Vox", url: "https://feeds.megaphone.fm/unexplainable" },
+  { show: "Land of the Giants", source: "Vox", url: "https://feeds.megaphone.fm/landofthegiants" },
+  { show: "Business Movers", source: "Wondery", url: "https://rss.art19.com/business-movers" },
+  { show: "WSJ: The Future of Everything", source: "Wall Street Journal", url: "https://feeds.content.dowjones.io/public/rss/wsj_future_of_everything" },
+  { show: "TED Radio Hour", source: "NPR", url: "https://feeds.npr.org/510298/podcast.xml" },
+  { show: "99% Invisible", source: "Radiotopia", url: "https://feeds.megaphone.fm/invisible99" },
 ];
 
 function envNumber(name: string, fallback: number): number {
@@ -179,52 +201,6 @@ function daysBetween(a: string, b: string): number {
   return Math.round((parseDate(a).getTime() - parseDate(b).getTime()) / 86_400_000);
 }
 
-function scoreEpisode(episode: Episode): number {
-  const text = `${episode.show} ${episode.title} ${episode.description}`.toLowerCase();
-  const weightedTerms: [string, number][] = [
-    ["interview", 3],
-    ["conversation", 3],
-    ["with ", 2],
-    ["engineer", 3],
-    ["engineering", 3],
-    ["developer", 2],
-    ["software", 2],
-    ["architecture", 2],
-    ["infrastructure", 2],
-    ["platform", 2],
-    ["data engineering", 3],
-    ["developer tools", 3],
-    ["open source", 2],
-    ["security", 2],
-    ["ai", 1],
-    ["agent", 2],
-    ["agents", 2],
-    ["llm", 2],
-    ["model", 1],
-    ["researcher", 2],
-    ["founder", 2],
-    ["ceo", 1],
-    ["cto", 2],
-    ["product", 1],
-    ["cloud", 1],
-    ["data center", 2],
-  ];
-  const penalties: [string, number][] = [
-    ["daily brief", 3],
-    ["news roundup", 3],
-    ["weekly update", 2],
-    ["solo episode", 1],
-    ["trailer", 3],
-  ];
-  const positive = weightedTerms.reduce((score, [term, weight]) => score + (text.includes(term) ? weight : 0), 0);
-  const negative = penalties.reduce((score, [term, weight]) => score + (text.includes(term) ? weight : 0), 0);
-  const showBonus = ["software engineering daily", "software engineering radio", "oxide and friends", "infoq", "changelog", "data engineering show"].some(show =>
-    episode.show.toLowerCase().includes(show),
-  )
-    ? 2
-    : 0;
-  return positive + showBonus - negative;
-}
 
 function maxEpisodes(): number {
   return envNumber("PODCAST_MAX_EPISODES", 3);
@@ -239,11 +215,11 @@ function candidateEpisodes(): number {
 }
 
 function foreignTechPodcastMaxEpisodes(): number {
-  return envNumber("FOREIGN_TECH_PODCAST_MAX_EPISODES", 5);
+  return envNumber("FOREIGN_TECH_PODCAST_MAX_EPISODES", 999);
 }
 
 function maxWindowDays(): number {
-  return envNumber("PODCAST_LOOKBACK_DAYS", 10);
+  return envNumber("PODCAST_LOOKBACK_DAYS", 0);
 }
 
 function maxDailyEpisodeMinutes(): number {
@@ -366,20 +342,16 @@ async function fetchRssEpisodes(date: string): Promise<Episode[]> {
     const delta = daysBetween(date, episode.date);
     return delta >= 0 && delta <= maxWindowDays();
   });
-  return inWindow.toSorted((a, b) => {
-    const scoreDelta = scoreEpisode(b) - scoreEpisode(a);
-    if (scoreDelta) return scoreDelta;
-    return b.date.localeCompare(a.date);
-  });
+  return inWindow.toSorted((a, b) => b.date.localeCompare(a.date));
 }
 
 
 function appleTopPodcastsCount(): number {
-  return envNumber("APPLE_TOP_PODCASTS_COUNT", 5);
+  return envNumber("APPLE_TOP_PODCASTS_COUNT", 20);
 }
 
 function appleTopPodcastsMaxEpisodes(): number {
-  return envNumber("APPLE_TOP_PODCASTS_MAX_EPISODES", appleTopPodcastsCount());
+  return envNumber("APPLE_TOP_PODCASTS_MAX_EPISODES", 999);
 }
 
 function appleStorefront(): string {
