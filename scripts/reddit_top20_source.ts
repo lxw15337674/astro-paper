@@ -14,7 +14,7 @@ const SUBREDDITS = ["AskReddit", "TIFU", "TrueOffMyChest", "confessions", "expla
 const POSTS_PER_SUB = 50;
 const TOP_N = 40;
 const COMMENTS_PER_POST = 5;
-const COMMENT_CONCURRENCY = 4;
+const COMMENT_CONCURRENCY = 5;
 
 export type RedditPayloadItem = {
   rank: number;
