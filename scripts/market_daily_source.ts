@@ -345,6 +345,9 @@ function topAndBottom<T extends { pct: number }>(rows: T[], limit = 5): { top: T
 
 const EQUITY_CATEGORIES = new Set(["股票", "A股", "港股"]);
 
+const A_SHARE_INDEX_NAMES = ["上证指数", "深证成指", "创业板指数", "沪深300", "中证500", "科创50"];
+const HK_INDEX_NAMES = ["恒生指数", "国企指数", "恒生科技指数"];
+
 function marketTableRowsByName(data: MarketTableData): Map<string, MarketTableRow> {
   return new Map(data.rows.filter(row => EQUITY_CATEGORIES.has(row.category)).map(row => [row.name, row]));
 }
@@ -394,8 +397,8 @@ function buildAsiaSectionFromMarketTable(data: MarketTableData, date: string, na
 
 export function buildAsiaMarketDailyFromTable(data: MarketTableData, date = data.date): string {
   const sections = [
-    buildAsiaSectionFromMarketTable(data, date, ["上证指数", "深证成指", "创业板指数", "沪深300", "中证500", "科创50"], "aShare", "A股", CLOSED_TEXT.aShare, UNAVAILABLE_TEXT.aShare),
-    buildAsiaSectionFromMarketTable(data, date, ["恒生指数", "国企指数", "恒生科技指数"], "hk", "港股", CLOSED_TEXT.hk, UNAVAILABLE_TEXT.hk),
+    buildAsiaSectionFromMarketTable(data, date, A_SHARE_INDEX_NAMES, "aShare", "A股", CLOSED_TEXT.aShare, UNAVAILABLE_TEXT.aShare),
+    buildAsiaSectionFromMarketTable(data, date, HK_INDEX_NAMES, "hk", "港股", CLOSED_TEXT.hk, UNAVAILABLE_TEXT.hk),
   ];
   return `${[buildSummary(sections, "A股与港股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
@@ -798,15 +801,17 @@ function stripSummaryBlock(markdown: string): string {
 // 各 source 段之间的分隔符，供 composeFullCapitalMarket 按序提取。
 export const CAPITAL_MARKET_SOURCE_SEP = "\n\n<!-- ===SECTION=== -->\n\n";
 
-// 一次性拉取全部市场数据（市场速览表、亚洲、美股、比特币），拼成统一 source 文本。
-// 各段顺序固定：table → asia → us → crypto，与 CAPITAL_MARKET_SOURCE_SEP 分隔。
-// 市场速览表格与亚洲段共享同一次 buildMarketTableData 调用，避免 Python/AkShare 被调用两次。
+// 一次性拉取全部市场数据（市场速览表、A股、港股、美股、比特币），拼成统一 source 文本。
+// 各段顺序固定：table → ashare → hk → us → crypto，与 CAPITAL_MARKET_SOURCE_SEP 分隔。
+// 市场速览表格与 A股/港股段共享同一次 buildMarketTableData 调用，避免 Python/AkShare 被调用两次。
 // 美股数据不可用（休市）时抛 MarketSourceUnavailableError("capital-market-daily", ...)，触发任务级跳过。
 export async function buildAllCapitalMarketSource(date: string): Promise<string> {
-  // 市场速览表与亚洲段共用一份 MarketTableData，只跑一次 Python 进程。
+  // 市场速览表与 A股/港股段共用一份 MarketTableData，只跑一次 Python 进程。
   const tableData = buildMarketTableData(date);
   const tableBlock = renderMarketTable(tableData);
-  const asiaFull = buildAsiaMarketDailyFromTable(tableData, date);
+  // A股与港股各自成块：section.markdown 以 `## A股`/`## 港股` 开头，无 `## 总结`，本身即数据块。
+  const ashareBlock = buildAsiaSectionFromMarketTable(tableData, date, A_SHARE_INDEX_NAMES, "aShare", "A股", CLOSED_TEXT.aShare, UNAVAILABLE_TEXT.aShare).markdown;
+  const hkBlock = buildAsiaSectionFromMarketTable(tableData, date, HK_INDEX_NAMES, "hk", "港股", CLOSED_TEXT.hk, UNAVAILABLE_TEXT.hk).markdown;
 
   const [usResult, cryptoResult] = await Promise.allSettled([
     generateUsMarketDaily(date).then(full => `${stripSummaryBlock(full)}\n`),
@@ -826,8 +831,7 @@ export async function buildAllCapitalMarketSource(date: string): Promise<string>
     return "";
   };
 
-  const asia = `${stripSummaryBlock(asiaFull)}\n`.trim();
-  return [tableBlock.trim(), asia, usResult.value.trim(), get(cryptoResult, "crypto")].join(CAPITAL_MARKET_SOURCE_SEP);
+  return [tableBlock.trim(), ashareBlock.trim(), hkBlock.trim(), usResult.value.trim(), get(cryptoResult, "crypto")].join(CAPITAL_MARKET_SOURCE_SEP);
 }
 
 // 保留旧接口供 CLI 调试用（market_table.py / generateAsiaMarketDaily 等单独调用）。

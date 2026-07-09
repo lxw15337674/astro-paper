@@ -182,7 +182,7 @@ function formatRedditTop20(text: string): string {
 
 function formatCapitalMarketDaily(body: string): { markdown: string; ogImage: string } {
   const normalized = normalizeMarkdown(body);
-  for (const heading of ["## 今日总览", "## 美股", "## 亚洲", "## 比特币"]) {
+  for (const heading of ["## 今日总览", "## 美股", "## A股", "## 港股", "## 比特币"]) {
     if (!normalized.includes(heading)) throw new Error(`capital-market-daily missing required section: ${heading}`);
   }
   return { markdown: `${normalized.trim()}\n`, ogImage: "" };

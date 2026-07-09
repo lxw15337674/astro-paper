@@ -866,19 +866,21 @@ test("result verifier skips task-level failures with explicit error", () => {
 
 test("composeFullCapitalMarket rejects missing JSON fields", () => {
   const validJson = JSON.stringify({
-    overview: "全球市场偏弱。",
-    asia_summary: "A股小幅下跌。",
-    asia_interpretation: "上证相对抗跌，创业板偏弱。",
+    overview: "全球市场偏弱，美股窄幅、A股港股回落、BTC 承压。",
     us_summary: "美股窄幅收涨。",
     us_interpretation: "科技板块领涨，行业分化明显。",
-    crypto_conclusion: "BTC 偏弱，约 62521 美元。",
-    crypto_price_move: "24h 跌约 2.2%，短线承压。",
+    ashare_summary: "A股小幅下跌。",
+    ashare_interpretation: "上证相对抗跌，创业板偏弱。",
+    hk_summary: "港股跟随回落。",
+    hk_interpretation: "恒生科技领跌，蓝筹相对抗跌。",
+    crypto_summary: "BTC 偏弱，约 62521 美元。",
+    crypto_interpretation: "24h 跌约 2.2%，资金费率转负，短线承压。",
   });
   const source = "## 市场速览\n\n| 品种 | 最新 |\n| :--- | ---: |\n| 比特币 | 62521 |";
   assert.doesNotThrow(() => composeFullCapitalMarket(validJson, source));
 
-  const missingField = JSON.stringify({ overview: "ok", asia_summary: "ok", asia_interpretation: "ok", us_summary: "ok", us_interpretation: "ok", crypto_conclusion: "ok" });
-  assert.throws(() => composeFullCapitalMarket(missingField, source), /crypto_price_move is empty/);
+  const missingField = JSON.stringify({ overview: "ok", us_summary: "ok", us_interpretation: "ok", ashare_summary: "ok", ashare_interpretation: "ok", hk_summary: "ok", hk_interpretation: "ok", crypto_summary: "ok" });
+  assert.throws(() => composeFullCapitalMarket(missingField, source), /crypto_interpretation is empty/);
 });
 
 test("HN source verifier accepts legitimate double-brace examples from source articles", () => {
