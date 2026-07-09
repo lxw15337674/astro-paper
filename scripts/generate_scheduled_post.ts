@@ -15,7 +15,7 @@ import { redditMarkdownFromModelJson } from "./reddit_top20_compose.ts";
 import { githubTrendingMarkdownFromModelJson } from "./github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "./mdblist_compose.ts";
 import { dailyDigestMarkdownFromModelJson } from "./daily_digest_compose.ts";
-import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcastEpisodeArticle, buildDailyPodcastSource, fetchDailyPodcastEpisodes, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
+import { type Episode, PodcastSourceInsufficientEpisodesError, buildDailyPodcastEpisodeArticle, buildDailyPodcastSource, fetchAppleTopPodcastEpisodeList, fetchDailyPodcastEpisodes, geminiArticleBaseUrl, geminiArticleModel } from "./foreign_tech_podcast_source.ts";
 import { appendSummarizedEpisode } from "./podcast_ledger.ts";
 import { MarketSourceUnavailableError, buildAllCapitalMarketSource } from "./market_daily_source.ts";
 import { composeFullCapitalMarket } from "./market_compose.ts";
@@ -722,6 +722,7 @@ type GenerateTaskOptions = {
 
 async function fetchPodcastArticleEpisodes(task: Task, date: string, force: boolean): Promise<Episode[]> {
   if (task === "daily-podcasts") return fetchDailyPodcastEpisodes(date, force);
+  if (task === "apple-top-podcasts") return fetchAppleTopPodcastEpisodeList(date, force);
   if (task === "xyzrank-top-episodes") return fetchXyzRankTopEpisodes(date, force);
   throw new Error(`unsupported podcast article task: ${task}`);
 }

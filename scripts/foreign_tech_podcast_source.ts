@@ -1028,8 +1028,14 @@ async function generateGeminiArticle(prompt: string, audioParts: GeminiAudioPart
 
 // 合并池里每个 episode 各出一篇（多模态：音频→文章），由编排层循环调用。
 export async function fetchDailyPodcastEpisodes(date = bjtDateString(), force = false): Promise<Episode[]> {
-  const episodes = (await fetchMergedPodcastEpisodes(date, force)).filter(episode => episode.audioUrl);
+  const episodes = (await fetchEpisodes(date, force)).filter(episode => episode.audioUrl);
   if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("daily podcasts", episodes.length, minEpisodes());
+  return episodes;
+}
+
+export async function fetchAppleTopPodcastEpisodeList(date = bjtDateString(), force = false): Promise<Episode[]> {
+  const episodes = (await fetchAppleTopPodcastEpisodes(date, force)).filter(episode => episode.audioUrl);
+  if (episodes.length < minEpisodes()) throw new PodcastSourceInsufficientEpisodesError("apple top podcasts", episodes.length, minEpisodes());
   return episodes;
 }
 

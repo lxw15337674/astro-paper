@@ -39,6 +39,12 @@ export const BLOG_TASKS = {
     description: "每周 XYZ Rank 中文播客热门单集 Top 5 音频长文笔记。",
     fileName: "XYZRank热门播客-{date}.md",
   },
+  "apple-top-podcasts": {
+    titlePrefix: "Apple 热门播客笔记",
+    tag: "Apple播客榜",
+    description: "每日 Apple Podcasts 美区 Top Shows 热门节目音频长文笔记。",
+    fileName: "Apple热门播客-{date}.md",
+  },
   "tech-daily": {
     titlePrefix: "技术日报",
     tag: "技术日报",
