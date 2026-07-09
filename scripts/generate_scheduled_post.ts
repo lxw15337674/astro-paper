@@ -192,7 +192,7 @@ function settlePodcastArticleResults(results: ResultItem[], date: string, minEpi
 }
 
 function isPodcastArticleTask(task: Task): boolean {
-  return task === "daily-podcasts" || task === "xyzrank-top-episodes";
+  return task === "daily-podcasts" || task === "apple-top-podcasts" || task === "xyzrank-top-episodes";
 }
 
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
