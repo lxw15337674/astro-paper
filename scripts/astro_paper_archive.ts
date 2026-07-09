@@ -216,10 +216,15 @@ function extractPodcastDescription(text: string): { text: string; description?: 
   return { text: newlineIndex >= 0 ? text.slice(newlineIndex + 1) : "", description };
 }
 
+function normalizePodcastHeadingDepth(markdown: string): string {
+  if (/^##\s+/m.test(markdown) || !/^###\s+/m.test(markdown)) return markdown;
+  return markdown.replace(/^(#{3,6})(\s+)/gm, (_match, hashes: string, spacing: string) => `${hashes.slice(1)}${spacing}`);
+}
+
 // daily-podcasts 一篇只讲一期，校验保持最小集：禁止合辑小节、至少一个 ## 标题、无重复内容、长度下限。
 function formatPodcastEpisode(text: string): { markdown: string; description?: string } {
   const { text: bodyText, description } = extractPodcastDescription(text);
-  const normalized = normalizeMarkdown(bodyText);
+  const normalized = normalizePodcastHeadingDepth(normalizeMarkdown(bodyText));
   for (const marker of ["## 今日总览", "## 今日播客清单"]) {
     if (normalized.includes(marker)) throw new Error(`daily podcasts contains forbidden section: ${marker}`);
   }
@@ -231,8 +236,8 @@ function formatPodcastEpisode(text: string): { markdown: string; description?: s
 
 // 标题取「节目名：本期中文标题」，比通用「笔记｜日期」更具体。
 function podcastEpisodeTitle(body: string): string {
-  const heading = body.match(/^##\s+(.+?)\s*$/m)?.[1]?.trim();
-  const show = body.match(/^-\s*\*\*节目\*\*[：:]\s*(.+?)\s*$/m)?.[1]?.trim();
+  const heading = body.match(/^#{2,3}\s+(.+?)\s*$/m)?.[1]?.trim();
+  const show = body.match(/^\s*-\s*(?:\*\*)?节目(?:\*\*)?[：:]\s*(.+?)\s*$/m)?.[1]?.trim();
   if (heading && show && show !== "未标明") return `${show}：${heading}`;
   return heading || "";
 }

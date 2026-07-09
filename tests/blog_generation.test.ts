@@ -715,6 +715,32 @@ test("archive and verifier accept generated HN, podcast notes, and retained dige
   assert.equal(verifyResultJson(repo, resultJson), 5);
 });
 
+test("podcast archive promotes h3-only model output into accepted section headings", () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-podcast-h3-"));
+  const body = `DESCRIPTION: 模型把顶层标题写成三级标题
+
+### 中文标题：一次格式下沉的播客输出
+
+### 基本信息
+
+- 节目：Format Drift Podcast
+- 日期：2099-01-02
+- 来源：Format Drift
+- 链接：https://example.com/podcast/format-drift
+
+### 长文笔记
+
+#### 第一部分
+
+${"这是一段用于覆盖模型把播客顶层标题写成三级标题时的归档兼容逻辑。它保留内容质量校验，只把标题层级提升一级，避免可用文章因为 Markdown 层级偏差被跳过。".repeat(24)}
+`;
+  const result = archivePost({ task: "apple-top-podcasts", date: "2099-01-02", repo, body, force: true, fileNameSuffix: "01-format-drift" });
+  const article = fs.readFileSync(path.join(repo, result.path), "utf8");
+  assert.equal(result.title, "Format Drift Podcast：中文标题：一次格式下沉的播客输出");
+  assert.match(article, /^## 中文标题：一次格式下沉的播客输出$/m);
+  assert.match(article, /^### 第一部分$/m);
+});
+
 test("HN compose parses source facts from markdown blocks", () => {
   const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/hn-top10.md"), "utf8");
   const facts = parseSourceFacts(source);
