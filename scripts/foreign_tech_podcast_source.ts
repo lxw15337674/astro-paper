@@ -219,7 +219,7 @@ function foreignTechPodcastMaxEpisodes(): number {
 }
 
 function maxWindowDays(): number {
-  return envNumber("PODCAST_LOOKBACK_DAYS", 0);
+  return envNumber("PODCAST_LOOKBACK_DAYS", 10);
 }
 
 function maxDailyEpisodeMinutes(): number {

@@ -199,8 +199,8 @@ test("foreign tech podcast source includes technical interview feeds", () => {
   assert.equal(feeds.get("The InfoQ Podcast"), "https://feeds.soundcloud.com/users/soundcloud:users:215740450/sounds.rss");
   assert.equal(feeds.get("Changelog Interviews"), "https://changelog.com/podcast/feed");
   assert.equal(feeds.get("The Data Engineering Show"), "https://feeds.fame.so/the-data-engineering-show");
+  assert.equal(feeds.get("The Cognitive Revolution"), "https://feeds.megaphone.fm/RINTP3108857801");
   assert.equal(feeds.has("Dwarkesh Podcast"), false);
-  assert.equal(feeds.has("The Cognitive Revolution"), false);
   assert.equal(feeds.has("Training Data"), false);
   assert.equal(feeds.has("Gradient Dissent"), false);
 });
@@ -701,6 +701,7 @@ test("archive and verifier accept generated HN, podcast notes, and retained dige
 这期还谈到产品布局和值得关注的设计工作流，这些是产品访谈里的正常语义，不应被市场日报的投顾口吻过滤误伤。
 `;
   const podcast = archivePost({ task: "daily-podcasts", date: "2099-01-02", repo, body: podcastBody, force: true });
+  const applePodcast = archivePost({ task: "apple-top-podcasts", date: "2099-01-02", repo, body: podcastBody, force: true, fileNameSuffix: "01-latent-space" });
   const xyzRankTopEpisodeBody = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/xyzrank-top-episodes.md"), "utf8");
   const xyzRankTopEpisode = archivePost({ task: "xyzrank-top-episodes", date: "2099-01-06", repo, body: xyzRankTopEpisodeBody, force: true, fileNameSuffix: "01-jokes-aside" });
   const techDailyBody = composeFixtureBody("tech-daily");
@@ -710,8 +711,8 @@ test("archive and verifier accept generated HN, podcast notes, and retained dige
   fs.copyFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/xyzrank-top-episodes.md"), path.join(artifactsDir, "source.fixture.md"));
   const xyzRankTopEpisodeWithSource = { ...xyzRankTopEpisode, generation: { source_artifact: "blog-generation-artifacts/xyzrank-top-episodes/source.fixture.md" } };
   const resultJson = path.join(repo, "result.json");
-  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, podcast, xyzRankTopEpisodeWithSource, techDaily] }));
-  assert.equal(verifyResultJson(repo, resultJson), 4);
+  fs.writeFileSync(resultJson, JSON.stringify({ date: "2099-01-06", results: [hn, podcast, applePodcast, xyzRankTopEpisodeWithSource, techDaily] }));
+  assert.equal(verifyResultJson(repo, resultJson), 5);
 });
 
 test("HN compose parses source facts from markdown blocks", () => {

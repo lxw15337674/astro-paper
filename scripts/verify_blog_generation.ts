@@ -37,7 +37,7 @@ function verifyFrontmatter(file: string, expectedTask: string): string {
     const info = taskInfo(expectedTask);
     if (!frontmatter.includes(info.tag)) throw new Error(`${file} frontmatter missing ${info.tag} tag`);
     // 播客逐集文章标题改为「节目名：本期中文标题」，不再带固定 titlePrefix。
-    if (expectedTask !== "daily-podcasts" && expectedTask !== "xyzrank-top-episodes" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
+    if (expectedTask !== "daily-podcasts" && expectedTask !== "apple-top-podcasts" && expectedTask !== "xyzrank-top-episodes" && !frontmatter.includes(info.titlePrefix)) throw new Error(`${file} frontmatter missing ${info.titlePrefix} title`);
   }
   return text;
 }

@@ -350,7 +350,7 @@ function formatMdblistWeekly(text: string): string {
 }
 
 function isPodcastArticleTask(task: string): boolean {
-  return task === "daily-podcasts" || task === "xyzrank-top-episodes";
+  return task === "daily-podcasts" || task === "apple-top-podcasts" || task === "xyzrank-top-episodes";
 }
 
 export function archivePost({
