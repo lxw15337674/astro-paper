@@ -400,6 +400,76 @@
       "date": "2026-07-06",
       "archivedAt": "2026-07-09",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-09-12-the-mel-robbins-podcast.md"
+    },
+    {
+      "title": "SE Radio 728: Clare Liguori on AWS Strands SDK for AI Agents",
+      "show": "Software Engineering Radio",
+      "link": "https://se-radio.net/2026/07/se-radio-728-clare-liguori-on-aws-strand-sdk-for-ai-agents/",
+      "audioUrl": "https://traffic.libsyn.com/secure/seradio/728-clare-liguori-aws-strand-sdk.mp3?dest-id=23379",
+      "guid": "938a88ad-f0d8-49eb-827d-93c6c300b7b5",
+      "date": "2026-07-08",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-01-software-engineering-radio.md"
+    },
+    {
+      "title": "Are we all living in an enormous black hole?",
+      "show": "Unexplainable",
+      "link": "https://www.vox.com/unexplainable",
+      "audioUrl": "https://www.podtrac.com/pts/redirect.mp3/pdst.fm/e/pscrb.fm/rss/p/mgln.ai/e/257/traffic.megaphone.fm/VMP1036315823.mp3",
+      "guid": "9186318e-4982-11f1-b651-0b9e973f5a31",
+      "date": "2026-07-06",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-02-unexplainable.md"
+    },
+    {
+      "title": "Fable Ban Reversed + Dr. Dana Suskind on Parenting With A.I. + Prediction Market Drama",
+      "show": "Hard Fork",
+      "link": "https://www.nytimes.com/column/hard-fork",
+      "audioUrl": "https://dts.podtrac.com/redirect.mp3/pdst.fm/e/pfx.vpixl.com/6qj4J/pscrb.fm/rss/p/nyt.simplecastaudio.com/3e43d072-f8a5-430f-bc8e-4c70aafdf3c7/episodes/0dc0d4df-eafd-4db7-a9c0-5cfb997b3491/audio/128/default.mp3?aid=rss_feed&awCollectionId=3e43d072-f8a5-430f-bc8e-4c70aafdf3c7&awEpisodeId=0dc0d4df-eafd-4db7-a9c0-5cfb997b3491&feed=6HKOhNgS",
+      "guid": "2a0ca7dc-3c64-4d5e-b7ea-e1635a9d19ba",
+      "date": "2026-07-03",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-03-hard-fork.md"
+    },
+    {
+      "title": "Apple Raises Prices on Everything!",
+      "show": "Waveform: The MKBHD Podcast",
+      "link": "1b1e8372-ba65-11f0-a842-eb3dc04f790a",
+      "audioUrl": "https://www.podtrac.com/pts/redirect.mp3/pdst.fm/e/pscrb.fm/rss/p/mgln.ai/e/257/traffic.megaphone.fm/VMP7642877374.mp3",
+      "guid": "1b1e8372-ba65-11f0-a842-eb3dc04f790a",
+      "date": "2026-07-03",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-04-waveform-the-mkbhd-podcast.md"
+    },
+    {
+      "title": "The state of fashion",
+      "show": "TED Radio Hour",
+      "link": "https://www.npr.org/2026/07/03/nx-s1-5876411/the-state-of-fashion",
+      "audioUrl": "https://prfx.byspotify.com/e/play.podtrac.com/npr-510298/npr.simplecastaudio.com/e19460b8-b905-4bd2-9062-cea3c0ab9405/episodes/d98aa16f-0c33-4f87-8dee-a06df8491e25/audio/128/default.mp3?awCollectionId=e19460b8-b905-4bd2-9062-cea3c0ab9405&awEpisodeId=d98aa16f-0c33-4f87-8dee-a06df8491e25&feed=gGUt_fS1&t=podcast&e=nx-s1-5876411&p=510298&d=3005&size=48087084",
+      "guid": "690885be-0a5a-401f-800f-5d286cefe5f7",
+      "date": "2026-07-03",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-05-ted-radio-hour.md"
+    },
+    {
+      "title": "How Nuclear Will Unlock Energy Abundance with Valar Atomics Founder Isaiah Taylor",
+      "show": "No Priors",
+      "link": "ee5028a8-75be-11f1-bab0-67711adf1682",
+      "audioUrl": "https://traffic.megaphone.fm/PDP1493614959.mp3",
+      "guid": "ee5028a8-75be-11f1-bab0-67711adf1682",
+      "date": "2026-07-02",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-06-no-priors.md"
+    },
+    {
+      "title": "Narcissists: Are We Surrounded?",
+      "show": "Science Vs",
+      "link": "be43b1ce-758d-11f1-92ed-7b3adc5703b6",
+      "audioUrl": "https://chrt.fm/track/15E3G4/traffic.megaphone.fm/GLT6782439273.mp3",
+      "guid": "be43b1ce-758d-11f1-92ed-7b3adc5703b6",
+      "date": "2026-07-02",
+      "archivedAt": "2026-07-09",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-09-07-science-vs.md"
     }
   ]
 }
