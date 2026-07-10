@@ -11,6 +11,8 @@ import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFacts } from "../scripts/hn_compose.ts";
 import { githubTrendingMarkdownFromModelJson, parseGitHubTrendingFacts } from "../scripts/github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "../scripts/mdblist_compose.ts";
+import { appendMdblistRecommendations, loadMdblistRecommendationKeys, parseMdblistRecommendationsFromSource } from "../scripts/mdblist_weekly_ledger.ts";
+import { buildMdblistWeeklySource, latestStartedSeasonNumber, selectUnrecommendedMdblistCandidates } from "../scripts/mdblist_weekly_source.ts";
 import { dailyDigestMarkdownFromModelJson } from "../scripts/daily_digest_compose.ts";
 import { FEEDS, buildForeignTechPodcastSource } from "../scripts/foreign_tech_podcast_source.ts";
 import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
@@ -821,6 +823,125 @@ test("mdblist compose takes poster and IMDb rating from source", () => {
   assert.match(markdown, /### 痴迷（Obsession）/);
   assert.match(markdown, /!\[痴迷\]\(https:\/\/image\.tmdb\.org\/t\/p\/w1920_and_h800_multi_faces\/r013C8Me2bZ0pUi0OWJRh0h7MzT\.jpg\)/);
   assert.match(markdown, /- IMDb 评分：8\.1/);
+});
+
+test("mdblist season identity uses the latest season with started episodes", () => {
+  assert.equal(
+    latestStartedSeasonNumber([
+      { season_number: 0, episodes: [{ votes: 100, rating: 8 }] },
+      { season_number: 1, episodes: [{ votes: 50, rating: 7.5 }] },
+      { season_number: 2, episodes: [{ votes: 10, rating: null }] },
+      { season_number: 3, episodes: [{ votes: 0, rating: null }] },
+    ]),
+    2,
+  );
+  assert.equal(latestStartedSeasonNumber([{ season_number: 1, episodes: [{ votes: 0, rating: null }] }]), null);
+});
+
+test("mdblist candidate selection expands past recommended TMDB identities", () => {
+  const startedSeason = (season: number) => ({ seasons: [{ season_number: season, episodes: [{ votes: 1, rating: 8 }] }] });
+  const candidates = [
+    { item: { title: "Already recommended", ids: { tmdb: 101 } }, info: startedSeason(2) },
+    { item: { title: "Future season only", ids: { tmdb: 102 } }, info: { seasons: [{ season_number: 1, episodes: [{ votes: 0, rating: null }] }] } },
+    { item: { title: "Fresh first", ids: { tmdb: 103 } }, info: startedSeason(1) },
+    { item: { title: "Fresh second", ids: { tmdb: 104 } }, info: startedSeason(4) },
+  ];
+  const selected = selectUnrecommendedMdblistCandidates(candidates, "show", new Set(["show:101:season:2"]), 2);
+  assert.deepEqual(
+    selected.map(entry => ({ title: entry.item.title, key: entry.recommendation.key })),
+    [
+      { title: "Fresh first", key: "show:103:season:1" },
+      { title: "Fresh second", key: "show:104:season:4" },
+    ],
+  );
+});
+
+test("mdblist ledger persists successful selections and replaces same-post reruns", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mdblist-ledger-"));
+  const file = path.join(dir, "recommended.json");
+  appendMdblistRecommendations(
+    [
+      { key: "movie:10", mediaType: "movie", tmdbId: 10, title: "Movie A" },
+      { key: "show:20:season:2", mediaType: "show", tmdbId: 20, seasonNumber: 2, title: "Show A" },
+    ],
+    { archivedAt: "2099-01-09", postPath: "src/content/posts/zh-cn/每周影视推荐-2099-01-09.md" },
+    file,
+  );
+  assert.deepEqual(loadMdblistRecommendationKeys(file), new Set(["movie:10", "show:20:season:2"]));
+
+  appendMdblistRecommendations(
+    [{ key: "show:21:season:1", mediaType: "show", tmdbId: 21, seasonNumber: 1, title: "Show B" }],
+    { archivedAt: "2099-01-09", postPath: "src/content/posts/zh-cn/每周影视推荐-2099-01-09.md" },
+    file,
+  );
+  assert.deepEqual(loadMdblistRecommendationKeys(file), new Set(["show:21:season:1"]));
+});
+
+test("mdblist source evidence exposes the TMDB identities selected for the ledger", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/mdblist-weekly.md"), "utf8");
+  const selections = parseMdblistRecommendationsFromSource(source);
+  assert.equal(selections.length, 6);
+  assert.deepEqual(selections[0], { key: "movie:1339713", mediaType: "movie", tmdbId: 1339713, title: "Obsession" });
+  assert.deepEqual(selections[3], {
+    key: "show:94997:season:3",
+    mediaType: "show",
+    tmdbId: 94997,
+    seasonNumber: 3,
+    title: "House of the Dragon",
+  });
+});
+
+test("mdblist source builder scans beyond recommended and unstarted candidates", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mdblist-source-"));
+  const ledgerFile = path.join(dir, "recommended.json");
+  appendMdblistRecommendations(
+    [
+      { key: "movie:1", mediaType: "movie", tmdbId: 1, title: "Seen Movie" },
+      { key: "show:11:season:1", mediaType: "show", tmdbId: 11, seasonNumber: 1, title: "Seen Show" },
+    ],
+    { archivedAt: "2099-01-02", postPath: "previous.md" },
+    ledgerFile,
+  );
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.MDBLIST_API_KEY;
+  process.env.MDBLIST_API_KEY = "test-key";
+  globalThis.fetch = (async input => {
+    const url = new URL(String(input));
+    let payload: unknown;
+    if (url.pathname.includes("/lists/87667/items")) {
+      payload = { movies: [{ title: "Seen Movie", ids: { tmdb: 1 } }, { title: "Fresh Movie", ids: { tmdb: 2 } }] };
+    } else if (url.pathname.includes("/lists/88434/items")) {
+      payload = {
+        shows: [
+          { title: "Seen Show", ids: { tmdb: 11 } },
+          { title: "Future Show", ids: { tmdb: 12 } },
+          { title: "Fresh Show", ids: { tmdb: 13 } },
+        ],
+      };
+    } else if (url.pathname.endsWith("/tmdb/show/11")) {
+      payload = { seasons: [{ season_number: 1, episodes: [{ votes: 5, rating: 8 }] }] };
+    } else if (url.pathname.endsWith("/tmdb/show/12")) {
+      payload = { seasons: [{ season_number: 1, episodes: [{ votes: 0, rating: null }] }] };
+    } else if (url.pathname.endsWith("/tmdb/show/13")) {
+      payload = { seasons: [{ season_number: 2, episodes: [{ votes: 2, rating: 7 }] }] };
+    } else {
+      payload = { title: "Fresh Movie", description: "A fresh movie.", ratings: [], genres: [] };
+    }
+    return new Response(JSON.stringify(payload), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const source = await buildMdblistWeeklySource("2099-01-09", 1, { candidatesToFetch: 3, ledgerFile });
+    assert.match(source, /## 1\. Fresh Movie/);
+    assert.match(source, /- TMDB ID：2/);
+    assert.match(source, /## 1\. Fresh Show/);
+    assert.match(source, /- TMDB ID：13/);
+    assert.match(source, /- 推荐季度：2/);
+    assert.doesNotMatch(source, /## \d+\. (?:Seen Movie|Seen Show|Future Show)/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.MDBLIST_API_KEY;
+    else process.env.MDBLIST_API_KEY = originalKey;
+  }
 });
 
 test("daily digest compose rejects links outside the source pool and duplicates", () => {

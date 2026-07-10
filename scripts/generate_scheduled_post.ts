@@ -23,6 +23,7 @@ import { buildDailyDigestSource } from "./daily_digest_source.ts";
 import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource, fetchXyzRankTopEpisodes } from "./xyzrank_top_episodes_source.ts";
 import { buildMdblistWeeklySource } from "./mdblist_weekly_source.ts";
+import { MDBLIST_LEDGER_REL_PATH, appendMdblistRecommendations, parseMdblistRecommendationsFromSource } from "./mdblist_weekly_ledger.ts";
 
 export type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
@@ -231,13 +232,18 @@ const SOURCE_BUILDERS: Partial<Record<Task, (date: string) => Promise<string>>> 
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),
-  "mdblist-weekly": date => buildMdblistWeeklySource(date),
   "tech-daily": date => buildDailyDigestSource(date),
 };
 
-async function sourceForTask(task: Task, date: string, sourceFixtureDir = ""): Promise<string> {
+async function sourceForTask(task: Task, date: string, sourceFixtureDir = "", repo = repoRoot()): Promise<string> {
   if (sourceFixtureDir) return fixtureSource(task, sourceFixtureDir);
   if (task === "capital-market-daily") return buildAllCapitalMarketSource(date);
+  if (task === "mdblist-weekly") {
+    return buildMdblistWeeklySource(date, undefined, {
+      ledgerFile: path.join(repo, MDBLIST_LEDGER_REL_PATH),
+      excludePostPath: taskPostRelPath(task, date),
+    });
+  }
   const builder = SOURCE_BUILDERS[task];
   if (!builder) throw new Error(`no source builder for task: ${task}`);
   return builder(date);
@@ -778,7 +784,7 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];
   }
-  let source = await sourceForTask(task, date, sourceFixtureDir);
+  let source = await sourceForTask(task, date, sourceFixtureDir, repo);
   if (useAi && task === "tech-daily" && !mockResponseDir) {
     source = await buildCombinedTechDailySource({ source, date, repo, model, promptDir, artifactsDir });
     const itemCount = countNumberedBlocks(source);
@@ -794,6 +800,13 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     generation = rendered.metadata;
   }
   const result: ResultItem = archivePost({ task, date, repo, body, force, description });
+  if (task === "mdblist-weekly" && !result.skipped) {
+    appendMdblistRecommendations(
+      parseMdblistRecommendationsFromSource(source),
+      { archivedAt: date, postPath: result.path },
+      path.join(repo, MDBLIST_LEDGER_REL_PATH),
+    );
+  }
   if (generation) result.generation = generation;
   return [result];
 }

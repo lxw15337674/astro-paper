@@ -70,10 +70,11 @@ Known repo-owned implementation files include:
 - `scripts/hn_top10_source.ts`
 - `scripts/generate_scheduled_post.ts`
 - `scripts/astro_paper_archive.ts`
+- `scripts/mdblist_weekly_source.ts`
+- `scripts/mdblist_weekly_ledger.ts`
+- `scripts/mdblist_compose.ts`
 - `scripts/run_morning_market_ai_pipeline.py`
 - `scripts/generate_morning_market_digest.py`
-- `scripts/upgrade_mdblist_weekly_article.py`
-- `scripts/mdblist_weekly_upgrade_prompt.md`
 
 ### Hermes cron integration
 Hermes cron jobs orchestrate these repo-owned flows.
@@ -146,16 +147,20 @@ Purpose:
 - publish a weekly Chinese entertainment recommendation column into Astro.
 
 Jobs:
-- upstream: `404c8660ee38` — `mdblist-weekly-hot-highscore`
-- downstream: `e226a7117f05` — `mdblist-weekly-astro-archive`
+- workflow: `.github/workflows/publish-mdblist-weekly.yml`
 
 Implementation split:
-- upstream source candidate list: `404c8660ee38`
-- editorial upgrade/reshape: `scripts/upgrade_mdblist_weekly_article.py`
-- editorial prompt contract: `scripts/mdblist_weekly_upgrade_prompt.md`
-- Astro archive write: `scripts/astro_paper_archive.py`
+- expanded MDBList candidate selection: `scripts/mdblist_weekly_source.ts`
+- permanent recommendation ledger: `scripts/mdblist_weekly_ledger.ts`
+- semantic JSON composition: `scripts/mdblist_compose.ts`
+- editorial prompt contract: `prompts/blog/weekly/mdblist-weekly.md`
+- Astro archive write: `scripts/astro_paper_archive.ts`
 
 Architecture note:
+- movies are deduplicated by TMDB movie id;
+- shows are deduplicated by TMDB show id plus the latest regular season with at least one rated or voted episode;
+- each list fetches an expanded candidate pool, filters all identities already present in `data/mdblist-weekly/recommended.json`, and only then selects the final items;
+- the ledger is updated only after the article archives successfully, so failed generation cannot consume candidates;
 - this pipeline explicitly separates source-item selection from article-shaping so the final post can read like a recommendation column rather than a database export.
 
 ### 5. Blog generation check-and-repair
@@ -240,15 +245,13 @@ When the user asks to pause “all blog cron jobs”, default behavior in this r
 - keep unrelated non-blog jobs running unless explicitly included.
 
 This means the default pause set currently includes:
-- GitHub Actions `Scheduled posts` schedules — current repo-owned daily publishing path for HN, podcast, market, GitHub Trending, and daily digests
+- GitHub Actions scheduled publishing workflows — current repo-owned publishing path for HN, podcasts, markets, GitHub Trending, daily digests, and weekly entertainment recommendations
 - `bc96c9bab5e7` — `daily-morning-market-blog`
-- `e226a7117f05` — `mdblist-weekly-astro-archive`
 - `9d09cf6e77f5` — `daily-blog-generation-check-and-repair`
 - legacy HN Hermes jobs `0373c42e95ea` / `8640cfe88f41` if they are found enabled in the scheduler
 
 By default it excludes:
 - `95d01fa1f5c7` — weather brief
-- `404c8660ee38` — weekly recommendation upstream source unless the user wants the source-digest leg stopped in addition to the Astro publishing leg
 
 ## Verification workflow
 
@@ -293,4 +296,3 @@ Operational controls are not ad hoc. The system explicitly distinguishes content
 - `skills/software-development/astro-paper-hn-cron-publishing/SKILL.md`
 - `skills/software-development/astro-paper-foreign-tech-podcast-cron/SKILL.md`
 - `skills/software-development/astro-paper-morning-market-cron/SKILL.md`
-- `skills/software-development/astro-paper-weekly-entertainment-cron/SKILL.md`

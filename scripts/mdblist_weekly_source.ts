@@ -1,8 +1,16 @@
 #!/usr/bin/env tsx
 import { bjtTimestamp, clipText, compact, fetchJson, parseArgs, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import {
+  type MdblistMediaType,
+  type MdblistRecommendation,
+  loadMdblistRecommendationKeys,
+  mdblistLedgerPath,
+  mdblistRecommendationKey,
+} from "./mdblist_weekly_ledger.ts";
 
 const MDBLIST_API = "https://api.mdblist.com";
 const DEFAULT_LIMIT = 5;
+const DEFAULT_CANDIDATE_LIMIT = 30;
 // mdblist 上 snoak 维护的 Trakt 趋势榜（数字 list id 比 slug 稳定），可用环境变量覆盖。
 const DEFAULT_MOVIES_LIST = "87667"; // Trakt's Trending Movies
 const DEFAULT_SHOWS_LIST = "88434"; // Trakt's Trending Shows
@@ -13,7 +21,7 @@ type MdblistIds = {
   tmdb?: number | string | null;
 };
 
-type MdblistItem = {
+export type MdblistItem = {
   id?: number | string;
   title?: string;
   mediatype?: string;
@@ -27,7 +35,9 @@ type MdblistListResponse = { movies?: MdblistItem[]; shows?: MdblistItem[]; erro
 
 type MdblistRating = { source?: string; value?: number | null };
 type MdblistGenre = { title?: string; name?: string };
-type MdblistMediaInfo = {
+export type MdblistSeasonEpisode = { votes?: number | null; rating?: number | null; episode_number?: number | null };
+export type MdblistSeason = { season_number?: number | null; episodes?: MdblistSeasonEpisode[] | null };
+export type MdblistMediaInfo = {
   description?: string | null;
   tagline?: string | null;
   year?: number | null;
@@ -37,12 +47,14 @@ type MdblistMediaInfo = {
   ratings?: MdblistRating[] | null;
   backdrop?: string | null;
   poster?: string | null;
+  seasons?: MdblistSeason[] | null;
   error?: string;
 };
 
 type ListSpec = { label: string; mediaLabel: string; mediaType: "movie" | "show"; list: string };
 
-type EnrichedItem = { item: MdblistItem; info: MdblistMediaInfo | null };
+export type EnrichedItem = { item: MdblistItem; info: MdblistMediaInfo | null };
+export type SelectedMdblistCandidate = EnrichedItem & { recommendation: MdblistRecommendation };
 
 function apiKey(): string {
   const key = compact(process.env.MDBLIST_API_KEY || "");
@@ -53,6 +65,11 @@ function apiKey(): string {
 function itemLimit(): number {
   const parsed = Number(process.env.MDBLIST_ITEM_LIMIT || DEFAULT_LIMIT);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_LIMIT;
+}
+
+function candidateLimit(): number {
+  const parsed = Number(process.env.MDBLIST_CANDIDATE_LIMIT || DEFAULT_CANDIDATE_LIMIT);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_CANDIDATE_LIMIT;
 }
 
 function apiUrl(pathname: string, key: string, params: Record<string, string> = {}): string {
@@ -130,8 +147,52 @@ function posterUrl(info: MdblistMediaInfo | null): string {
   return compact(info?.backdrop || info?.poster || "") || "-";
 }
 
-function sourceBlock(enriched: EnrichedItem, index: number, spec: ListSpec): string {
-  const { item, info } = enriched;
+export function latestStartedSeasonNumber(seasons: MdblistSeason[] | null | undefined): number | null {
+  const started = (seasons || [])
+    .filter(season => {
+      const number = Number(season.season_number);
+      if (!Number.isInteger(number) || number <= 0) return false;
+      return (season.episodes || []).some(episode => Number(episode.votes || 0) > 0 || (typeof episode.rating === "number" && Number.isFinite(episode.rating)));
+    })
+    .map(season => Number(season.season_number));
+  return started.length ? Math.max(...started) : null;
+}
+
+function recommendationForCandidate(candidate: EnrichedItem, mediaType: MdblistMediaType): MdblistRecommendation | null {
+  if (!candidate.info) return null;
+  const tmdbId = Number(candidate.item.ids?.tmdb);
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) return null;
+  const seasonNumber = mediaType === "show" ? latestStartedSeasonNumber(candidate.info.seasons) : undefined;
+  if (mediaType === "show" && seasonNumber === null) return null;
+  return {
+    key: mdblistRecommendationKey(mediaType, tmdbId, seasonNumber ?? undefined),
+    mediaType,
+    tmdbId,
+    ...(mediaType === "show" ? { seasonNumber: seasonNumber as number } : {}),
+    title: compact(candidate.item.title || ""),
+  };
+}
+
+export function selectUnrecommendedMdblistCandidates(
+  candidates: EnrichedItem[],
+  mediaType: MdblistMediaType,
+  recommendedKeys: Set<string>,
+  count: number,
+): SelectedMdblistCandidate[] {
+  const blocked = new Set(recommendedKeys);
+  const selected: SelectedMdblistCandidate[] = [];
+  for (const candidate of candidates) {
+    const recommendation = recommendationForCandidate(candidate, mediaType);
+    if (!recommendation || blocked.has(recommendation.key)) continue;
+    selected.push({ ...candidate, recommendation });
+    blocked.add(recommendation.key);
+    if (selected.length >= count) break;
+  }
+  return selected;
+}
+
+function sourceBlock(enriched: SelectedMdblistCandidate, index: number, spec: ListSpec): string {
+  const { item, info, recommendation } = enriched;
   const title = compact(item.title || `未命名作品 ${index + 1}`);
   // 剧集的 runtime 是全季累计分钟，作为单片「片长」会误导，只在电影里给出。
   const runtimeLine = spec.mediaType === "movie" && typeof info?.runtime === "number" && info.runtime > 0 ? [`- 片长：${info.runtime} 分钟`] : [];
@@ -139,6 +200,8 @@ function sourceBlock(enriched: EnrichedItem, index: number, spec: ListSpec): str
     `## ${index + 1}. ${title}`,
     `- 原标题：${title}`,
     `- 媒体类型：${spec.mediaLabel}`,
+    `- TMDB ID：${recommendation.tmdbId}`,
+    ...(recommendation.seasonNumber ? [`- 推荐季度：${recommendation.seasonNumber}`] : []),
     `- 题材(EN)：${genreText(info)}`,
     `- 上映日期：${releaseDateText(info, item)}`,
     ...runtimeLine,
@@ -150,10 +213,25 @@ function sourceBlock(enriched: EnrichedItem, index: number, spec: ListSpec): str
   ].join("\n");
 }
 
-async function buildSection(spec: ListSpec, key: string, count: number): Promise<string[]> {
-  const items = await fetchListItems(spec, key, count);
-  const enriched: EnrichedItem[] = await Promise.all(items.map(async item => ({ item, info: await fetchMediaInfo(item, spec.mediaType, key) })));
-  return [`# ${spec.mediaLabel}候选`, "", ...enriched.map((entry, index) => sourceBlock(entry, index, spec)), ""];
+async function buildSection(spec: ListSpec, key: string, count: number, candidatesToFetch: number, recommendedKeys: Set<string>): Promise<string[]> {
+  const items = await fetchListItems(spec, key, candidatesToFetch);
+  const selected: SelectedMdblistCandidate[] = [];
+  const blocked = new Set(recommendedKeys);
+  for (const item of items) {
+    const tmdbId = Number(item.ids?.tmdb);
+    if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
+    if (spec.mediaType === "movie" && blocked.has(mdblistRecommendationKey("movie", tmdbId))) continue;
+    const candidate: EnrichedItem = { item, info: await fetchMediaInfo(item, spec.mediaType, key) };
+    const next = selectUnrecommendedMdblistCandidates([candidate], spec.mediaType, blocked, 1)[0];
+    if (!next) continue;
+    selected.push(next);
+    blocked.add(next.recommendation.key);
+    if (selected.length >= count) break;
+  }
+  if (selected.length < count) {
+    throw new Error(`mdblist ${spec.label} has only ${selected.length}/${count} unrecommended candidates in the top ${candidatesToFetch}`);
+  }
+  return [`# ${spec.mediaLabel}候选`, "", ...selected.map((entry, index) => sourceBlock(entry, index, spec)), ""];
 }
 
 function listSpecs(): ListSpec[] {
@@ -163,16 +241,29 @@ function listSpecs(): ListSpec[] {
   ];
 }
 
-export async function buildMdblistWeeklySource(date: string, count = itemLimit()): Promise<string> {
+export async function buildMdblistWeeklySource(
+  date: string,
+  count = itemLimit(),
+  {
+    candidatesToFetch = candidateLimit(),
+    ledgerFile = mdblistLedgerPath(),
+    excludePostPath = "",
+  }: { candidatesToFetch?: number; ledgerFile?: string; excludePostPath?: string } = {},
+): Promise<string> {
   const key = apiKey();
   const specs = listSpecs();
-  const sections = await Promise.all(specs.map(spec => buildSection(spec, key, count)));
+  if (!Number.isInteger(candidatesToFetch) || candidatesToFetch < count) {
+    throw new Error(`MDBList candidate limit must be at least the final item limit: ${candidatesToFetch} < ${count}`);
+  }
+  const recommendedKeys = loadMdblistRecommendationKeys(ledgerFile, excludePostPath);
+  const sections = await Promise.all(specs.map(spec => buildSection(spec, key, count, candidatesToFetch, recommendedKeys)));
   return [
     `# 每周影视推荐候选源｜${date}`,
     "",
     "来源：mdblist 聚合的 Trakt 趋势电影与剧集榜单（media 元数据来自 IMDb/TMDb/Trakt 等）",
     `接口：${MDBLIST_API}/lists/{list}/items`,
     `抓取时间：${bjtTimestamp()}`,
+    `候选池：电影与剧集各取前 ${candidatesToFetch}，过滤历史推荐后各选 ${count} 部`,
     "",
     "数据说明：榜单代表近期 Trakt 趋势热度，不是官方权威排名。请据证据写推荐，不要编造评分、剧情或上线日期。",
     "",
@@ -184,7 +275,14 @@ async function main(): Promise<void> {
   const args = parseArgs();
   const date = stringArg(args, "date", new Date().toISOString().slice(0, 10));
   const count = Number(stringArg(args, "limit", String(itemLimit())));
-  writeStdout(await buildMdblistWeeklySource(date, Number.isInteger(count) && count > 0 ? count : itemLimit()));
+  const candidatesToFetch = Number(stringArg(args, "candidate-limit", String(candidateLimit())));
+  writeStdout(
+    await buildMdblistWeeklySource(date, Number.isInteger(count) && count > 0 ? count : itemLimit(), {
+      candidatesToFetch: Number.isInteger(candidatesToFetch) && candidatesToFetch > 0 ? candidatesToFetch : candidateLimit(),
+      ledgerFile: stringArg(args, "ledger-file", mdblistLedgerPath()),
+      excludePostPath: stringArg(args, "exclude-post-path"),
+    }),
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

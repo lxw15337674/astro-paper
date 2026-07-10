@@ -47,14 +47,16 @@ Do **not** treat this file as the single source of truth for each pipeline's det
   - main: `bc96c9bab5e7` — `daily-morning-market-blog`
 
 ### 4. Weekly Entertainment Recommendation
-- Skill: `skills/software-development/astro-paper-weekly-entertainment-cron/SKILL.md`
 - Key scripts:
-  - `scripts/upgrade_mdblist_weekly_article.py`
-  - `scripts/mdblist_weekly_upgrade_prompt.md`
-  - `scripts/astro_paper_archive.py`
-- Cron jobs:
-  - upstream: `404c8660ee38` — `mdblist-weekly-hot-highscore`
-  - downstream: `e226a7117f05` — `mdblist-weekly-astro-archive`
+  - `scripts/mdblist_weekly_source.ts`
+  - `scripts/mdblist_weekly_ledger.ts`
+  - `scripts/mdblist_compose.ts`
+  - `prompts/blog/weekly/mdblist-weekly.md`
+  - `scripts/astro_paper_archive.ts`
+- State:
+  - `data/mdblist-weekly/recommended.json` (permanent TMDB movie / TMDB show-season deduplication)
+- Workflow:
+  - `.github/workflows/publish-mdblist-weekly.yml`
 
 ## Global blog maintenance cron
 
@@ -71,15 +73,13 @@ Do **not** treat this file as the single source of truth for each pipeline's det
 Use this procedure when the goal is to stop all blog-oriented scheduled publishing and its automatic repair loop, while leaving unrelated automations untouched.
 
 ### Included in the pause set
-- GitHub Actions `Scheduled posts` schedules — current repo-owned daily publishing path for HN, podcast, market, GitHub Trending, and daily digests
+- GitHub Actions scheduled publishing workflows — current repo-owned publishing path for HN, podcasts, markets, GitHub Trending, daily digests, and weekly entertainment recommendations
 - `bc96c9bab5e7` — `daily-morning-market-blog`
-- `e226a7117f05` — `mdblist-weekly-astro-archive`
 - `9d09cf6e77f5` — `daily-blog-generation-check-and-repair`
 - legacy HN Hermes jobs `0373c42e95ea` / `8640cfe88f41` if they are found enabled in the scheduler
 
 ### Intentionally excluded from the pause set
 - `95d01fa1f5c7` — weather brief; not a blog pipeline
-- `404c8660ee38` — weekly recommendation upstream digest; pause only if the user wants the source brief itself stopped, not just the Astro publishing leg
 
 ### Operational rule
 - Default interpretation of “暂停现在的所有博客定时任务” in this repo is:

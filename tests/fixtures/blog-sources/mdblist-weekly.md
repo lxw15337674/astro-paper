@@ -11,6 +11,7 @@
 ## 1. Obsession
 - 原标题：Obsession
 - 媒体类型：电影
+- TMDB ID：1339713
 - 题材(EN)：Horror、Romance、Thriller
 - 上映日期：2026-05-13
 - 片长：109 分钟
@@ -23,6 +24,7 @@
 ## 2. The Devil Wears Prada 2
 - 原标题：The Devil Wears Prada 2
 - 媒体类型：电影
+- TMDB ID：1314481
 - 题材(EN)：Comedy、Drama
 - 上映日期：2026-04-29
 - 片长：119 分钟
@@ -35,6 +37,7 @@
 ## 3. The Sheep Detectives
 - 原标题：The Sheep Detectives
 - 媒体类型：电影
+- TMDB ID：1301421
 - 题材(EN)：Adventure、Comedy、Family、Mystery
 - 上映日期：2026-02-06
 - 片长：115 分钟
@@ -49,6 +52,8 @@
 ## 1. House of the Dragon
 - 原标题：House of the Dragon
 - 媒体类型：剧集
+- TMDB ID：94997
+- 推荐季度：3
 - 题材(EN)：Action、Adventure、Drama、Science Fiction
 - 上映日期：2022-08-21
 - 评分：IMDb 8.3 / 烂番茄 92% / Trakt 82
@@ -60,6 +65,8 @@
 ## 2. FROM
 - 原标题：FROM
 - 媒体类型：剧集
+- TMDB ID：124364
+- 推荐季度：4
 - 题材(EN)：Drama、Mystery、Sci-Fi & Fantasy
 - 上映日期：2022-02-20
 - 评分：IMDb 7.7 / 烂番茄 89% / Trakt 80
@@ -71,6 +78,8 @@
 ## 3. Arcane
 - 原标题：Arcane
 - 媒体类型：剧集
+- TMDB ID：94605
+- 推荐季度：2
 - 题材(EN)：Animation、Drama、Sci-Fi & Fantasy
 - 上映日期：2021-11-06
 - 评分：IMDb 9.0 / 烂番茄 96% / Trakt 88
