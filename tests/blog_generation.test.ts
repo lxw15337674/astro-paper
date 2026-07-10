@@ -849,19 +849,27 @@ test("mdblist season identity uses the latest season with started episodes", () 
 });
 
 test("mdblist candidate selection expands past recommended TMDB identities", () => {
-  const startedSeason = (season: number) => ({ seasons: [{ season_number: season, episodes: [{ votes: 1, rating: 8 }] }] });
+  const startedSeason = (season: number, imdb: number | null = 6) => ({
+    ratings: imdb === null ? [] : [{ source: "imdb", value: imdb }],
+    seasons: [{ season_number: season, episodes: [{ votes: 1, rating: 8 }] }],
+  });
   const candidates = [
     { item: { title: "Already recommended", ids: { tmdb: 101 } }, info: startedSeason(2) },
-    { item: { title: "Future season only", ids: { tmdb: 102 } }, info: { seasons: [{ season_number: 1, episodes: [{ votes: 0, rating: null }] }] } },
-    { item: { title: "Fresh first", ids: { tmdb: 103 } }, info: startedSeason(1) },
-    { item: { title: "Fresh second", ids: { tmdb: 104 } }, info: startedSeason(4) },
+    { item: { title: "Low rated", ids: { tmdb: 102 } }, info: startedSeason(1, 5.9) },
+    { item: { title: "Missing IMDb", ids: { tmdb: 103 } }, info: startedSeason(1, null) },
+    {
+      item: { title: "Future season only", ids: { tmdb: 104 } },
+      info: { ratings: [{ source: "imdb", value: 8 }], seasons: [{ season_number: 1, episodes: [{ votes: 0, rating: null }] }] },
+    },
+    { item: { title: "Fresh first", ids: { tmdb: 105 } }, info: startedSeason(1, 6) },
+    { item: { title: "Fresh second", ids: { tmdb: 106 } }, info: startedSeason(4, 6.1) },
   ];
   const selected = selectUnrecommendedMdblistCandidates(candidates, "show", new Set(["show:101:season:2"]), 2);
   assert.deepEqual(
     selected.map(entry => ({ title: entry.item.title, key: entry.recommendation.key })),
     [
-      { title: "Fresh first", key: "show:103:season:1" },
-      { title: "Fresh second", key: "show:104:season:4" },
+      { title: "Fresh first", key: "show:105:season:1" },
+      { title: "Fresh second", key: "show:106:season:4" },
     ],
   );
 });
@@ -924,30 +932,37 @@ test("mdblist source builder scans deeper and returns as many unrecommended cand
       payload = {
         shows: [
           { title: "Seen Show", ids: { tmdb: 11 } },
-          { title: "Future Show", ids: { tmdb: 12 } },
-          { title: "Fresh Show", ids: { tmdb: 13 } },
+          { title: "Low Rated Show", ids: { tmdb: 12 } },
+          { title: "Missing IMDb Show", ids: { tmdb: 13 } },
+          { title: "Future Show", ids: { tmdb: 14 } },
+          { title: "Fresh Show", ids: { tmdb: 15 } },
         ],
       };
     } else if (url.pathname.endsWith("/tmdb/show/11")) {
-      payload = { seasons: [{ season_number: 1, episodes: [{ votes: 5, rating: 8 }] }] };
+      payload = { ratings: [{ source: "imdb", value: 8 }], seasons: [{ season_number: 1, episodes: [{ votes: 5, rating: 8 }] }] };
     } else if (url.pathname.endsWith("/tmdb/show/12")) {
-      payload = { seasons: [{ season_number: 1, episodes: [{ votes: 0, rating: null }] }] };
+      payload = { ratings: [{ source: "imdb", value: 5.9 }], seasons: [{ season_number: 1, episodes: [{ votes: 5, rating: 8 }] }] };
     } else if (url.pathname.endsWith("/tmdb/show/13")) {
-      payload = { seasons: [{ season_number: 2, episodes: [{ votes: 2, rating: 7 }] }] };
+      payload = { ratings: [], seasons: [{ season_number: 1, episodes: [{ votes: 5, rating: 8 }] }] };
+    } else if (url.pathname.endsWith("/tmdb/show/14")) {
+      payload = { ratings: [{ source: "imdb", value: 8 }], seasons: [{ season_number: 1, episodes: [{ votes: 0, rating: null }] }] };
+    } else if (url.pathname.endsWith("/tmdb/show/15")) {
+      payload = { ratings: [{ source: "imdb", value: 6 }], seasons: [{ season_number: 2, episodes: [{ votes: 2, rating: 7 }] }] };
     } else {
       payload = { title: "Fresh Movie", description: "A fresh movie.", ratings: [], genres: [] };
     }
     return new Response(JSON.stringify(payload), { status: 200 });
   }) as typeof fetch;
   try {
-    const source = await buildMdblistWeeklySource("2099-01-09", 2, { candidatesToFetch: 3, ledgerFile });
+    const source = await buildMdblistWeeklySource("2099-01-09", 2, { candidatesToFetch: 5, ledgerFile });
     assert.match(source, /过滤历史推荐后各最多选 2 部/);
+    assert.match(source, /剧集评分门槛：IMDb 评分存在且不低于 6\.0/);
     assert.match(source, /## 1\. Fresh Movie/);
     assert.match(source, /- TMDB ID：2/);
     assert.match(source, /## 1\. Fresh Show/);
-    assert.match(source, /- TMDB ID：13/);
+    assert.match(source, /- TMDB ID：15/);
     assert.match(source, /- 推荐季度：2/);
-    assert.doesNotMatch(source, /## \d+\. (?:Seen Movie|Seen Show|Future Show)/);
+    assert.doesNotMatch(source, /## \d+\. (?:Seen Movie|Seen Show|Low Rated Show|Missing IMDb Show|Future Show)/);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.MDBLIST_API_KEY;

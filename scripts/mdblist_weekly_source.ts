@@ -11,6 +11,7 @@ import {
 const MDBLIST_API = "https://api.mdblist.com";
 const DEFAULT_LIMIT = 10;
 const DEFAULT_CANDIDATE_LIMIT = 50;
+const MIN_SHOW_IMDB_RATING = 6;
 // mdblist 上 snoak 维护的 Trakt 趋势榜（数字 list id 比 slug 稳定），可用环境变量覆盖。
 const DEFAULT_MOVIES_LIST = "87667"; // Trakt's Trending Movies
 const DEFAULT_SHOWS_LIST = "88434"; // Trakt's Trending Shows
@@ -162,6 +163,8 @@ function recommendationForCandidate(candidate: EnrichedItem, mediaType: MdblistM
   if (!candidate.info) return null;
   const tmdbId = Number(candidate.item.ids?.tmdb);
   if (!Number.isInteger(tmdbId) || tmdbId <= 0) return null;
+  const imdbRating = ratingValue(candidate.info, "imdb");
+  if (mediaType === "show" && (imdbRating === null || imdbRating < MIN_SHOW_IMDB_RATING)) return null;
   const seasonNumber = mediaType === "show" ? latestStartedSeasonNumber(candidate.info.seasons) : undefined;
   if (mediaType === "show" && seasonNumber === null) return null;
   return {
@@ -262,6 +265,7 @@ export async function buildMdblistWeeklySource(
     `接口：${MDBLIST_API}/lists/{list}/items`,
     `抓取时间：${bjtTimestamp()}`,
     `候选池：电影与剧集各取前 ${candidatesToFetch}，过滤历史推荐后各最多选 ${count} 部`,
+    `剧集评分门槛：IMDb 评分存在且不低于 ${MIN_SHOW_IMDB_RATING.toFixed(1)}`,
     "",
     "数据说明：榜单代表近期 Trakt 趋势热度，不是官方权威排名。请据证据写推荐，不要编造评分、剧情或上线日期。",
     "",
