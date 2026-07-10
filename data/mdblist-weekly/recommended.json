@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "recommendations": [
+    {
+      "key": "movie:1339713",
+      "mediaType": "movie",
+      "tmdbId": 1339713,
+      "title": "Obsession",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1280738",
+      "mediaType": "movie",
+      "tmdbId": 1280738,
+      "title": "The Furious",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1314481",
+      "mediaType": "movie",
+      "tmdbId": 1314481,
+      "title": "The Devil Wears Prada 2",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1084244",
+      "mediaType": "movie",
+      "tmdbId": 1084244,
+      "title": "Toy Story 5",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1301421",
+      "mediaType": "movie",
+      "tmdbId": 1301421,
+      "title": "The Sheep Detectives",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:94997:season:3",
+      "mediaType": "show",
+      "tmdbId": 94997,
+      "seasonNumber": 3,
+      "title": "House of the Dragon",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:60625:season:9",
+      "mediaType": "show",
+      "tmdbId": 60625,
+      "seasonNumber": 9,
+      "title": "Rick and Morty",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:138502:season:2",
+      "mediaType": "show",
+      "tmdbId": 138502,
+      "seasonNumber": 2,
+      "title": "X-Men '97",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:136315:season:5",
+      "mediaType": "show",
+      "tmdbId": 136315,
+      "seasonNumber": 5,
+      "title": "The Bear",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:125988:season:3",
+      "mediaType": "show",
+      "tmdbId": 125988,
+      "seasonNumber": 3,
+      "title": "Silo",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    }
+  ]
+}
