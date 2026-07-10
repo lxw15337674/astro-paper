@@ -42,6 +42,46 @@
       "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
     },
     {
+      "key": "movie:687163",
+      "mediaType": "movie",
+      "tmdbId": 687163,
+      "title": "Project Hail Mary",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1202033",
+      "mediaType": "movie",
+      "tmdbId": 1202033,
+      "title": "Enola Holmes 3",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1368314",
+      "mediaType": "movie",
+      "tmdbId": 1368314,
+      "title": "Passenger",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1083381",
+      "mediaType": "movie",
+      "tmdbId": 1083381,
+      "title": "Backrooms",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:936075",
+      "mediaType": "movie",
+      "tmdbId": 936075,
+      "title": "Michael",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
       "key": "show:94997:season:3",
       "mediaType": "show",
       "tmdbId": 94997,
@@ -83,6 +123,51 @@
       "tmdbId": 125988,
       "seasonNumber": 3,
       "title": "Silo",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:124364:season:4",
+      "mediaType": "show",
+      "tmdbId": 124364,
+      "seasonNumber": 4,
+      "title": "FROM",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:299167:season:1",
+      "mediaType": "show",
+      "tmdbId": 299167,
+      "seasonNumber": 1,
+      "title": "Dutton Ranch",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:285404:season:1",
+      "mediaType": "show",
+      "tmdbId": 285404,
+      "seasonNumber": 1,
+      "title": "Maximum Pleasure Guaranteed",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:270476:season:1",
+      "mediaType": "show",
+      "tmdbId": 270476,
+      "seasonNumber": 1,
+      "title": "Widow's Bay",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "show:82452:season:2",
+      "mediaType": "show",
+      "tmdbId": 82452,
+      "seasonNumber": 2,
+      "title": "Avatar: The Last Airbender",
       "archivedAt": "2026-07-10",
       "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
     }
