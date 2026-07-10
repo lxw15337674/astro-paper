@@ -540,6 +540,26 @@
       "date": "2026-07-09",
       "archivedAt": "2026-07-09",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-09-09-the-mel-robbins-podcast.md"
+    },
+    {
+      "title": "Eric Ries on Why Good Companies Go Bad",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/07/09/eric-ries-on-why-good-companies-go-bad/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=eric-ries-on-why-good-companies-go-bad",
+      "audioUrl": "https://traffic.megaphone.fm/SED4166333461.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=22353",
+      "date": "2026-07-09",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-10-01-software-engineering-daily.md"
+    },
+    {
+      "title": "Travel Through the Lens of AI with with Booking.com CEO Glenn Fogel",
+      "show": "No Priors",
+      "link": "18a5d0ce-73e6-11f1-80e0-175857be9792",
+      "audioUrl": "https://traffic.megaphone.fm/PDP8517369630.mp3",
+      "guid": "18a5d0ce-73e6-11f1-80e0-175857be9792",
+      "date": "2026-07-09",
+      "archivedAt": "2026-07-10",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-10-02-no-priors.md"
     }
   ]
 }
