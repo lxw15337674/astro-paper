@@ -182,8 +182,16 @@ function formatRedditTop20(text: string): string {
 
 function formatCapitalMarketDaily(body: string): { markdown: string; ogImage: string } {
   const normalized = normalizeMarkdown(body);
-  for (const heading of ["## 今日总览", "## 美股", "## A股", "## 港股", "## 比特币"]) {
+  const requiredHeadings = ["## 市场速览", "## 今日总览", "## 美股", "## A股", "## 港股", "## 比特币"];
+  for (const heading of requiredHeadings) {
     if (!normalized.includes(heading)) throw new Error(`capital-market-daily missing required section: ${heading}`);
+  }
+  const headings = normalized.match(/^##\s+.+$/gm) || [];
+  const positions = requiredHeadings.map(required => headings.findIndex(heading => heading.startsWith(required)));
+  if (positions.some((position, index) => position !== index)) throw new Error("capital-market-daily sections are not in the required order");
+  for (const title of ["今日总览", "美股", "A股", "港股", "比特币"]) {
+    const matches = normalized.match(new RegExp(`^#{2,6}\\s+${title}\\s*$`, "gm")) || [];
+    if (matches.length !== 1) throw new Error(`capital-market-daily must contain exactly one ${title} heading`);
   }
   return { markdown: `${normalized.trim()}\n`, ogImage: "" };
 }

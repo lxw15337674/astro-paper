@@ -57,6 +57,7 @@ type MarketSection = {
   markdown: string;
   open: boolean;
   summary: string;
+  evidence: Record<string, unknown>;
 };
 
 type InstrumentRow = { symbol: string; name: string; pct: number; close: number; volume?: number; avgVolume20?: number; volumeRatio?: number };
@@ -317,6 +318,37 @@ function closedSection(key: EquityKey, title: string, text: string): MarketSecti
     open: false,
     summary: text.split("，")[0].replace(/。$/, ""),
     markdown: [`## ${title}`, "", text].join("\n"),
+    evidence: { market: key, status: "closed_or_unavailable", reason: text },
+  };
+}
+
+function rounded(value: unknown, digits = 2): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? Number(num.toFixed(digits)) : null;
+}
+
+function directionFromChanges(changes: number[]): "up" | "down" | "mixed" | "flat" {
+  const positive = changes.some(value => value > 0.005);
+  const negative = changes.some(value => value < -0.005);
+  if (positive && negative) return "mixed";
+  if (positive) return "up";
+  if (negative) return "down";
+  return "flat";
+}
+
+function instrumentEvidence(row: InstrumentRow): Record<string, unknown> {
+  return {
+    symbol: row.symbol,
+    name: row.name,
+    close: rounded(row.close),
+    change_pct: rounded(row.pct),
+    change_display: pct(row.pct),
+    volume_shares: rounded(row.volume, 0),
+    volume_display: compactVolume(row.volume),
+    average_volume_20d_shares: rounded(row.avgVolume20, 0),
+    volume_vs_20d_average: rounded(row.volumeRatio),
+    volume_vs_20d_average_display: Number.isFinite(row.volumeRatio) ? `${Number(row.volumeRatio).toFixed(2)} 倍` : "unavailable",
+    average_period_days: 20,
   };
 }
 
@@ -378,6 +410,7 @@ function buildAsiaSectionFromMarketTable(data: MarketTableData, date: string, na
   const missing = names.filter(name => !isAvailableMarketTableRow(byName.get(name)));
   const sorted = rows.toSorted((a, b) => tablePct(b) - tablePct(a));
   const missingText = missing.length ? `未获取到完整数据的指数：${missing.join("、")}。` : "";
+  const changes = rows.map(tablePct);
   return {
     key,
     title,
@@ -392,6 +425,23 @@ function buildAsiaSectionFromMarketTable(data: MarketTableData, date: string, na
       "",
       `数据口径：本节与顶部市场速览使用同一份 AkShare 指数历史数据，日期为 ${data.asof || data.date}；缺失项不由其它行情源补数。`,
     ].join("\n"),
+    evidence: {
+      market: key,
+      status: "open",
+      as_of: data.asof || data.date,
+      direction: directionFromChanges(changes),
+      strongest_index: sorted[0].name,
+      weakest_index: sorted.at(-1)?.name || sorted[0].name,
+      indices: rows.map(row => ({
+        name: row.name,
+        close: rounded(row.latest, row.decimals),
+        change_pct: rounded(tablePct(row)),
+        close_display: formatMarketLatest(row.latest, row.decimals),
+        change_display: formatMarketChange(row.latest, row.prev_close, row.unit),
+      })),
+      missing_indices: missing,
+      source: "AkShare index history; missing values are not backfilled from other providers",
+    },
   };
 }
 
@@ -425,6 +475,11 @@ export function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow
     { name: "纳指", pct: Number(nasdaq.f3 || 0) },
     { name: "标普500", pct: Number(spx.f3 || 0) },
   ]);
+  const indexRows = [
+    { name: "道指", close: Number(dji.f2), pct: Number(dji.f3 || 0) },
+    { name: "纳指", close: Number(nasdaq.f2), pct: Number(nasdaq.f3 || 0) },
+    { name: "标普500", close: Number(spx.f2), pct: Number(spx.f3 || 0) },
+  ];
   const { top, bottom } = topAndBottom(sectors);
   const sectorVolumeLeaders = sectors.filter(row => Number.isFinite(row.volumeRatio)).toSorted((a, b) => Number(b.volumeRatio || 0) - Number(a.volumeRatio || 0)).slice(0, 3);
   const sectorSummary = sectors.length
@@ -444,6 +499,27 @@ export function buildUsSection(rows: QuoteRows, date: string, sectors: SectorRow
       sectorVolumeLeaders.length ? volumeActivityLine("成交活跃度靠前的行业 ETF", sectorVolumeLeaders) : "行业 ETF 近 20 个交易日成交量均值不足，暂不判断行业 ETF 放量或缩量。",
       "行业板块采用 S&P 500 行业 ETF 作为近似口径，用于观察风格结构，不等同于完整成分股贡献；成交量只能描述活跃度，不等同于真实资金流。",
     ].join("\n"),
+    evidence: {
+      market: "us",
+      status: "open",
+      as_of: date,
+      direction: directionFromChanges(indexRows.map(row => row.pct)),
+      strongest_index: indexRows.toSorted((a, b) => b.pct - a.pct)[0].name,
+      weakest_index: indexRows.toSorted((a, b) => a.pct - b.pct)[0].name,
+      indices: indexRows.map(row => ({
+        name: row.name,
+        close: rounded(row.close),
+        change_pct: rounded(row.pct),
+        close_display: number(row.close),
+        change_display: pct(row.pct),
+      })),
+      sectors: sectors.map(instrumentEvidence),
+      broad_etfs: broadEtfs.map(instrumentEvidence),
+      methodology: [
+        "Sector performance uses S&P 500 sector ETFs as a style proxy, not full constituent contribution.",
+        "Volume and the 20-day comparison describe trading activity, not capital flows.",
+      ],
+    },
   };
 }
 
@@ -752,6 +828,66 @@ async function buildCryptoSection(): Promise<MarketSection> {
       ]
         .filter(Boolean)
         .join("\n"),
+      evidence: {
+        market: "crypto",
+        status: "open",
+        asset_scope: "BTC only",
+        direction: directionFromChanges([spot.pct24h]),
+        spot: {
+          price_usd: rounded(spot.price, 0),
+          change_24h_pct: rounded(spot.pct24h),
+          change_7d_pct: rounded(spot.pct7d),
+          change_period_hours: 24,
+          longer_change_period_days: 7,
+          volume_24h_usd: rounded(spot.volume, 0),
+          volume_24h_trillion_usd: rounded(spot.volume / 1_000_000_000_000),
+          market_cap_usd: rounded(spot.marketCap, 0),
+          market_cap_trillion_usd: rounded(spot.marketCap / 1_000_000_000_000),
+          updated_at: spot.updatedAt,
+          source: "CoinGecko aggregated spot quote",
+        },
+        perpetual: {
+          venue: "Deribit",
+          instrument: "BTC-PERPETUAL",
+          mark_price_usd: rounded(Number(perp.mark_price || spot.price), 0),
+          funding_8h_pct: rounded(funding8h),
+          funding_period_hours: 8,
+          current_funding_pct: rounded(Number(perp.current_funding || 0) * 100),
+          open_interest_usd: rounded(perpOi, 0),
+          volume_24h_usd: rounded(perpVolumeUsd, 0),
+          price_change_pct: rounded(Number(perp.price_change || 0)),
+        },
+        options: {
+          venue: "Deribit",
+          put_call_open_interest_ratio: rounded(options.putCallOiRatio),
+          put_call_volume_ratio: rounded(options.putCallVolumeRatio),
+          largest_expiries: options.topExpiries.map(item => ({
+            expiry: item.expiry,
+            total_open_interest: rounded(item.totalOi, 1),
+            put_call_open_interest_ratio: rounded(item.putCallOiRatio),
+          })),
+          largest_put_open_interest: options.maxPutOi
+            ? { expiry: options.maxPutOi.expiry, strike_usd: rounded(options.maxPutOi.strike, 0), open_interest: rounded(options.maxPutOi.openInterest, 1) }
+            : null,
+          largest_call_open_interest: options.maxCallOi
+            ? { expiry: options.maxCallOi.expiry, strike_usd: rounded(options.maxCallOi.strike, 0), open_interest: rounded(options.maxCallOi.openInterest, 1) }
+            : null,
+          near_expiry: options.nearExpiry,
+          near_atm_iv_pct: rounded(options.nearAtmIv),
+          near_5pct_otm_put_iv_pct: rounded(options.nearOtmPutIv),
+          near_5pct_otm_call_iv_pct: rounded(options.nearOtmCallIv),
+          otm_distance_pct: 5,
+          near_put_minus_call_iv_pct: rounded(options.nearOtmIvSkew),
+          atm_iv_term_structure: options.atmTermStructure.map(item => ({ expiry: item.expiry, atm_iv_pct: rounded(item.atmIv) })),
+        },
+        sentiment: sentiment
+          ? { fear_greed_value: sentiment.value, classification: sentiment.classification || "unclassified", source: "Alternative.me" }
+          : { fear_greed_value: null, classification: "unavailable", source: "Alternative.me" },
+        methodology: [
+          "Deribit open interest, volume, funding and implied volatility are venue-level public data, not whole-market positions or trading actions.",
+          "Price, funding, option ratios and volatility skew do not by themselves establish a crash or reversal.",
+        ],
+      },
     };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -776,15 +912,20 @@ export async function generateAsiaMarketDaily(date = bjtDateString()): Promise<s
   return buildAsiaMarketDailyFromTable(buildMarketTableData(date), date);
 }
 
-export async function generateUsMarketDaily(date = bjtDateString()): Promise<string> {
+async function buildUsMarketSection(date: string): Promise<MarketSection> {
   const rows = await quoteRowsWithFallback(date, [EASTMONEY_INDEX_SECS.dji, EASTMONEY_INDEX_SECS.nasdaq, EASTMONEY_INDEX_SECS.spx], YAHOO_SYMBOLS.us);
   const [sectors, broadEtfs] = isWeekday(date)
     ? await Promise.all([usSectorEtfs(date), yahooInstruments(US_BROAD_ETFS, date)])
     : [[], []];
-  const sections = [buildUsSection(rows, date, sectors, broadEtfs)];
-  if (!sections[0].open) {
-    throw new MarketSourceUnavailableError("us-market-daily", sections[0].summary || "美股市场未产生或未获取到完整常规收盘数据");
+  const section = buildUsSection(rows, date, sectors, broadEtfs);
+  if (!section.open) {
+    throw new MarketSourceUnavailableError("us-market-daily", section.summary || "美股市场未产生或未获取到完整常规收盘数据");
   }
+  return section;
+}
+
+export async function generateUsMarketDaily(date = bjtDateString()): Promise<string> {
+  const sections = [await buildUsMarketSection(date)];
   return `${[buildSummary(sections, "美股市场"), ...sections.map(section => section.markdown)].join("\n\n").trim()}\n`;
 }
 
@@ -798,24 +939,39 @@ function stripSummaryBlock(markdown: string): string {
   return markdown.replace(/^##\s+总结[\s\S]*?(?=\n##\s+)/, "").trim();
 }
 
-// 各 source 段之间的分隔符，供 composeFullCapitalMarket 按序提取。
+// 市场速览表与结构化证据之间的分隔符，供 composeFullCapitalMarket 提取确定性表格。
 export const CAPITAL_MARKET_SOURCE_SEP = "\n\n<!-- ===SECTION=== -->\n\n";
 
-// 一次性拉取全部市场数据（市场速览表、A股、港股、美股、比特币），拼成统一 source 文本。
-// 各段顺序固定：table → ashare → hk → us → crypto，与 CAPITAL_MARKET_SOURCE_SEP 分隔。
+function marketOverviewEvidence(data: MarketTableData): Record<string, unknown> {
+  return {
+    as_of: data.asof || data.date,
+    rows: data.rows.map(row => ({
+      category: row.category,
+      name: row.name,
+      latest: rounded(row.latest, row.decimals),
+      daily_change: formatMarketChange(row.latest, row.prev_close, row.unit),
+      year_to_date_change: formatMarketChange(row.latest, row.year_open, row.unit),
+      change_unit: row.unit,
+    })),
+  };
+}
+
+function structuredEvidenceBlock(evidence: Record<string, unknown>): string {
+  return [`## 结构化市场证据`, "", "```json", JSON.stringify(evidence, null, 2), "```"].join("\n");
+}
+
+// 一次性拉取全部市场数据。市场速览继续确定性渲染；其它市场只向模型提供结构化证据。
 // 市场速览表格与 A股/港股段共享同一次 buildMarketTableData 调用，避免 Python/AkShare 被调用两次。
 // 美股数据不可用（休市）时抛 MarketSourceUnavailableError("capital-market-daily", ...)，触发任务级跳过。
 export async function buildAllCapitalMarketSource(date: string): Promise<string> {
-  // 市场速览表与 A股/港股段共用一份 MarketTableData，只跑一次 Python 进程。
   const tableData = buildMarketTableData(date);
   const tableBlock = renderMarketTable(tableData);
-  // A股与港股各自成块：section.markdown 以 `## A股`/`## 港股` 开头，无 `## 总结`，本身即数据块。
-  const ashareBlock = buildAsiaSectionFromMarketTable(tableData, date, A_SHARE_INDEX_NAMES, "aShare", "A股", CLOSED_TEXT.aShare, UNAVAILABLE_TEXT.aShare).markdown;
-  const hkBlock = buildAsiaSectionFromMarketTable(tableData, date, HK_INDEX_NAMES, "hk", "港股", CLOSED_TEXT.hk, UNAVAILABLE_TEXT.hk).markdown;
+  const ashareSection = buildAsiaSectionFromMarketTable(tableData, date, A_SHARE_INDEX_NAMES, "aShare", "A股", CLOSED_TEXT.aShare, UNAVAILABLE_TEXT.aShare);
+  const hkSection = buildAsiaSectionFromMarketTable(tableData, date, HK_INDEX_NAMES, "hk", "港股", CLOSED_TEXT.hk, UNAVAILABLE_TEXT.hk);
 
   const [usResult, cryptoResult] = await Promise.allSettled([
-    generateUsMarketDaily(date).then(full => `${stripSummaryBlock(full)}\n`),
-    generateCryptoMarketDaily().then(full => `${stripSummaryBlock(full)}\n`),
+    buildUsMarketSection(date),
+    buildCryptoSection(),
   ]);
 
   if (usResult.status === "rejected") {
@@ -824,14 +980,28 @@ export async function buildAllCapitalMarketSource(date: string): Promise<string>
     throw new MarketSourceUnavailableError("capital-market-daily", msg);
   }
 
-  const get = (r: PromiseSettledResult<string>, label: string): string => {
-    if (r.status === "fulfilled") return r.value.trim();
-    const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
-    writeStderr(`WARN: capital-market-daily ${label} source fetch failed: ${msg}`);
-    return "";
+  let cryptoEvidence: Record<string, unknown>;
+  if (cryptoResult.status === "fulfilled") {
+    cryptoEvidence = cryptoResult.value.evidence;
+  } else {
+    const msg = cryptoResult.reason instanceof Error ? cryptoResult.reason.message : String(cryptoResult.reason);
+    writeStderr(`WARN: capital-market-daily crypto source fetch failed: ${msg}`);
+    cryptoEvidence = { market: "crypto", status: "unavailable", reason: msg };
+  }
+
+  const evidence = {
+    schema_version: 1,
+    date,
+    market_overview: marketOverviewEvidence(tableData),
+    markets: {
+      us: usResult.value.evidence,
+      ashare: ashareSection.evidence,
+      hk: hkSection.evidence,
+      crypto: cryptoEvidence,
+    },
   };
 
-  return [tableBlock.trim(), ashareBlock.trim(), hkBlock.trim(), usResult.value.trim(), get(cryptoResult, "crypto")].join(CAPITAL_MARKET_SOURCE_SEP);
+  return [tableBlock.trim(), structuredEvidenceBlock(evidence)].join(CAPITAL_MARKET_SOURCE_SEP);
 }
 
 // 保留旧接口供 CLI 调试用（market_table.py / generateAsiaMarketDaily 等单独调用）。

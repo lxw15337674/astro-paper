@@ -1,51 +1,125 @@
-// 资本市场日报规则层：五段数据一次性喂给 AI，模型返回 10 字段 JSON，规则层组装完整文章。
+// 资本市场日报规则层：确定性表格置顶，AI 负责其余完整正文，规则层做事实边界校验。
 import { CAPITAL_MARKET_SOURCE_SEP } from "./market_daily_source.ts";
-import { parseModelJsonObject } from "./compose_common.ts";
+import { parseModelJsonObject, stripJsonFence } from "./compose_common.ts";
+
+type MarketDirection = "up" | "down" | "mixed" | "flat";
+
+type MarketEvidence = {
+  direction?: MarketDirection;
+  status?: string;
+  strongest_index?: string;
+  weakest_index?: string;
+};
+
+type CapitalMarketEvidence = {
+  date?: string;
+  market_overview?: unknown;
+  markets?: Record<"us" | "ashare" | "hk" | "crypto", MarketEvidence>;
+};
 
 function requireProse(value: unknown, label: string): string {
   const text = String(value || "").trim();
   if (!text) throw new Error(`${label} is empty`);
+  if (/^#{1,6}\s+/m.test(text)) throw new Error(`${label} must not contain headings`);
+  if (/^(?:[-*+]\s+|\d+\.\s+)/m.test(text)) throw new Error(`${label} must use prose paragraphs, not lists`);
   return text;
 }
 
-function demoteHeadings(markdown: string): string {
-  return markdown.replace(/^(#{2})\s+/gm, "### ").trim();
+function extractSource(source: string): { table: string; evidence: CapitalMarketEvidence } {
+  const [table = "", evidenceBlock = ""] = source.split(CAPITAL_MARKET_SOURCE_SEP, 2);
+  if (!table.trim() || !/^##\s+市场速览/m.test(table)) throw new Error("capital market source is missing the market overview table");
+  const fencedJson = evidenceBlock.match(/```json\s*([\s\S]*?)\s*```/i)?.[1] || stripJsonFence(evidenceBlock);
+  try {
+    const evidence = JSON.parse(fencedJson) as CapitalMarketEvidence;
+    if (!evidence.markets) throw new Error("markets is missing");
+    return { table: table.trim(), evidence };
+  } catch (error) {
+    throw new Error(`capital market structured evidence is invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
-// 从 source 文本里按 SECTION 分隔符提取各块：[table, ashare, hk, us, crypto]
-function extractSourceSections(source: string): [string, string, string, string, string] {
-  const parts = source.split(CAPITAL_MARKET_SOURCE_SEP);
-  return [0, 1, 2, 3, 4].map(i => parts[i]?.trim() ?? "") as [string, string, string, string, string];
+function canonicalNumber(raw: string): string {
+  const value = Number(raw.replaceAll(",", ""));
+  return Number.isFinite(value) ? String(Object.is(value, -0) ? 0 : value) : raw;
 }
 
-// 单个市场段：`## 标题` + 小结 + 数据块（降级标题）+ 解读；数据缺失则跳过数据块。
-function marketSection(title: string, summary: string, dataBlock: string, interpretation: string): string {
-  const data = demoteHeadings(dataBlock);
-  return data ? `## ${title}\n\n${summary}\n\n${data}\n\n${interpretation}` : `## ${title}\n\n${summary}\n\n${interpretation}`;
+function numbersIn(text: string): string[] {
+  return (text.match(/(?<!\d)[+-]?\d[\d,]*(?:\.\d+)?/g) || []).map(canonicalNumber);
+}
+
+function evidenceNumbers(value: unknown, output = new Set<string>()): Set<string> {
+  if (typeof value === "number" && Number.isFinite(value)) output.add(canonicalNumber(String(value)));
+  else if (typeof value === "string") numbersIn(value).forEach(number => output.add(number));
+  else if (Array.isArray(value)) value.forEach(item => evidenceNumbers(item, output));
+  else if (value && typeof value === "object") Object.values(value).forEach(item => evidenceNumbers(item, output));
+  return output;
+}
+
+function assertNumbersComeFromEvidence(text: string, label: string, evidence: unknown): void {
+  const allowed = evidenceNumbers(evidence);
+  for (const number of numbersIn(text)) {
+    if (!allowed.has(number)) {
+      throw new Error(`${label} prose contains a number absent from its source evidence: ${number}`);
+    }
+  }
+}
+
+function assertDirection(text: string, market: string, evidence: MarketEvidence | undefined): void {
+  if (!evidence || evidence.status !== "open" || !evidence.direction) return;
+  const broad = "(?:三大[^。；，]{0,8}指数|主要[^。；，]{0,8}指数|宽基[^。；，]{0,8}指数|指数走势|宽基走势)";
+  const contradiction: Partial<Record<MarketDirection, RegExp>> = {
+    up: new RegExp(`${broad}[^。；，]{0,16}(?:同跌|全线下跌|普跌|下跌|走低|收跌|涨跌分化|走势分化)`),
+    down: new RegExp(`${broad}[^。；，]{0,16}(?:同涨|全线上涨|普涨|上涨|走高|收涨|涨跌分化|走势分化)`),
+    mixed: new RegExp(`${broad}[^。；，]{0,16}(?:同涨|同跌|全线上涨|全线下跌|普涨|普跌)`),
+    flat: new RegExp(`${broad}[^。；，]{0,16}(?:大涨|大跌|全线上涨|全线下跌)`),
+  };
+  if (contradiction[evidence.direction]?.test(text)) {
+    throw new Error(`${market} prose contradicts source direction ${evidence.direction}`);
+  }
+}
+
+function assertRelativeStrength(text: string, market: string, evidence: MarketEvidence | undefined): void {
+  if (!evidence || evidence.status !== "open") return;
+  const strongest = evidence.strongest_index;
+  const weakest = evidence.weakest_index;
+  if (weakest && new RegExp(`${weakest}[^。；，]{0,10}(?:最强|领涨|占优|相对更强)`).test(text)) {
+    throw new Error(`${market} prose describes the weakest index as strongest`);
+  }
+  if (strongest && new RegExp(`${strongest}[^。；，]{0,10}(?:最弱|领跌|垫底|相对更弱)`).test(text)) {
+    throw new Error(`${market} prose describes the strongest index as weakest`);
+  }
 }
 
 export function composeFullCapitalMarket(raw: string, source: string): string {
   const parsed = parseModelJsonObject(raw, "capital market daily");
+  const description = requireProse(parsed.description, "description");
   const overview = requireProse(parsed.overview, "overview");
-  const usSummary = requireProse(parsed.us_summary, "us_summary");
-  const usInterpretation = requireProse(parsed.us_interpretation, "us_interpretation");
-  const ashareSummary = requireProse(parsed.ashare_summary, "ashare_summary");
-  const ashareInterpretation = requireProse(parsed.ashare_interpretation, "ashare_interpretation");
-  const hkSummary = requireProse(parsed.hk_summary, "hk_summary");
-  const hkInterpretation = requireProse(parsed.hk_interpretation, "hk_interpretation");
-  const cryptoSummary = requireProse(parsed.crypto_summary, "crypto_summary");
-  const cryptoInterpretation = requireProse(parsed.crypto_interpretation, "crypto_interpretation");
+  const us = requireProse(parsed.us, "us");
+  const ashare = requireProse(parsed.ashare, "ashare");
+  const hk = requireProse(parsed.hk, "hk");
+  const crypto = requireProse(parsed.crypto, "crypto");
+  const { table, evidence } = extractSource(source);
 
-  const [tableBlock, ashareBlock, hkBlock, usBlock, cryptoBlock] = extractSourceSections(source);
+  assertNumbersComeFromEvidence(description, "description", evidence);
+  assertNumbersComeFromEvidence(overview, "overview", evidence);
+  assertNumbersComeFromEvidence(us, "us", evidence.markets?.us);
+  assertNumbersComeFromEvidence(ashare, "ashare", evidence.markets?.ashare);
+  assertNumbersComeFromEvidence(hk, "hk", evidence.markets?.hk);
+  assertNumbersComeFromEvidence(crypto, "crypto", evidence.markets?.crypto);
+  assertDirection(us, "us", evidence.markets?.us);
+  assertDirection(ashare, "ashare", evidence.markets?.ashare);
+  assertDirection(hk, "hk", evidence.markets?.hk);
+  assertDirection(crypto, "crypto", evidence.markets?.crypto);
+  assertRelativeStrength(us, "us", evidence.markets?.us);
+  assertRelativeStrength(ashare, "ashare", evidence.markets?.ashare);
+  assertRelativeStrength(hk, "hk", evidence.markets?.hk);
 
-  const blocks: string[] = [`## 今日总览\n\n${overview}`];
-
-  if (tableBlock) blocks.push(tableBlock);
-
-  blocks.push(marketSection("美股", usSummary, usBlock, usInterpretation));
-  blocks.push(marketSection("A股", ashareSummary, ashareBlock, ashareInterpretation));
-  blocks.push(marketSection("港股", hkSummary, hkBlock, hkInterpretation));
-  blocks.push(marketSection("比特币", cryptoSummary, cryptoBlock, cryptoInterpretation));
-
-  return `${blocks.join("\n\n")}\n`;
+  return `${[
+    table,
+    `## 今日总览\n\n${overview}`,
+    `## 美股\n\n${us}`,
+    `## A股\n\n${ashare}`,
+    `## 港股\n\n${hk}`,
+    `## 比特币\n\n${crypto}`,
+  ].join("\n\n")}\n`;
 }

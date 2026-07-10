@@ -17,7 +17,7 @@ import { bjtArchiveInstant, fetchText } from "../scripts/blog_common.ts";
 import { normalizePodcastUrl } from "../scripts/foreign_tech_podcast_dedupe.ts";
 import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprints } from "../scripts/podcast_ledger.ts";
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
-import { articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
+import { CAPITAL_MARKET_SOURCE_SEP, articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
 import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
@@ -890,23 +890,80 @@ test("result verifier skips task-level failures with explicit error", () => {
   assert.equal(verifyResultJson(repo, resultJson), 0);
 });
 
-test("composeFullCapitalMarket rejects missing JSON fields", () => {
-  const validJson = JSON.stringify({
-    overview: "全球市场偏弱，美股窄幅、A股港股回落、BTC 承压。",
-    us_summary: "美股窄幅收涨。",
-    us_interpretation: "科技板块领涨，行业分化明显。",
-    ashare_summary: "A股小幅下跌。",
-    ashare_interpretation: "上证相对抗跌，创业板偏弱。",
-    hk_summary: "港股跟随回落。",
-    hk_interpretation: "恒生科技领跌，蓝筹相对抗跌。",
-    crypto_summary: "BTC 偏弱，约 62521 美元。",
-    crypto_interpretation: "24h 跌约 2.2%，资金费率转负，短线承压。",
-  });
-  const source = "## 市场速览\n\n| 品种 | 最新 |\n| :--- | ---: |\n| 比特币 | 62521 |";
-  assert.doesNotThrow(() => composeFullCapitalMarket(validJson, source));
+function capitalMarketSourceFixture(): string {
+  const table = `## 市场速览（2099-01-06）
 
-  const missingField = JSON.stringify({ overview: "ok", us_summary: "ok", us_interpretation: "ok", ashare_summary: "ok", ashare_interpretation: "ok", hk_summary: "ok", hk_interpretation: "ok", crypto_summary: "ok" });
-  assert.throws(() => composeFullCapitalMarket(missingField, source), /crypto_interpretation is empty/);
+| 分类 | 品种 | 最新 | 当日 | 今年以来 |
+| :-- | :-- | --: | --: | --: |
+| 美股 | 标普500 | 7000.00 | +1.30% | +8.00% |`;
+  const evidence = {
+    schema_version: 1,
+    date: "2099-01-06",
+    market_overview: { rows: [{ name: "标普500", latest: 7000, daily_change: "+1.30%" }] },
+    markets: {
+      us: { status: "open", direction: "up", strongest_index: "纳指", weakest_index: "道指" },
+      ashare: { status: "open", direction: "down", strongest_index: "上证指数", weakest_index: "创业板指数" },
+      hk: { status: "open", direction: "mixed", strongest_index: "恒生科技指数", weakest_index: "国企指数" },
+      crypto: { status: "open", direction: "up", spot: { change_24h_pct: 1.41 } },
+    },
+  };
+  return `${table}${CAPITAL_MARKET_SOURCE_SEP}## 结构化市场证据\n\n\`\`\`json\n${JSON.stringify(evidence, null, 2)}\n\`\`\``;
+}
+
+test("composeFullCapitalMarket puts the deterministic table first and uses complete AI sections", () => {
+  const validJson = JSON.stringify({
+    description: "全球市场表现不一，成长风格相对活跃。",
+    overview: "2099年1月6日，美股走强，A股回落，港股分化，比特币反弹。",
+    us: "美股主要指数同涨，风险偏好有所改善。行业表现仍有差异，不能据此推断真实资金流。",
+    ashare: "A股主要指数同跌，宽基整体承压。指数表现不能代表所有成分股。",
+    hk: "港股主要指数涨跌分化，市场缺少一致方向。",
+    crypto: "比特币现货反弹，但衍生品结构仍显示谨慎情绪。",
+  });
+  const markdown = composeFullCapitalMarket(validJson, capitalMarketSourceFixture());
+  assert.ok(markdown.indexOf("## 市场速览") < markdown.indexOf("## 今日总览"));
+  assert.equal((markdown.match(/^## A股$/gm) || []).length, 1);
+  assert.doesNotMatch(markdown, /^### A股$/m);
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-capital-market-"));
+  assert.doesNotThrow(() => archivePost({ task: "capital-market-daily", date: "2099-01-06", repo, body: markdown, force: true }));
+
+  const missingField = JSON.stringify({ description: "简述", overview: "总览", us: "美股", ashare: "A股", hk: "港股" });
+  assert.throws(() => composeFullCapitalMarket(missingField, capitalMarketSourceFixture()), /crypto is empty/);
+});
+
+test("composeFullCapitalMarket rejects prose numbers absent from evidence", () => {
+  const raw = JSON.stringify({
+    description: "市场方向分化。",
+    overview: "各市场走势不一。",
+    us: "美股主要指数同涨，其中一个指数上涨 9.99%。",
+    ashare: "A股主要指数同跌。",
+    hk: "港股主要指数涨跌分化。",
+    crypto: "比特币现货反弹。",
+  });
+  assert.throws(() => composeFullCapitalMarket(raw, capitalMarketSourceFixture()), /number absent from its source evidence: 9.99/);
+});
+
+test("composeFullCapitalMarket rejects broad-market direction contradictions", () => {
+  const raw = JSON.stringify({
+    description: "市场方向分化。",
+    overview: "各市场走势不一。",
+    us: "美股三大指数走势分化，科技方向相对活跃。",
+    ashare: "A股主要指数同跌。",
+    hk: "港股主要指数涨跌分化。",
+    crypto: "比特币现货反弹。",
+  });
+  assert.throws(() => composeFullCapitalMarket(raw, capitalMarketSourceFixture()), /us prose contradicts source direction up/);
+});
+
+test("composeFullCapitalMarket rejects inverted strongest and weakest indices", () => {
+  const raw = JSON.stringify({
+    description: "市场方向分化。",
+    overview: "各市场走势不一。",
+    us: "美股主要指数整体上涨，道指相对更强。",
+    ashare: "A股主要指数同跌。",
+    hk: "港股主要指数涨跌分化。",
+    crypto: "比特币现货反弹。",
+  });
+  assert.throws(() => composeFullCapitalMarket(raw, capitalMarketSourceFixture()), /us prose describes the weakest index as strongest/);
 });
 
 test("HN source verifier accepts legitimate double-brace examples from source articles", () => {
