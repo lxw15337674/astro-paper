@@ -110,6 +110,11 @@ function composeWork(model: MdblistModelItem, fact: MdblistFact): string {
 }
 
 function composeSection(heading: string, models: MdblistModelItem[], facts: MdblistFact[]): string {
+  if (models.length !== facts.length) {
+    throw new Error(`mdblist ${heading} model count does not match source count: ${models.length} vs ${facts.length}`);
+  }
+  const modelRanks = new Set(models.map(model => model.rank));
+  if (modelRanks.size !== models.length) throw new Error(`mdblist ${heading} model contains duplicate ranks`);
   const byRank = new Map(facts.map(fact => [fact.rank, fact]));
   const works = models.map(model => {
     const fact = byRank.get(model.rank);

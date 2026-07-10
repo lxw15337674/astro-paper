@@ -159,7 +159,7 @@ Implementation split:
 Architecture note:
 - movies are deduplicated by TMDB movie id;
 - shows are deduplicated by TMDB show id plus the latest regular season with at least one rated or voted episode;
-- each list fetches an expanded candidate pool, filters all identities already present in `data/mdblist-weekly/recommended.json`, and only then selects the final items;
+- each list fetches the top 50 candidates, filters all identities already present in `data/mdblist-weekly/recommended.json`, and only then selects up to 10 movies and 10 shows;
 - the ledger is updated only after the article archives successfully, so failed generation cannot consume candidates;
 - this pipeline explicitly separates source-item selection from article-shaping so the final post can read like a recommendation column rather than a database export.
 

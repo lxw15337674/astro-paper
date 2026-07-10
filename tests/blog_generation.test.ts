@@ -825,6 +825,16 @@ test("mdblist compose takes poster and IMDb rating from source", () => {
   assert.match(markdown, /- IMDb 评分：8\.1/);
 });
 
+test("mdblist compose requires every selected candidate exactly once", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/mdblist-weekly.md"), "utf8");
+  const raw = JSON.parse(fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/mdblist-weekly.json"), "utf8"));
+  assert.throws(() => mdblistMarkdownFromModelJson(JSON.stringify({ ...raw, movies: raw.movies.slice(0, -1) }), source), /电影推荐 model count does not match source count/);
+  assert.throws(
+    () => mdblistMarkdownFromModelJson(JSON.stringify({ ...raw, series: raw.series.map((item: { rank: number }, index: number) => ({ ...item, rank: index ? 1 : item.rank })) }), source),
+    /剧集推荐 model contains duplicate ranks/,
+  );
+});
+
 test("mdblist season identity uses the latest season with started episodes", () => {
   assert.equal(
     latestStartedSeasonNumber([
@@ -891,7 +901,7 @@ test("mdblist source evidence exposes the TMDB identities selected for the ledge
   });
 });
 
-test("mdblist source builder scans beyond recommended and unstarted candidates", async () => {
+test("mdblist source builder scans deeper and returns as many unrecommended candidates as available", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mdblist-source-"));
   const ledgerFile = path.join(dir, "recommended.json");
   appendMdblistRecommendations(
@@ -930,7 +940,8 @@ test("mdblist source builder scans beyond recommended and unstarted candidates",
     return new Response(JSON.stringify(payload), { status: 200 });
   }) as typeof fetch;
   try {
-    const source = await buildMdblistWeeklySource("2099-01-09", 1, { candidatesToFetch: 3, ledgerFile });
+    const source = await buildMdblistWeeklySource("2099-01-09", 2, { candidatesToFetch: 3, ledgerFile });
+    assert.match(source, /过滤历史推荐后各最多选 2 部/);
     assert.match(source, /## 1\. Fresh Movie/);
     assert.match(source, /- TMDB ID：2/);
     assert.match(source, /## 1\. Fresh Show/);
