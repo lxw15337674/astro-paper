@@ -432,13 +432,20 @@ function buildAsiaSectionFromMarketTable(data: MarketTableData, date: string, na
       direction: directionFromChanges(changes),
       strongest_index: sorted[0].name,
       weakest_index: sorted.at(-1)?.name || sorted[0].name,
-      indices: rows.map(row => ({
-        name: row.name,
-        close: rounded(row.latest, row.decimals),
-        change_pct: rounded(tablePct(row)),
-        close_display: formatMarketLatest(row.latest, row.decimals),
-        change_display: formatMarketChange(row.latest, row.prev_close, row.unit),
-      })),
+      indices: rows.map(row => {
+        const ytdChange = row.latest !== null && row.year_open !== null && Number.isFinite(row.latest) && Number.isFinite(row.year_open) && row.year_open !== 0
+          ? rounded((row.latest / row.year_open - 1) * 100)
+          : null;
+        return {
+          name: row.name,
+          close: rounded(row.latest, row.decimals),
+          change_pct: rounded(tablePct(row)),
+          year_to_date_change_pct: ytdChange,
+          year_to_date_change_display: ytdChange !== null ? formatMarketChange(row.latest, row.year_open, row.unit) : "—",
+          close_display: formatMarketLatest(row.latest, row.decimals),
+          change_display: formatMarketChange(row.latest, row.prev_close, row.unit),
+        };
+      }),
       missing_indices: missing,
       source: "AkShare index history; missing values are not backfilled from other providers",
     },

@@ -58,9 +58,13 @@ function evidenceNumbers(value: unknown, output = new Set<string>()): Set<string
 function assertNumbersComeFromEvidence(text: string, label: string, evidence: unknown): void {
   const allowed = evidenceNumbers(evidence);
   for (const number of numbersIn(text)) {
-    if (!allowed.has(number)) {
-      throw new Error(`${label} prose contains a number absent from its source evidence: ${number}`);
-    }
+    if (allowed.has(number)) continue;
+    // The AI may describe a negative change as "下跌 26.81%" (unsigned),
+    // or a positive change as "上涨 5.2%" when evidence has -5.2.
+    // Accept the negated form when it exists in evidence.
+    const negated = String(-Number(number));
+    if (Number.isFinite(Number(negated)) && allowed.has(negated)) continue;
+    throw new Error(`${label} prose contains a number absent from its source evidence: ${number}`);
   }
 }
 
