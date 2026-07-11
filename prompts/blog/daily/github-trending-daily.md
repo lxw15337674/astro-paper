@@ -25,7 +25,7 @@ JSON 结构必须严格如下（`items` 覆盖证据里的全部项目，`rank` 
 
 ```json
 {
-  "description": "今日榜单主要方向与亮点项目，40字以内",
+  "description": "今日榜单主要方向与亮点项目，50字以内",
   "items": [
     {
       "rank": 1,

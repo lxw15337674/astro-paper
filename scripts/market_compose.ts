@@ -57,14 +57,24 @@ function evidenceNumbers(value: unknown, output = new Set<string>()): Set<string
 
 function assertNumbersComeFromEvidence(text: string, label: string, evidence: unknown): void {
   const allowed = evidenceNumbers(evidence);
-  for (const number of numbersIn(text)) {
-    if (allowed.has(number)) continue;
+  // Build a numeric set for fuzzy matching.
+  const allowedNumerics = new Set<number>();
+  for (const s of allowed) {
+    const n = Number(s);
+    if (Number.isFinite(n)) allowedNumerics.add(n);
+  }
+  for (const raw of numbersIn(text)) {
+    if (allowed.has(raw)) continue;
     // The AI may describe a negative change as "下跌 26.81%" (unsigned),
     // or a positive change as "上涨 5.2%" when evidence has -5.2.
     // Accept the negated form when it exists in evidence.
-    const negated = String(-Number(number));
+    const negated = String(-Number(raw));
     if (Number.isFinite(Number(negated)) && allowed.has(negated)) continue;
-    throw new Error(`${label} prose contains a number absent from its source evidence: ${number}`);
+    // AI may round slightly differently than the evidence (e.g. 0.68 vs 0.679).
+    // Accept numbers within 0.1 of any evidence number (or its negation).
+    const num = Number(raw);
+    if (Number.isFinite(num) && [...allowedNumerics].some(e => Math.abs(num - e) < 0.1 || Math.abs(num + e) < 0.1)) continue;
+    throw new Error(`${label} prose contains a number absent from its source evidence: ${raw}`);
   }
 }
 
