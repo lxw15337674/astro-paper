@@ -650,6 +650,26 @@
       "date": "2026-07-09",
       "archivedAt": "2026-07-10",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-10-09-the-toast.md"
+    },
+    {
+      "title": "Nothing Beats Phone 4b with Ear 3a?",
+      "show": "Waveform: The MKBHD Podcast",
+      "link": "8123ecea-b5cc-11f0-92f1-efbfeafa510c",
+      "audioUrl": "https://www.podtrac.com/pts/redirect.mp3/pdst.fm/e/pscrb.fm/rss/p/mgln.ai/e/257/traffic.megaphone.fm/VMP8062474703.mp3",
+      "guid": "8123ecea-b5cc-11f0-92f1-efbfeafa510c",
+      "date": "2026-07-10",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-11-01-waveform-the-mkbhd-podcast.md"
+    },
+    {
+      "title": "Tracking what your body needs",
+      "show": "TED Radio Hour",
+      "link": "https://www.npr.org/2026/07/10/nx-s1-5886183/tracking-what-your-body-needs",
+      "audioUrl": "https://prfx.byspotify.com/e/play.podtrac.com/npr-510298/npr.simplecastaudio.com/e19460b8-b905-4bd2-9062-cea3c0ab9405/episodes/7dce206e-31b1-40a9-bd9a-557cd8027f75/audio/128/default.mp3?awCollectionId=e19460b8-b905-4bd2-9062-cea3c0ab9405&awEpisodeId=7dce206e-31b1-40a9-bd9a-557cd8027f75&feed=gGUt_fS1&t=podcast&e=nx-s1-5886183&p=510298&d=3000&size=48013106",
+      "guid": "71288a54-9cb0-4883-b22b-ed9077a42d89",
+      "date": "2026-07-10",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-11-02-ted-radio-hour.md"
     }
   ]
 }
