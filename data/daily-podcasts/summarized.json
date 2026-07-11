@@ -670,6 +670,56 @@
       "date": "2026-07-10",
       "archivedAt": "2026-07-11",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-11-02-ted-radio-hour.md"
+    },
+    {
+      "title": "#2523 - Ali Siddiq",
+      "show": "The Joe Rogan Experience",
+      "link": "20c24484-7992-11f1-a40e-3f6b34f7c121",
+      "audioUrl": "https://traffic.megaphone.fm/GLT2738913736.mp3",
+      "guid": "20c24484-7992-11f1-a40e-3f6b34f7c121",
+      "date": "2026-07-07",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-11-01-the-joe-rogan-experience.md"
+    },
+    {
+      "title": "Iran and US Pause Fighting Again, TPS Work Permits, July 4th Teen Death Investigation",
+      "show": "Up First from NPR",
+      "link": "https://www.npr.org/2026/07/10/nx-s1-5888146/iran-and-us-pause-fighting-again-tps-work-permits-july-4th-teen-death-investigation",
+      "audioUrl": "https://prfx.byspotify.com/e/play.podtrac.com/npr-510318/npr.simplecastaudio.com/d52bee4a-b10a-40f8-9417-45064e6b8632/episodes/17923009-5487-4721-8711-ed0047dff00f/audio/128/default.mp3?awCollectionId=d52bee4a-b10a-40f8-9417-45064e6b8632&awEpisodeId=17923009-5487-4721-8711-ed0047dff00f&feed=HMwRVgVt&t=podcast&e=nx-s1-5888146&p=510318&d=852&size=13639725",
+      "guid": "6bb57229-87d4-4026-ba12-1ecf369e2419",
+      "date": "2026-07-10",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-11-02-up-first-from-npr.md"
+    },
+    {
+      "title": "684. Franklin: Revenge of the American Genius (Part 2)",
+      "show": "The Rest Is History",
+      "link": "bf829bc4-755e-11f1-ac03-7f241e6dbc38",
+      "audioUrl": "https://pdst.fm/e/traffic.megaphone.fm/GLT6013835340.mp3",
+      "guid": "bf829bc4-755e-11f1-ac03-7f241e6dbc38",
+      "date": "2026-07-01",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-11-05-the-rest-is-history.md"
+    },
+    {
+      "title": "How to Build a Better Future: 2 Simple Questions That Uplevel Your Life Immediately",
+      "show": "The Mel Robbins Podcast",
+      "link": "https://www.melrobbins.com/episode/episode-413",
+      "audioUrl": "https://dts.podtrac.com/redirect.mp3/pdst.fm/e/stitcher.simplecastaudio.com/b9de9f5f-6dab-4833-b4c2-05f1d28dd998/episodes/fbed2f05-c1d0-4360-8a94-eda3d22f7048/audio/128/default.mp3?aid=rss_feed&awCollectionId=b9de9f5f-6dab-4833-b4c2-05f1d28dd998&awEpisodeId=fbed2f05-c1d0-4360-8a94-eda3d22f7048&feed=UCwaTX1J",
+      "guid": "22fb17c0-af06-42fd-9a38-993470785b83",
+      "date": "2026-07-11",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-11-06-the-mel-robbins-podcast.md"
+    },
+    {
+      "title": "The Race to Replace Graham Platner",
+      "show": "Pod Save America",
+      "link": "https://audioboom.com/posts/8926109",
+      "audioUrl": "https://clrtpod.com/m/pscrb.fm/rss/p/prfx.byspotify.com/e/arttrk.com/p/CRMDA/mgln.ai/e/284/dts.podtrac.com/redirect.mp3/audioboom.com/posts/8926109.mp3?modified=1783652387&sid=5166624&source=rss",
+      "guid": "audioboom-019f49f1-dd57-719f-b15c-543cda92f876",
+      "date": "2026-07-10",
+      "archivedAt": "2026-07-11",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-11-07-pod-save-america.md"
     }
   ]
 }
