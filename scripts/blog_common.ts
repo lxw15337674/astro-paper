@@ -126,34 +126,66 @@ export async function fetchText(
     headers = {},
     maxChars = 1_000_000,
     throwOnMaxChars = false,
-  }: { timeoutMs?: number; headers?: Record<string, string>; maxChars?: number; throwOnMaxChars?: boolean } = {},
+    retries = 2,
+    retryDelayMs = 1_000,
+  }: {
+    timeoutMs?: number;
+    headers?: Record<string, string>;
+    maxChars?: number;
+    throwOnMaxChars?: boolean;
+    retries?: number;
+    retryDelayMs?: number;
+  } = {},
 ): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
-        ...headers,
-      },
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
-    const text = await response.text();
-    if (text.length > maxChars) {
-      if (throwOnMaxChars) throw new Error(`response exceeded ${maxChars} characters for ${url}`);
-      return text.slice(0, maxChars);
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        redirect: "follow",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
+          ...headers,
+        },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`);
+      const text = await response.text();
+      if (text.length > maxChars) {
+        if (throwOnMaxChars) throw new Error(`response exceeded ${maxChars} characters for ${url}`);
+        return text.slice(0, maxChars);
+      }
+      return text;
+    } catch (error) {
+      if (error instanceof Error && (error.name === "AbortError" || /operation was aborted/i.test(error.message))) {
+        error = new Error(`request timed out after ${timeoutMs}ms for ${url}`);
+      }
+      lastError = error;
+      if (attempt < retries && isRetriableFetchError(error)) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    return text;
-  } catch (error) {
-    if (error instanceof Error && (error.name === "AbortError" || /operation was aborted/i.test(error.message))) {
-      throw new Error(`request timed out after ${timeoutMs}ms for ${url}`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastError;
+}
+
+function isRetriableFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  // Timeouts and transient network faults.
+  if (/^request timed out after/.test(error.message)) return true;
+  if (/\b(ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|socket hang up|network|fetch failed)\b/i.test(error.message)) return true;
+  // Retriable server-side HTTP statuses.
+  const status = error.message.match(/^HTTP (\d{3})\b/)?.[1];
+  return status === "429" || status === "500" || status === "502" || status === "503" || status === "504";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export async function fetchJson<T = unknown>(url: string, options = {}): Promise<T> {
