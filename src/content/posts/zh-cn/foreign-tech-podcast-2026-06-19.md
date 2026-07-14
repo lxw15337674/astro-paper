@@ -5,7 +5,7 @@ modDatetime: 2026-06-19T15:20:00Z
 title: "海外科技访谈播客笔记 - 2026-06-19"
 featured: false
 draft: false
-tags: []
+tags:
 description: "今天的海外科技访谈聚焦 AI 基础设施、开发者平台扩张、数据中心资本逻辑与 AI 进入物理工程世界。"
 timezone: Asia/Shanghai
 ---
