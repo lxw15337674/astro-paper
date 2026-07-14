@@ -3,7 +3,7 @@ import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import { compact, fetchJson, fetchText, stripHtml, writeStderr, writeStdout } from "./blog_common.ts";
 
-const HN_TOP_URL = "https://news.ycombinator.com/";
+const HN_TOP_STORIES_URL = "https://hacker-news.firebaseio.com/v0/topstories.json";
 const hnApiItem = (id: number) => `https://hacker-news.firebaseio.com/v0/item/${id}.json`;
 
 type HnItem = {
@@ -48,10 +48,9 @@ export function classify(title = ""): string {
   return "技术 / 观察";
 }
 
-export async function scrapeTopIds(): Promise<number[]> {
-  const html = await fetchText(HN_TOP_URL, { timeoutMs: 20_000, throwOnMaxChars: true });
-  const ids = [...html.matchAll(/<span class="rank">(\d+)\.<\/span>.*?id="score_(\d+)"/gs)].map(match => Number(match[2]));
-  return [...new Set(ids)].slice(0, 10);
+export async function fetchTopIds(n = 30): Promise<number[]> {
+  const ids = await fetchJson<number[]>(HN_TOP_STORIES_URL, { timeoutMs: 20_000 });
+  return ids.slice(0, n);
 }
 
 function readableFromHtml(html: string, url: string): string {
@@ -168,12 +167,22 @@ function evidenceCounts(text: string): { original: number; comments: number } {
 }
 
 export async function buildHnSource(): Promise<string> {
-  const ids = await scrapeTopIds();
+  // Phase 1: fetch top 30 metadata in parallel, sort by comment count, keep top 10
+  const topIds = await fetchTopIds(30);
+  const rawItems = await Promise.all(
+    topIds.map(id => fetchJson<HnItem>(hnApiItem(id), { timeoutMs: 12_000 }).catch(() => null))
+  );
+  const sorted = rawItems
+    .filter((item): item is HnItem => item !== null && !item.deleted && !item.dead)
+    .sort((a, b) => (b.descendants ?? 0) - (a.descendants ?? 0))
+    .slice(0, 10);
+
+  // Phase 2: fetch original excerpts + comments for top 10
   const lines = ["1. 🔥 今日 HackerNews 热门文章 Top 10", ""];
   const items: HnPayloadItem[] = [];
-  for (const [index, id] of ids.entries()) {
+  for (const [index, item] of sorted.entries()) {
     const rank = index + 1;
-    const item = await fetchJson<HnItem>(hnApiItem(id), { timeoutMs: 12_000 });
+    const id = Number(item.id || 0);
     const title = compact(item.title || `Item ${id}`);
     const url = item.url || `https://news.ycombinator.com/item?id=${id}`;
     const [originalExcerpt, commentExcerpt] = await Promise.all([fetchOriginalExcerpt(url), fetchCommentExcerpt(item)]);
