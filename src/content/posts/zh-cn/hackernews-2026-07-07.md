@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-07-07"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "../../../../public/images/hn-cover.svg"
 description: "开源替代正逼近AI与终端软件，隐私、本地化和可控性成共同主线"

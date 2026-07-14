@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-06-28"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "../../../../public/images/hn-cover.svg"
 description: "每日 Hacker News 热门文章 Top 10 中文整理，按当天归档并覆盖更新。"

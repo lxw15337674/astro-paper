@@ -6,7 +6,6 @@ title: "读心大师的沟通课：如何建立信任、克服社交恐惧与成
 featured: false
 draft: false
 tags:
-  - 定时文章
   - Apple播客榜
 ogImage: "../../../../public/images/podcast/2026-07-09-12-the-mel-robbins-podcast.webp"
 description: "本期播客由 Mel Robbins 对话世界级读心大师 Oz"

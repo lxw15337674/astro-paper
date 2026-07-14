@@ -6,7 +6,6 @@ title: "Mick Unplugged：破解潜意识枷锁：Brandon Epstein 的“成功法
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 description: "每日海外科技访谈与 Apple Podcasts 热门节目中文长文笔记，按节目逐集生成。"
 timezone: Asia/Shanghai

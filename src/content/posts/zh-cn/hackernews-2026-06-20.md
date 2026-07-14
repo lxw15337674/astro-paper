@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-06-20"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "https://startupfortune.com/wp-content/uploads/2026/06/sf-14065-1781845702426.jpg"
 description: "Hacker News Top 10：今日 HackerNews 热门文章 Top 10"

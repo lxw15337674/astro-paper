@@ -6,7 +6,6 @@ title: "不开玩笑 Jokes Aside：251. 把身体和灵魂恢复到最佳状态"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 中文播客榜
 ogImage: "../../../../public/images/podcast/2026-07-13-04-不开玩笑-jokes-aside.webp"
 description: "脱口秀演员与主播们的身体康复、宿醉恢复记忆及健康反思。"

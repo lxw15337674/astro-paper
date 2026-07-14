@@ -6,7 +6,6 @@ title: "AI模型的“情绪监管”与开发者工具链的生态割裂"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-08-02-software-engineering-daily.webp"
 description: "解析AI模型管控地缘风险、IDE生态锁合与开发者工具链的商业"

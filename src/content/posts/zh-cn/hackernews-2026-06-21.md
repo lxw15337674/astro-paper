@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-06-21"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "https://opengraph.githubassets.com/3ddf082fe55a4fee612c035d9df363ec94fbf33ac7b49e08a55b6f87b52152f2/mysk-research/loupe"
 description: "Hacker News Top 10：今日 HackerNews 热门文章 Top 10"

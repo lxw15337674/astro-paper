@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-07-08"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "../../../../public/images/hn-cover.svg"
 description: "AI代理安全、隐私监管与本地AI工具成焦点"

@@ -6,7 +6,6 @@ title: "2026年7月6日 NPR Up First 播客笔记"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - Apple播客榜
 ogImage: "../../../../public/images/podcast/2026-07-09-02-up-first-from-npr.webp"
 description: "美国建国250周年庆典冲突、伊朗前最高领袖葬礼以及世界杯红牌"

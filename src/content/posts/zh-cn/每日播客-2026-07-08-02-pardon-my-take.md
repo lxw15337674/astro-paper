@@ -6,7 +6,6 @@ title: "美国男足世界杯折戟与卡恰克兄弟的全新征程"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-08-02-pardon-my-take.webp"
 description: "Pardon My Take播客深度解析：美国男足世界杯折戟"

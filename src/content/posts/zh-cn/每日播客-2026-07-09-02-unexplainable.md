@@ -6,7 +6,6 @@ title: "Unexplainable：我们是否生活在一个巨大的黑洞之中？"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-09-02-unexplainable.webp"
 description: "探讨宇宙是否处于黑洞内部的物理学假说与观测边界。"

@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const BJT_TIME_ZONE = "Asia/Shanghai";
-export const TOTAL_TAG = "定时文章";
 export const AUTHOR = "bhwa233";
 
 export function repoRoot(): string {

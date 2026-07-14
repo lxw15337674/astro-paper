@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-07-10"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "../../../../public/images/hn-cover.svg"
 description: "AI模型迭代、本地推理与开源重写占据焦点"

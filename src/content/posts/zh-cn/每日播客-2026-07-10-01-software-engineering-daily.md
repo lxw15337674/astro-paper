@@ -6,7 +6,6 @@ title: "Software Engineering Daily：Eric Ries 谈好公司如何变坏及如何
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-10-01-software-engineering-daily.webp"
 description: "硅谷创业教父 Eric Ries 探讨企业如何保持初心，防范"

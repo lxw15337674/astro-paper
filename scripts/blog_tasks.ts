@@ -1,5 +1,4 @@
 import path from "node:path";
-import { TOTAL_TAG } from "./blog_common.ts";
 
 export type BlogTaskInfo = {
   titlePrefix: string;
@@ -97,7 +96,7 @@ export function taskInfo(task: string): BlogTaskInfo {
 }
 
 export function taskTags(task: Task): string[] {
-  return [TOTAL_TAG, taskInfo(task).tag];
+  return [taskInfo(task).tag];
 }
 
 export function taskTitle(task: Task, date: string): string {

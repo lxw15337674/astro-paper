@@ -6,8 +6,7 @@ title: "HackerNews Top 10 - 2026-06-19"
 featured: false
 draft: true
 tags:
-  - scheduled-posts
-  - hackernews-top10
+  - HackerNews
 description: "今日 HackerNews 热门文章 Top 10（当前日期·星期）"
 timezone: Asia/Shanghai
 ---

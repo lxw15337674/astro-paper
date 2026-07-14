@@ -6,7 +6,6 @@ title: "Love Trapped：劳拉认罪协议延期：庭审博弈与后续走向"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - Apple播客榜
 ogImage: "../../../../public/images/podcast/2026-07-09-06-love-trapped.webp"
 description: "劳拉认罪协议再度延期，案件走向与关键细节透露。"

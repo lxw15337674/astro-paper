@@ -6,8 +6,7 @@ title: "MDBList 高分热播推荐 - 2026-W25"
 featured: false
 draft: true
 tags:
-  - scheduled-posts
-  - mdblist-weekly
+  - 每周影视推荐
 description: "MDBList 高分热播推荐 标题：示例剧集 类型：悬疑 / 犯罪 上线日期：20260616 简介：这是一个用于验证 MDBList 周归档生成链路的示例条目。"
 timezone: Asia/Shanghai
 ---

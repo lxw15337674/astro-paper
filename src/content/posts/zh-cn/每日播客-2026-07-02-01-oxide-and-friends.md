@@ -6,7 +6,6 @@ title: "Oxide and Friends：从 CAD 渲染到 Web 交互：Oxide 3D 机架探索
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-02-01-oxide-and-friends.webp"
 description: "每日海外 Podcasts 热门节目中文长文笔记。"

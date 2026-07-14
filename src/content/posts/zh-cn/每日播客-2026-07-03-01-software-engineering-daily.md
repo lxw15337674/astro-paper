@@ -6,7 +6,6 @@ title: "Software Engineering Daily：AI 原生时代的可观测性革命：Graf
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-03-01-software-engineering-daily.webp"
 description: "每日海外 Podcasts 热门节目中文长文笔记。"

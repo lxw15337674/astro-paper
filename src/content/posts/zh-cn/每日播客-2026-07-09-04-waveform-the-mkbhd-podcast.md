@@ -6,7 +6,6 @@ title: "Waveform: The MKBHD Podcast：苹果产品全线大幅涨价（Waveform:
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-09-04-waveform-the-mkbhd-podcast.webp"
 description: "Apple 多款硬件大幅涨价；折叠屏新品与实体游戏介质的消亡"

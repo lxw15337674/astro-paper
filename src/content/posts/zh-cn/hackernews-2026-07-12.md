@@ -6,7 +6,6 @@ title: "HackerNews Top 10｜2026-07-12"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - HackerNews
 ogImage: "../../../../public/images/hn-cover.svg"
 description: "分布式 AI、开发工具自举，与 GPU 基建融资风险升温"

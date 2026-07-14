@@ -6,7 +6,6 @@ title: "The Shawn Ryan Show：什么是二甲基色胺（DMT）？"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - Apple播客榜
 ogImage: "../../../../public/images/podcast/2026-07-10-04-the-shawn-ryan-show.webp"
 description: "独立研究员 Danny Goler 深入探讨二甲基色胺（DM"

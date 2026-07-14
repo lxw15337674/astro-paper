@@ -6,7 +6,6 @@ title: "诺兰与戴蒙的史诗重塑：经典文学改编的视差、导演协
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-08-03-good-hang-with-amy-poehler.webp"
 description: "麦特·戴蒙与诺兰深度剖析新片《奥德赛》、创作伙伴关系与中年身"

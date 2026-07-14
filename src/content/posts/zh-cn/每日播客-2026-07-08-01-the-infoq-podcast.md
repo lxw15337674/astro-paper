@@ -6,7 +6,6 @@ title: "愤怒驱动工程：AI原生时代的云原生安全新蓝图"
 featured: false
 draft: false
 tags:
-  - 定时文章
   - 播客
 ogImage: "../../../../public/images/podcast/2026-07-08-01-the-infoq-podcast.webp"
 description: "AI原生时代下的云原生安全重构、系统工程反思与开发者实践指南"

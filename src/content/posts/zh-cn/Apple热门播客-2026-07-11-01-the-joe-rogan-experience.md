@@ -6,7 +6,6 @@ title: "The Joe Rogan Experience：喜剧与竞技的深层逻辑：从行业规
 featured: false
 draft: false
 tags:
-  - 定时文章
   - Apple播客榜
 ogImage: "../../../../public/images/podcast/2026-07-11-01-the-joe-rogan-experience.webp"
 description: "Ali Siddiq 与 Joe Rogan 探讨竞技体育公"
