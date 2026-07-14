@@ -30,6 +30,7 @@ const config: ResolvedAstroPaperConfig = {
     lightAndDarkMode: userConfig.features?.lightAndDarkMode ?? true,
     dynamicOgImage: userConfig.features?.dynamicOgImage ?? true,
     showArchives: userConfig.features?.showArchives ?? true,
+    showAbout: userConfig.features?.showAbout ?? true,
     showBackButton: userConfig.features?.showBackButton ?? true,
     editPost: userConfig.features?.editPost ?? { enabled: false },
     search: userConfig.features?.search ?? "pagefind",
