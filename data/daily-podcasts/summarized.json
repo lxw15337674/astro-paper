@@ -890,6 +890,26 @@
       "date": "2026-07-09",
       "archivedAt": "2026-07-14",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-14-09-world-war-ii-with-tom-hanks.md"
+    },
+    {
+      "title": "Governance in the Age of AI: A Conversation with Sarah Wells",
+      "show": "The InfoQ Podcast",
+      "link": "https://soundcloud.com/infoq-channel/governance-in-the-age-of-ai-a",
+      "audioUrl": "http://dts.podtrac.com/redirect.mp3/feeds.soundcloud.com/stream/2354666729-infoq-channel-governance-in-the-age-of-ai-a.mp3",
+      "guid": "tag:soundcloud,2010:tracks/2354666729",
+      "date": "2026-07-13",
+      "archivedAt": "2026-07-14",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-14-01-the-infoq-podcast.md"
+    },
+    {
+      "title": "Listen Now: Dan Taberski’s Manifesto",
+      "show": "Business Movers",
+      "link": "gid://art19-episode-locator/V0/LNhwtIg1oA_-TaI_VB87Z3cZTj4l3_ufqJjNm8VpNSM",
+      "audioUrl": "https://pscrb.fm/rss/p/rss.art19.com/episodes/2fb79b51-1710-4174-acb6-c3931de50baf.mp3?rss_browser=BAhJIgtDaHJvbWUGOgZFVA%3D%3D--d05363d83ce333c74f32188013892b2863ad051c",
+      "guid": "gid://art19-episode-locator/V0/LNhwtIg1oA_-TaI_VB87Z3cZTj4l3_ufqJjNm8VpNSM",
+      "date": "2026-07-13",
+      "archivedAt": "2026-07-14",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-14-02-business-movers.md"
     }
   ]
 }
