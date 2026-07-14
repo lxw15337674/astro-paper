@@ -10,7 +10,7 @@ export const REDDIT_DATA_DIR = path.join(repoRoot(), "data/reddit-top20");
 
 const OLD_REDDIT = "https://old.reddit.com";
 const REDDIT_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
-const SUBREDDITS = ["AskReddit", "TIFU", "TrueOffMyChest", "confessions", "explainlikeimfive", "changemyview", "GriefSupport"];
+const SUBREDDITS = ["AskReddit", "TrueOffMyChest", "confessions", "explainlikeimfive", "changemyview", "GriefSupport"];
 const POSTS_PER_SUB = 50;
 const TOP_N = 40;
 const COMMENTS_PER_POST = 5;
