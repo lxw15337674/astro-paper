@@ -1,6 +1,7 @@
 // NYT 每周图书规则层：模型只返回语义字段（中文书名/类型/内容简介/推荐理由），
-// 事实字段（原书名、作者、出版社、排名、上榜周数、封面、书评链接）一律取自 source。
+// 事实字段（原书名、作者、封面、书评链接）一律取自 source。分节由 nyt_books_sections 集中配置。
 import { bulletValue, extractBullets, hasChinese, looksLowSignal, parseModelJsonObject } from "./compose_common.ts";
+import { NYT_BOOK_SECTIONS } from "./nyt_books_sections.ts";
 
 export type NytBookModelItem = {
   rank: number;
@@ -14,14 +15,9 @@ export type NytBookFact = {
   rank: number;
   original_title: string;
   author: string;
-  publisher: string;
-  nyt_rank: string;
-  weeks_on_list: string;
   review_link: string;
   cover: string;
 };
-
-type NytBookFacts = { fiction: NytBookFact[]; nonfiction: NytBookFact[] };
 
 function parseSectionFacts(sectionText: string): NytBookFact[] {
   const blocks = sectionText
@@ -35,22 +31,24 @@ function parseSectionFacts(sectionText: string): NytBookFact[] {
       rank: index + 1,
       original_title: bulletValue(bullets, "原书名") || block.match(/^##\s+\d+\.\s+(.+)$/m)?.[1]?.trim() || "",
       author: bulletValue(bullets, "作者"),
-      publisher: bulletValue(bullets, "出版社"),
-      nyt_rank: bulletValue(bullets, "榜单排名"),
-      weeks_on_list: bulletValue(bullets, "上榜周数"),
       review_link: link && link !== "-" ? link : "",
       cover: bulletValue(bullets, "封面"),
     };
   });
 }
 
-// source 分「# 小说候选」「# 非虚构候选」两段，任一段可能缺席（当周该榜无新书）。
-export function parseNytBookFacts(source: string): NytBookFacts {
-  const fictionAt = source.indexOf("# 小说候选");
-  const nonfictionAt = source.indexOf("# 非虚构候选");
-  const fictionText = fictionAt >= 0 ? source.slice(fictionAt, nonfictionAt >= 0 && nonfictionAt > fictionAt ? nonfictionAt : undefined) : "";
-  const nonfictionText = nonfictionAt >= 0 ? source.slice(nonfictionAt) : "";
-  return { fiction: parseSectionFacts(fictionText), nonfiction: parseSectionFacts(nonfictionText) };
+// source 按「# {label}候选」分段，任一节可能缺席（当周该类无新书）。返回以分节 key 为索引的事实表。
+export function parseNytBookFacts(source: string): Record<string, NytBookFact[]> {
+  const marks = NYT_BOOK_SECTIONS.map(section => ({ section, at: source.indexOf(`# ${section.label}候选`) }))
+    .filter(entry => entry.at >= 0)
+    .sort((a, b) => a.at - b.at);
+  const facts: Record<string, NytBookFact[]> = {};
+  for (const section of NYT_BOOK_SECTIONS) facts[section.key] = [];
+  marks.forEach((entry, index) => {
+    const text = source.slice(entry.at, index + 1 < marks.length ? marks[index + 1].at : undefined);
+    facts[entry.section.key] = parseSectionFacts(text);
+  });
+  return facts;
 }
 
 function validateModelItems(rawItems: unknown, label: string): NytBookModelItem[] {
@@ -73,26 +71,26 @@ function validateModelItems(rawItems: unknown, label: string): NytBookModelItem[
   });
 }
 
-export function parseNytBookModelJson(raw: string): { fiction: NytBookModelItem[]; nonfiction: NytBookModelItem[] } {
+export function parseNytBookModelJson(raw: string): Record<string, NytBookModelItem[]> {
   const parsed = parseModelJsonObject(raw, "nyt-books");
-  const fiction = validateModelItems(parsed.fiction, "fiction");
-  const nonfiction = validateModelItems(parsed.nonfiction, "nonfiction");
-  if (fiction.length + nonfiction.length < 1) throw new Error("nyt-books model JSON needs at least one book");
-  return { fiction, nonfiction };
+  const model: Record<string, NytBookModelItem[]> = {};
+  let total = 0;
+  for (const section of NYT_BOOK_SECTIONS) {
+    model[section.key] = validateModelItems(parsed[section.key], section.key);
+    total += model[section.key].length;
+  }
+  if (total < 1) throw new Error("nyt-books model JSON needs at least one book");
+  return model;
 }
 
 function composeWork(model: NytBookModelItem, fact: NytBookFact): string {
   const lines = [`### ${model.title_zh}（${fact.original_title}）`, ""];
   if (fact.cover && fact.cover !== "-") lines.push(`![${model.title_zh}](${fact.cover})`, "");
-  const rankText = fact.nyt_rank && fact.nyt_rank !== "-" ? `本周榜单第 ${fact.nyt_rank} 名` : "本周新上榜";
-  const weeksText = fact.weeks_on_list && fact.weeks_on_list !== "-" ? `（上榜 ${fact.weeks_on_list} 周）` : "";
   lines.push(
     "#### 基本信息",
     "",
     `- 作者：${fact.author || "未标明"}`,
-    `- 出版社：${fact.publisher || "未标明"}`,
     `- 类型：${model.genre_zh}`,
-    `- 榜单表现：${rankText}${weeksText}`,
     "",
     "#### 内容简介",
     "",
@@ -122,11 +120,8 @@ function composeSection(heading: string, models: NytBookModelItem[], facts: NytB
   return [`## ${heading}`, "", works.join("\n\n")].join("\n");
 }
 
-export function composeNytBooksBody(
-  model: { fiction: NytBookModelItem[]; nonfiction: NytBookModelItem[] },
-  facts: NytBookFacts,
-): string {
-  const sections = [composeSection("小说", model.fiction, facts.fiction), composeSection("非虚构", model.nonfiction, facts.nonfiction)].filter(Boolean);
+export function composeNytBooksBody(model: Record<string, NytBookModelItem[]>, facts: Record<string, NytBookFact[]>): string {
+  const sections = NYT_BOOK_SECTIONS.map(section => composeSection(section.label, model[section.key] || [], facts[section.key] || [])).filter(Boolean);
   if (!sections.length) throw new Error("nyt-books produced no book sections");
   return `${sections.join("\n\n")}\n`;
 }

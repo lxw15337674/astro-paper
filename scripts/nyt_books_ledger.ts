@@ -2,8 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { compact, ensureDir, repoRoot } from "./blog_common.ts";
 import { bulletValue, extractBullets } from "./compose_common.ts";
+import { NYT_BOOK_SECTIONS, sectionByLabel } from "./nyt_books_sections.ts";
 
-export type NytBookListType = "fiction" | "nonfiction";
+// listType 取分节 key（fiction / nonfiction / young_adult / graphic）；仅作元数据，去重靠 ISBN key。
+export type NytBookListType = string;
 
 export type NytBookRecommendation = {
   key: string;
@@ -35,9 +37,7 @@ export function nytBookRecommendationKey(bookId: string): string {
 }
 
 function listTypeFromLabel(label: string): NytBookListType {
-  if (label === "小说") return "fiction";
-  if (label === "非虚构") return "nonfiction";
-  throw new Error(`NYT books source has unsupported list type: ${label || "missing"}`);
+  return sectionByLabel(label).key;
 }
 
 function readLedger(file: string): NytBooksLedger {
@@ -99,20 +99,20 @@ export function appendNytBookRecommendations(
 
 // 从候选源 markdown 反解出本篇推荐的图书身份，供归档后写入 ledger。
 export function parseNytBookRecommendationsFromSource(source: string): NytBookRecommendation[] {
-  const fictionAt = source.indexOf("# 小说候选");
-  const nonfictionAt = source.indexOf("# 非虚构候选");
-  const sections: Array<{ listType: NytBookListType; text: string }> = [];
-  if (fictionAt >= 0) sections.push({ listType: "fiction", text: source.slice(fictionAt, nonfictionAt >= 0 && nonfictionAt > fictionAt ? nonfictionAt : undefined) });
-  if (nonfictionAt >= 0) sections.push({ listType: "nonfiction", text: source.slice(nonfictionAt) });
-  return sections.flatMap(section => {
-    const blocks = section.text
+  // 按分节标题「# {label}候选」切段，逐段解析编号块。
+  const marks = NYT_BOOK_SECTIONS.map(section => ({ section, at: source.indexOf(`# ${section.label}候选`) }))
+    .filter(entry => entry.at >= 0)
+    .sort((a, b) => a.at - b.at);
+  return marks.flatMap((entry, index) => {
+    const text = source.slice(entry.at, index + 1 < marks.length ? marks[index + 1].at : undefined);
+    const blocks = text
       .split(/(?=^##\s+\d+\.\s+)/gm)
       .map(block => block.trim())
       .filter(block => /^##\s+\d+\.\s+/.test(block));
     return blocks.map(block => {
       const bullets = extractBullets(block);
       const listType = listTypeFromLabel(bulletValue(bullets, "榜单类型"));
-      if (listType !== section.listType) throw new Error(`NYT books source block list type mismatch: ${listType} vs ${section.listType}`);
+      if (listType !== entry.section.key) throw new Error(`NYT books source block list type mismatch: ${listType} vs ${entry.section.key}`);
       const bookId = bulletValue(bullets, "ISBN");
       const title = bulletValue(bullets, "原书名") || block.match(/^##\s+\d+\.\s+(.+)$/m)?.[1]?.trim() || "";
       return {

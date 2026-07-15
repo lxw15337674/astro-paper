@@ -352,10 +352,10 @@ function formatMdblistWeekly(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
-function formatNytBooksWeekly(text: string): string {
+function formatNytBooksWeekly(text: string): { markdown: string; ogImage: string } {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  const sections = ["小说", "非虚构"].filter(section => new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized));
-  if (!sections.length) throw new Error("nyt books weekly missing both 小说 and 非虚构 sections");
+  const sections = ["小说", "非虚构", "青少年", "图像小说与漫画"].filter(section => new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized));
+  if (!sections.length) throw new Error("nyt books weekly missing all known sections (小说/非虚构/青少年/图像小说与漫画)");
   const works = (normalized.match(/^###\s+.+$/gm) || []).length;
   if (works < 1) throw new Error("nyt books weekly needs at least one title entry");
   const count = (label: string): number => (normalized.match(new RegExp(`^####\\s+${label}\\s*$`, "gm")) || []).length;
@@ -366,7 +366,9 @@ function formatNytBooksWeekly(text: string): string {
   for (const pattern of [/待补充/, /示例/, /信息不足/, /无法判断/, /本文将/]) {
     if (pattern.test(normalized)) throw new Error(`nyt books weekly contains forbidden language: ${pattern.source}`);
   }
-  return `${normalized.trim()}\n`;
+  // 取正文首张封面图作文章级 ogImage（社交卡片缩略图）。
+  const ogImage = normalized.match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/)?.[1] || "";
+  return { markdown: `${normalized.trim()}\n`, ogImage };
 }
 
 function isPodcastArticleTask(task: string): boolean {
@@ -409,7 +411,7 @@ export function archivePost({
     task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } :
     task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } :
     task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } :
-    task === "nyt-books-weekly" ? { markdown: formatNytBooksWeekly(body), ogImage: "" } :
+    task === "nyt-books-weekly" ? formatNytBooksWeekly(body) :
     task === "capital-market-daily" ? formatCapitalMarketDaily(body) :
     (() => { throw new Error(`no archive formatter for task: ${task}`); })();
   const description = formatted.description ?? providedDescription ?? info.description;
