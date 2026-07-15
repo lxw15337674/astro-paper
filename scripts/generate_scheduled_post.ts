@@ -24,6 +24,9 @@ import { buildGitHubTrendingDailySource } from "./github_trending_daily_source.t
 import { buildXyzRankTopEpisodesSource, fetchXyzRankTopEpisodes } from "./xyzrank_top_episodes_source.ts";
 import { buildMdblistWeeklySource } from "./mdblist_weekly_source.ts";
 import { MDBLIST_LEDGER_REL_PATH, appendMdblistRecommendations, parseMdblistRecommendationsFromSource } from "./mdblist_weekly_ledger.ts";
+import { NytBooksNoNewReleasesError, buildNytBooksWeeklySource } from "./nyt_books_source.ts";
+import { nytBooksMarkdownFromModelJson } from "./nyt_books_compose.ts";
+import { NYT_BOOKS_LEDGER_REL_PATH, appendNytBookRecommendations, parseNytBookRecommendationsFromSource } from "./nyt_books_ledger.ts";
 
 export type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
@@ -198,6 +201,7 @@ function isPodcastArticleTask(task: Task): boolean {
 
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
   if (error instanceof MarketSourceUnavailableError && error.task === task) return true;
+  if (error instanceof NytBooksNoNewReleasesError) return task === "nyt-books-weekly";
   if (!(error instanceof PodcastSourceInsufficientEpisodesError)) return false;
   return isPodcastArticleTask(task);
 }
@@ -241,6 +245,12 @@ async function sourceForTask(task: Task, date: string, sourceFixtureDir = "", re
   if (task === "mdblist-weekly") {
     return buildMdblistWeeklySource(date, undefined, {
       ledgerFile: path.join(repo, MDBLIST_LEDGER_REL_PATH),
+      excludePostPath: taskPostRelPath(task, date),
+    });
+  }
+  if (task === "nyt-books-weekly") {
+    return buildNytBooksWeeklySource(date, {
+      ledgerFile: path.join(repo, NYT_BOOKS_LEDGER_REL_PATH),
       excludePostPath: taskPostRelPath(task, date),
     });
   }
@@ -606,6 +616,7 @@ const JSON_COMPOSERS: Partial<Record<Task, (rawJson: string, source: string) => 
   "reddit-top20": redditMarkdownFromModelJson,
   "github-trending-daily": githubTrendingMarkdownFromModelJson,
   "mdblist-weekly": mdblistMarkdownFromModelJson,
+  "nyt-books-weekly": nytBooksMarkdownFromModelJson,
   "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src),
   "capital-market-daily": composeFullCapitalMarket,
 };
@@ -805,6 +816,13 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
       parseMdblistRecommendationsFromSource(source),
       { archivedAt: date, postPath: result.path },
       path.join(repo, MDBLIST_LEDGER_REL_PATH),
+    );
+  }
+  if (task === "nyt-books-weekly" && !result.skipped) {
+    appendNytBookRecommendations(
+      parseNytBookRecommendationsFromSource(source),
+      { archivedAt: date, postPath: result.path },
+      path.join(repo, NYT_BOOKS_LEDGER_REL_PATH),
     );
   }
   if (generation) result.generation = generation;

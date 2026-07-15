@@ -352,6 +352,23 @@ function formatMdblistWeekly(text: string): string {
   return `${normalized.trim()}\n`;
 }
 
+function formatNytBooksWeekly(text: string): string {
+  const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
+  const sections = ["小说", "非虚构"].filter(section => new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized));
+  if (!sections.length) throw new Error("nyt books weekly missing both 小说 and 非虚构 sections");
+  const works = (normalized.match(/^###\s+.+$/gm) || []).length;
+  if (works < 1) throw new Error("nyt books weekly needs at least one title entry");
+  const count = (label: string): number => (normalized.match(new RegExp(`^####\\s+${label}\\s*$`, "gm")) || []).length;
+  if (count("基本信息") !== works) throw new Error(`nyt books weekly each work needs a 基本信息 block: ${count("基本信息")} vs ${works} works`);
+  for (const label of ["内容简介", "推荐理由"]) {
+    if (count(label) < works) throw new Error(`nyt books weekly missing ${label} block for some works: ${count(label)} < ${works}`);
+  }
+  for (const pattern of [/待补充/, /示例/, /信息不足/, /无法判断/, /本文将/]) {
+    if (pattern.test(normalized)) throw new Error(`nyt books weekly contains forbidden language: ${pattern.source}`);
+  }
+  return `${normalized.trim()}\n`;
+}
+
 function isPodcastArticleTask(task: string): boolean {
   return task === "daily-podcasts" || task === "apple-top-podcasts" || task === "xyzrank-top-episodes";
 }
@@ -392,6 +409,7 @@ export function archivePost({
     task === "tech-daily" ? { markdown: formatTechDaily(body), ogImage: "" } :
     task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } :
     task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } :
+    task === "nyt-books-weekly" ? { markdown: formatNytBooksWeekly(body), ogImage: "" } :
     task === "capital-market-daily" ? formatCapitalMarketDaily(body) :
     (() => { throw new Error(`no archive formatter for task: ${task}`); })();
   const description = formatted.description ?? providedDescription ?? info.description;

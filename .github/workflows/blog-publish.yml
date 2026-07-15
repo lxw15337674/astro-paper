@@ -159,6 +159,7 @@ jobs:
           AI_FALLBACK_MODEL: ${{ secrets.AI_FALLBACK_MODEL || 'deepseek-v4-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+          NYT_API_KEY: ${{ secrets.NYT_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           PODCAST_TRANSCRIBE_PROVIDER: gemini
           PODCAST_GEMINI_MODEL: gemini-flash-latest

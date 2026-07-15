@@ -56,6 +56,12 @@ export const BLOG_TASKS = {
     description: "每周影视推荐专栏，基于 mdblist 聚合的 Trakt 趋势电影与剧集榜单，汇总本周值得看的作品并补充口碑观察。",
     fileName: "每周影视推荐-{date}.md",
   },
+  "nyt-books-weekly": {
+    titlePrefix: "每周图书推荐",
+    tag: "每周图书推荐",
+    description: "每周图书推荐专栏，基于纽约时报畅销书榜（小说与非虚构）筛选本周新上榜的图书并补充中文导读。",
+    fileName: "每周图书推荐-{date}.md",
+  },
   "reddit-top20": {
     titlePrefix: "Reddit 热门",
     tag: "Reddit热门",
@@ -79,6 +85,7 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "0 22 * * 1-5": { task: "capital-market-daily", dateTimeZone: "Asia/Shanghai", dateOffset: -1 },
   "0 23 * * *": { task: "github-trending-daily", dateTimeZone: "America/Los_Angeles" },
   "0 2 * * 5": { task: "mdblist-weekly", dateTimeZone: "Asia/Shanghai" },
+  "0 2 * * 0": { task: "nyt-books-weekly", dateTimeZone: "Asia/Shanghai" },
   "0 8 * * *": { task: "reddit-top20", dateTimeZone: "America/Los_Angeles" },
 };
 
