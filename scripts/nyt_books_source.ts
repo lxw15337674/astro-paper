@@ -50,6 +50,55 @@ function apiKey(): string {
   return key;
 }
 
+// OpenLibrary 免密钥兜底：NYT overview 对新书常缺 description，靠书名硬编简介会得到空话。
+const OPEN_LIBRARY_API = "https://openlibrary.org";
+const MIN_SYNOPSIS_CHARS = 60;
+
+type OpenLibraryDescription = string | { value?: string } | undefined;
+type OpenLibraryEdition = { description?: OpenLibraryDescription; works?: { key?: string }[] };
+type OpenLibraryWork = { description?: OpenLibraryDescription };
+
+function readDescription(value: OpenLibraryDescription): string {
+  if (typeof value === "string") return compact(value);
+  if (value && typeof value.value === "string") return compact(value.value);
+  return "";
+}
+
+// 两跳：edition 有简介直接用；没有就跟到 work（简介多挂在 work 上）。失败静默返回空，回落到占位。
+async function fetchOpenLibrarySynopsis(isbn: string): Promise<string> {
+  const id = compact(isbn);
+  if (!id) return "";
+  try {
+    const edition = await fetchJson<OpenLibraryEdition>(`${OPEN_LIBRARY_API}/isbn/${id}.json`, {
+      headers: { accept: "application/json" },
+      retries: 1,
+    });
+    const editionDesc = readDescription(edition.description);
+    if (editionDesc.length >= MIN_SYNOPSIS_CHARS) return editionDesc;
+    const workKey = compact(edition.works?.[0]?.key || "");
+    if (workKey) {
+      const work = await fetchJson<OpenLibraryWork>(`${OPEN_LIBRARY_API}${workKey}.json`, {
+        headers: { accept: "application/json" },
+        retries: 1,
+      });
+      const workDesc = readDescription(work.description);
+      if (workDesc.length >= MIN_SYNOPSIS_CHARS) return workDesc;
+    }
+    return editionDesc; // 可能是短简介或空串
+  } catch {
+    return ""; // 未收录 / 限流 / 网络故障：不阻断生成
+  }
+}
+
+// 逐本补简介：仅对 NYT 未给 description 的书发请求，顺序执行避免打爆 OpenLibrary。
+async function enrichSynopses(candidates: NytBookCandidate[]): Promise<void> {
+  for (const { book } of candidates) {
+    if (compact(book.description || "")) continue;
+    const synopsis = await fetchOpenLibrarySynopsis(bookId(book));
+    if (synopsis) book.description = synopsis;
+  }
+}
+
 // overview.json 一次返回全部活跃榜单，避开 NYT 5 次/分钟的逐榜限流。
 async function fetchOverview(key: string): Promise<Map<string, NytBook[]>> {
   const url = new URL(`${NYT_BOOKS_API}/lists/overview.json`);
@@ -103,12 +152,12 @@ function sourceBlock(candidate: NytBookCandidate, index: number, section: NytBoo
   ].join("\n");
 }
 
-function buildSection(
+function selectSection(
   section: NytBookSection,
   overview: Map<string, NytBook[]>,
   blockedKeys: Set<string>,
   blockedTitleAuthor: Set<string>,
-): { blocks: string[]; recommendations: NytBookRecommendation[] } {
+): NytBookCandidate[] {
   const selected: NytBookCandidate[] = [];
   for (const list of section.lists) {
     for (const book of overview.get(list) || []) {
@@ -123,6 +172,10 @@ function buildSection(
       selected.push({ book, recommendation: { key, listType: section.key, bookId: id, title: compact(book.title || "") } });
     }
   }
+  return selected;
+}
+
+function renderSection(section: NytBookSection, selected: NytBookCandidate[]): { blocks: string[]; recommendations: NytBookRecommendation[] } {
   if (!selected.length) return { blocks: [], recommendations: [] };
   return {
     blocks: [`# ${section.label}候选`, "", ...selected.map((entry, index) => sourceBlock(entry, index, section)), ""],
@@ -137,11 +190,14 @@ export async function buildNytBooksWeeklySource(
   const overview = await fetchOverview(apiKey());
   const blockedKeys = loadNytBookRecommendationKeys(ledgerFile, excludePostPath);
   const blockedTitleAuthor = new Set<string>();
-  const sections = NYT_BOOK_SECTIONS.map(section => buildSection(section, overview, blockedKeys, blockedTitleAuthor));
-  const total = sections.reduce((sum, section) => sum + section.recommendations.length, 0);
+  const selections = NYT_BOOK_SECTIONS.map(section => selectSection(section, overview, blockedKeys, blockedTitleAuthor));
+  const total = selections.reduce((sum, selected) => sum + selected.length, 0);
   if (!total) {
     throw new NytBooksNoNewReleasesError(`NYT books lists have no brand-new (week 1) unrecommended titles for ${date}`);
   }
+  // NYT 常缺 description，先用 OpenLibrary 补齐再渲染，避免模型靠书名编空话。
+  await enrichSynopses(selections.flat());
+  const sections = NYT_BOOK_SECTIONS.map((section, index) => renderSection(section, selections[index]));
   const sourceLists = [...new Set(NYT_BOOK_SECTIONS.flatMap(section => section.lists))].join(", ");
   return [
     `# 每周图书推荐候选源｜${date}`,
