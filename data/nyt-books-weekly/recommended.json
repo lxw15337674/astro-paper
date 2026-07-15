@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "recommendations": [
+    {
+      "key": "book:9781464245640",
+      "listType": "fiction",
+      "bookId": "9781464245640",
+      "title": "TEMPTING VENOM",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9798217059959",
+      "listType": "fiction",
+      "bookId": "9798217059959",
+      "title": "THE SHAMPOO EFFECT",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9798217187386",
+      "listType": "fiction",
+      "bookId": "9798217187386",
+      "title": "ENTER THE NIGHTMARE",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781668222027",
+      "listType": "nonfiction",
+      "bookId": "9781668222027",
+      "title": "CANCEL ME IF YOU CAN",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9798898550387",
+      "listType": "nonfiction",
+      "bookId": "9798898550387",
+      "title": "KNICKER BONKERS",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9780063491946",
+      "listType": "nonfiction",
+      "bookId": "9780063491946",
+      "title": "ON COURAGE",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781668018057",
+      "listType": "nonfiction",
+      "bookId": "9781668018057",
+      "title": "MAILMAN",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781586424367",
+      "listType": "nonfiction",
+      "bookId": "9781586424367",
+      "title": "A RESISTANCE HISTORY OF THE UNITED STATES",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9780399590528",
+      "listType": "nonfiction",
+      "bookId": "9780399590528",
+      "title": "EDUCATED",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9780593657522",
+      "listType": "nonfiction",
+      "bookId": "9780593657522",
+      "title": "EMPIRE OF AI",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781419775680",
+      "listType": "nonfiction",
+      "bookId": "9781419775680",
+      "title": "THE ART OF STAR WARS: ANDOR (THE COMPLETE SERIES)",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781401997373",
+      "listType": "nonfiction",
+      "bookId": "9781401997373",
+      "title": "THE FREEDOM-BASED BUSINESS METHOD",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781250878694",
+      "listType": "young_adult",
+      "bookId": "9781250878694",
+      "title": "THE RIVER SHE BECAME",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9798217026500",
+      "listType": "young_adult",
+      "bookId": "9798217026500",
+      "title": "THORNBIRD",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781250346797",
+      "listType": "young_adult",
+      "bookId": "9781250346797",
+      "title": "EVERY EXQUISITE THING",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9798337404356",
+      "listType": "young_adult",
+      "bookId": "9798337404356",
+      "title": "SIX OF CROWS",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781250357915",
+      "listType": "graphic",
+      "bookId": "9781250357915",
+      "title": "INVESTIGATORS: WEATHER OR NOT",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9781974716463",
+      "listType": "graphic",
+      "bookId": "9781974716463",
+      "title": "CHAINSAW MAN, VOL. 21",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9780593872024",
+      "listType": "graphic",
+      "bookId": "9780593872024",
+      "title": "LORE OLYMPUS, VOL. TEN",
+      "archivedAt": "2026-07-15",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    }
+  ]
+}
