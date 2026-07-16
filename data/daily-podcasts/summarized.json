@@ -1000,6 +1000,16 @@
       "date": "2026-07-14",
       "archivedAt": "2026-07-15",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-15-08-the-toast.md"
+    },
+    {
+      "title": "SE Radio 729: Garth Mollett on AI Supply Chain Security",
+      "show": "Software Engineering Radio",
+      "link": "https://se-radio.net/2026/07/se-radio-729-garth-mollett-on-ai-supply-chain-security/",
+      "audioUrl": "https://traffic.libsyn.com/secure/seradio/729-garth-mollet-ai-supply-chain-security.mp3?dest-id=23379",
+      "guid": "74ebc480-b818-4ee2-849a-291486b7929e",
+      "date": "2026-07-15",
+      "archivedAt": "2026-07-16",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-16-01-software-engineering-radio.md"
     }
   ]
 }
