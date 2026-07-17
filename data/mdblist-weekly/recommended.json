@@ -170,6 +170,176 @@
       "title": "Avatar: The Last Airbender",
       "archivedAt": "2026-07-10",
       "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-10.md"
+    },
+    {
+      "key": "movie:1368337",
+      "mediaType": "movie",
+      "tmdbId": 1368337,
+      "title": "The Odyssey",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1440050",
+      "mediaType": "movie",
+      "tmdbId": 1440050,
+      "title": "The Breadwinner",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:614945",
+      "mediaType": "movie",
+      "tmdbId": 614945,
+      "title": "Voicemails for Isabelle",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1715492",
+      "mediaType": "movie",
+      "tmdbId": 1715492,
+      "title": "Shipwrecked: Nightmare at Sea",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:454639",
+      "mediaType": "movie",
+      "tmdbId": 454639,
+      "title": "Masters of the Universe",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1340206",
+      "mediaType": "movie",
+      "tmdbId": 1340206,
+      "title": "Tuner",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1228710",
+      "mediaType": "movie",
+      "tmdbId": 1228710,
+      "title": "The Mandalorian and Grogu",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:83533",
+      "mediaType": "movie",
+      "tmdbId": 83533,
+      "title": "Avatar: Fire and Ash",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1304313",
+      "mediaType": "movie",
+      "tmdbId": 1304313,
+      "title": "Lee Cronin's The Mummy",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1226863",
+      "mediaType": "movie",
+      "tmdbId": 1226863,
+      "title": "The Super Mario Galaxy Movie",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:278624:season:1",
+      "mediaType": "show",
+      "tmdbId": 278624,
+      "seasonNumber": 1,
+      "title": "Lucky",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:37854:season:23",
+      "mediaType": "show",
+      "tmdbId": 37854,
+      "seasonNumber": 23,
+      "title": "One Piece",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:278178:season:1",
+      "mediaType": "show",
+      "tmdbId": 278178,
+      "seasonNumber": 1,
+      "title": "I Will Find You",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:1399:season:8",
+      "mediaType": "show",
+      "tmdbId": 1399,
+      "seasonNumber": 8,
+      "title": "Game of Thrones",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:1418:season:12",
+      "mediaType": "show",
+      "tmdbId": 1418,
+      "seasonNumber": 12,
+      "title": "The Big Bang Theory",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:76479:season:5",
+      "mediaType": "show",
+      "tmdbId": 76479,
+      "seasonNumber": 5,
+      "title": "The Boys",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:219971:season:2",
+      "mediaType": "show",
+      "tmdbId": 219971,
+      "seasonNumber": 2,
+      "title": "The Agency",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:277439:season:1",
+      "mediaType": "show",
+      "tmdbId": 277439,
+      "seasonNumber": 1,
+      "title": "Cape Fear",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:79744:season:8",
+      "mediaType": "show",
+      "tmdbId": 79744,
+      "seasonNumber": 8,
+      "title": "The Rookie",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "show:258348:season:2",
+      "mediaType": "show",
+      "tmdbId": 258348,
+      "seasonNumber": 2,
+      "title": "Clevatess",
+      "archivedAt": "2026-07-17",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
     }
   ]
 }
