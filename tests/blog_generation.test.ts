@@ -24,7 +24,7 @@ import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
-import { type ResultItem, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
+import { type ResultItem, promptWithValidationFeedback, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
 
 // prompts 已按 daily/weekly/market/podcast 分类到子目录，用解析器按名查找（根目录 + 一层子目录）。
 const PROMPTS_DIR = path.join(process.cwd(), "prompts/blog");
@@ -1087,6 +1087,17 @@ test("composeFullCapitalMarket rejects prose numbers absent from evidence", () =
     crypto: "比特币现货反弹。",
   });
   assert.throws(() => composeFullCapitalMarket(raw, capitalMarketSourceFixture()), /number absent from its source evidence: 9.99/);
+});
+
+test("capital market retry feedback keeps every rejected number and requires qualitative JSON prose", () => {
+  const prompt = promptWithValidationFeedback("Return the required JSON object.", "capital-market-daily", [
+    "overview prose contains a number absent from its source evidence: 3900",
+    "ashare prose contains a number absent from its source evidence: 10",
+  ]);
+  assert.match(prompt, /1\. overview prose contains a number absent from its source evidence: 3900/);
+  assert.match(prompt, /2\. ashare prose contains a number absent from its source evidence: 10/);
+  assert.match(prompt, /所有 JSON 字符串字段完全不含阿拉伯数字、百分号或数字化日期/);
+  assert.match(prompt, /遵守原始输出格式/);
 });
 
 test("composeFullCapitalMarket rejects broad-market direction contradictions", () => {

@@ -586,13 +586,18 @@ function assertMarkdownUsesOnlySourceLinks(markdown: string, source: string, tas
   if (unexpected) throw new Error(`${task} generated link outside selected source whitelist: ${unexpected}`);
 }
 
-function promptWithValidationFeedback(prompt: string, task: Task, previousError: string): string {
+export function promptWithValidationFeedback(prompt: string, task: Task, validationErrors: readonly string[]): string {
+  const feedback = validationErrors.map((error, index) => `${index + 1}. ${error}`).join("\n");
+  const capitalMarketNumericSafety = task === "capital-market-daily"
+    ? "\n资本市场日报的本次重试必须让所有 JSON 字符串字段完全不含阿拉伯数字、百分号或数字化日期。市场速览表已经由规则层发布全部有据数字；正文改用定性表述，避免任何新的数值主张。"
+    : "";
   return `${prompt.trim()}
 
 ---
 
-上一轮 ${task} 输出被发布质量检查拒绝，原因：${previousError}
-请重新生成完整 Markdown 正文，并严格避开上述失败原因；不要复述错误原因，不要输出解释，不要输出代码围栏。`;
+此前 ${task} 输出被发布质量检查拒绝，原因如下：
+${feedback}${capitalMarketNumericSafety}
+请重新生成完整输出，并严格避开全部上述失败原因；遵守原始输出格式，不要复述错误原因，不要输出解释或代码围栏。`;
 }
 
 function shouldRetryWithValidationFeedback(error: string): boolean {
@@ -653,6 +658,7 @@ async function renderLiveAiMarkdownWithSourceValidation(
   const attempts = retryAttempts();
   const jsonMode = usesJsonComposer(task);
   let lastError = "";
+  const validationErrors: string[] = [];
   let attemptPrompt = prompt;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     await sleep(retryDelayMs(attempt));
@@ -665,9 +671,10 @@ async function renderLiveAiMarkdownWithSourceValidation(
       return { markdown, description, ai };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
+      validationErrors.push(lastError);
       writeArtifact(artifactsDir, artifactKey, `ai-error-attempt-${attempt}.txt`, lastError);
       if (attempt < attempts) {
-        attemptPrompt = shouldRetryWithValidationFeedback(lastError) ? promptWithValidationFeedback(prompt, task, lastError) : prompt;
+        attemptPrompt = shouldRetryWithValidationFeedback(lastError) ? promptWithValidationFeedback(prompt, task, validationErrors) : prompt;
         writeStderr(`WARN: ${artifactKey} AI generation attempt ${attempt}/${attempts} failed; retrying with validation feedback: ${lastError}`);
       }
     }
