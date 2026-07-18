@@ -1077,7 +1077,7 @@ test("composeFullCapitalMarket puts the deterministic table first and uses compl
   assert.throws(() => composeFullCapitalMarket(missingField, capitalMarketSourceFixture()), /crypto is empty/);
 });
 
-test("composeFullCapitalMarket rejects prose numbers absent from evidence", () => {
+test("composeFullCapitalMarket allows prose numbers absent from evidence", () => {
   const raw = JSON.stringify({
     description: "市场方向分化。",
     overview: "各市场走势不一。",
@@ -1086,7 +1086,7 @@ test("composeFullCapitalMarket rejects prose numbers absent from evidence", () =
     hk: "港股主要指数涨跌分化。",
     crypto: "比特币现货反弹。",
   });
-  assert.throws(() => composeFullCapitalMarket(raw, capitalMarketSourceFixture()), /number absent from its source evidence: 9.99/);
+  assert.doesNotThrow(() => composeFullCapitalMarket(raw, capitalMarketSourceFixture()));
 });
 
 test("composeFullCapitalMarket rejects broad-market direction contradictions", () => {

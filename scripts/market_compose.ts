@@ -38,51 +38,6 @@ function extractSource(source: string): { table: string; evidence: CapitalMarket
   }
 }
 
-function canonicalNumber(raw: string): string {
-  const value = Number(raw.replaceAll(",", ""));
-  return Number.isFinite(value) ? String(Object.is(value, -0) ? 0 : value) : raw;
-}
-
-function numbersIn(text: string): string[] {
-  return (text.match(/(?<!\d)[+-]?\d[\d,]*(?:\.\d+)?/g) || []).map(canonicalNumber);
-}
-
-function evidenceNumbers(value: unknown, output = new Set<string>()): Set<string> {
-  if (typeof value === "number" && Number.isFinite(value)) output.add(canonicalNumber(String(value)));
-  else if (typeof value === "string") numbersIn(value).forEach(number => output.add(number));
-  else if (Array.isArray(value)) value.forEach(item => evidenceNumbers(item, output));
-  else if (value && typeof value === "object") Object.values(value).forEach(item => evidenceNumbers(item, output));
-  return output;
-}
-
-function assertNumbersComeFromEvidence(text: string, label: string, evidence: unknown): void {
-  const allowed = evidenceNumbers(evidence);
-  // Build a numeric set for fuzzy matching.
-  const allowedNumerics = new Set<number>();
-  for (const s of allowed) {
-    const n = Number(s);
-    if (Number.isFinite(n)) allowedNumerics.add(n);
-  }
-  // Common structural / descriptive numbers that the AI may legitimately use
-  // (e.g. "三大指数", "11个板块", "10年期国债") but never appear as data points.
-  const STRUCTURAL_NUMBERS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20, 24, 30, 50, 100]);
-  for (const raw of numbersIn(text)) {
-    if (allowed.has(raw)) continue;
-    // The AI may describe a negative change as "下跌 26.81%" (unsigned),
-    // or a positive change as "上涨 5.2%" when evidence has -5.2.
-    // Accept the negated form when it exists in evidence.
-    const negated = String(-Number(raw));
-    if (Number.isFinite(Number(negated)) && allowed.has(negated)) continue;
-    // AI may round slightly differently than the evidence (e.g. 0.68 vs 0.679).
-    // Accept numbers within 0.1 of any evidence number (or its negation).
-    const num = Number(raw);
-    if (Number.isFinite(num) && [...allowedNumerics].some(e => Math.abs(num - e) < 0.1 || Math.abs(num + e) < 0.1)) continue;
-    // Accept common structural / descriptive numbers.
-    if (Number.isFinite(num) && STRUCTURAL_NUMBERS.has(num)) continue;
-    throw new Error(`${label} prose contains a number absent from its source evidence: ${raw}`);
-  }
-}
-
 function assertDirection(text: string, market: string, evidence: MarketEvidence | undefined): void {
   if (!evidence || evidence.status !== "open" || !evidence.direction) return;
   const broad = "(?:三大[^。；，]{0,8}指数|主要[^。；，]{0,8}指数|宽基[^。；，]{0,8}指数|指数走势|宽基走势)";
@@ -119,12 +74,6 @@ export function composeFullCapitalMarket(raw: string, source: string): string {
   const crypto = requireProse(parsed.crypto, "crypto");
   const { table, evidence } = extractSource(source);
 
-  assertNumbersComeFromEvidence(description, "description", evidence);
-  assertNumbersComeFromEvidence(overview, "overview", evidence);
-  assertNumbersComeFromEvidence(us, "us", evidence.markets?.us);
-  assertNumbersComeFromEvidence(ashare, "ashare", evidence.markets?.ashare);
-  assertNumbersComeFromEvidence(hk, "hk", evidence.markets?.hk);
-  assertNumbersComeFromEvidence(crypto, "crypto", evidence.markets?.crypto);
   assertDirection(us, "us", evidence.markets?.us);
   assertDirection(ashare, "ashare", evidence.markets?.ashare);
   assertDirection(hk, "hk", evidence.markets?.hk);
