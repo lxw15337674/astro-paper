@@ -1190,6 +1190,46 @@
       "date": "2026-07-17",
       "archivedAt": "2026-07-18",
       "postPath": "src/content/posts/zh-cn/每日播客-2026-07-18-02-ted-radio-hour.md"
+    },
+    {
+      "title": "#2527 - MrBeast",
+      "show": "The Joe Rogan Experience",
+      "link": "72615f9a-80aa-11f1-adca-2f13d8da1330",
+      "audioUrl": "https://traffic.megaphone.fm/GLT2845814639.mp3",
+      "guid": "72615f9a-80aa-11f1-adca-2f13d8da1330",
+      "date": "2026-07-16",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-18-01-the-joe-rogan-experience.md"
+    },
+    {
+      "title": "Trump's Explosive Diarrhea of the Mouth",
+      "show": "Pod Save America",
+      "link": "https://audioboom.com/posts/8929286",
+      "audioUrl": "https://clrtpod.com/m/pscrb.fm/rss/p/prfx.byspotify.com/e/arttrk.com/p/CRMDA/mgln.ai/e/284/dts.podtrac.com/redirect.mp3/audioboom.com/posts/8929286.mp3?modified=1784273748&sid=5166624&source=rss",
+      "guid": "audioboom-019f6ec4-2b51-74c3-8901-4939ec84409e",
+      "date": "2026-07-17",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-18-02-pod-save-america.md"
+    },
+    {
+      "title": "Trump Rehashes Election Fraud Claims, Politics Of Trump's Speech, Texas Flooding",
+      "show": "Up First from NPR",
+      "link": "https://www.npr.org/2026/07/17/nx-s1-5897282/trump-rehashes-election-fraud-claims-politics-of-trumps-speech-texas-flooding",
+      "audioUrl": "https://prfx.byspotify.com/e/play.podtrac.com/npr-510318/npr.simplecastaudio.com/d52bee4a-b10a-40f8-9417-45064e6b8632/episodes/79e37f2b-9e14-40ad-bbb9-4ee0e1ea0bf6/audio/128/default.mp3?awCollectionId=d52bee4a-b10a-40f8-9417-45064e6b8632&awEpisodeId=79e37f2b-9e14-40ad-bbb9-4ee0e1ea0bf6&feed=HMwRVgVt&t=podcast&e=nx-s1-5897282&p=510318&d=820&size=13133576",
+      "guid": "fb4ce733-4f10-4feb-94b8-0a64ebb81b03",
+      "date": "2026-07-17",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-18-03-up-first-from-npr.md"
+    },
+    {
+      "title": "The Lindsay Clancy Case: A Family Tragedy on Trial",
+      "show": "48 Hours",
+      "link": "e656791e-1366-11f1-8a09-b7aaaeeb2daa",
+      "audioUrl": "https://serve.castfire.com/audio/8168189/8168189_2026-04-12-014129.192.mp3?rssID=5942",
+      "guid": "e656791e-1366-11f1-8a09-b7aaaeeb2daa",
+      "date": "2026-07-17",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-18-04-48-hours.md"
     }
   ]
 }
