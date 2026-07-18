@@ -63,6 +63,9 @@ function assertNumbersComeFromEvidence(text: string, label: string, evidence: un
     const n = Number(s);
     if (Number.isFinite(n)) allowedNumerics.add(n);
   }
+  // Common structural / descriptive numbers that the AI may legitimately use
+  // (e.g. "三大指数", "11个板块", "10年期国债") but never appear as data points.
+  const STRUCTURAL_NUMBERS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20, 24, 30, 50, 100]);
   for (const raw of numbersIn(text)) {
     if (allowed.has(raw)) continue;
     // The AI may describe a negative change as "下跌 26.81%" (unsigned),
@@ -74,6 +77,8 @@ function assertNumbersComeFromEvidence(text: string, label: string, evidence: un
     // Accept numbers within 0.1 of any evidence number (or its negation).
     const num = Number(raw);
     if (Number.isFinite(num) && [...allowedNumerics].some(e => Math.abs(num - e) < 0.1 || Math.abs(num + e) < 0.1)) continue;
+    // Accept common structural / descriptive numbers.
+    if (Number.isFinite(num) && STRUCTURAL_NUMBERS.has(num)) continue;
     throw new Error(`${label} prose contains a number absent from its source evidence: ${raw}`);
   }
 }

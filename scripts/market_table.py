@@ -113,6 +113,8 @@ def bond_yield_triple(column: str, date_str: str):
 def sge_gold_triple(symbol: str):
     # 上金所现货历史：列含 date/收盘价。
     df = ak.spot_hist_sge(symbol=symbol)
+    if df is None or len(df) == 0 or len(df.columns) == 0:
+        return None, None, None
     date_col = "date" if "date" in df.columns else df.columns[0]
     close_col = "close" if "close" in df.columns else "收盘价"
     pairs = list(zip(df[date_col].astype(str), df[close_col]))
