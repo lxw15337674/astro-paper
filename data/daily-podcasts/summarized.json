@@ -1170,6 +1170,26 @@
       "date": "2026-07-16",
       "archivedAt": "2026-07-17",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-17-09-the-shawn-ryan-show.md"
+    },
+    {
+      "title": "OnePlus is Dead… (In the US)",
+      "show": "Waveform: The MKBHD Podcast",
+      "link": "8137a4ba-b5cc-11f0-92f1-933493c6e155",
+      "audioUrl": "https://www.podtrac.com/pts/redirect.mp3/pdst.fm/e/pscrb.fm/rss/p/mgln.ai/e/257/traffic.megaphone.fm/VMP4057571763.mp3",
+      "guid": "8137a4ba-b5cc-11f0-92f1-933493c6e155",
+      "date": "2026-07-17",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-18-01-waveform-the-mkbhd-podcast.md"
+    },
+    {
+      "title": "Searching for paradise",
+      "show": "TED Radio Hour",
+      "link": "https://www.npr.org/2026/07/17/nx-s1-5896219/searching-for-paradise",
+      "audioUrl": "https://prfx.byspotify.com/e/play.podtrac.com/npr-510298/npr.simplecastaudio.com/e19460b8-b905-4bd2-9062-cea3c0ab9405/episodes/c4dd06a7-d9bb-4e32-bf0a-cd854f89c35f/audio/128/default.mp3?awCollectionId=e19460b8-b905-4bd2-9062-cea3c0ab9405&awEpisodeId=c4dd06a7-d9bb-4e32-bf0a-cd854f89c35f&feed=gGUt_fS1&t=podcast&e=nx-s1-5896219&p=510298&d=3006&size=48105057",
+      "guid": "090c018c-3859-4547-822f-a2a3eed0d823",
+      "date": "2026-07-17",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-18-02-ted-radio-hour.md"
     }
   ]
 }
