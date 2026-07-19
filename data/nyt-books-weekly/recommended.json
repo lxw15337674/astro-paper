@@ -152,6 +152,78 @@
       "title": "LORE OLYMPUS, VOL. TEN",
       "archivedAt": "2026-07-15",
       "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-15.md"
+    },
+    {
+      "key": "book:9780593600320",
+      "listType": "fiction",
+      "bookId": "9780593600320",
+      "title": "LOVE YOU MORE",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9780593819487",
+      "listType": "fiction",
+      "bookId": "9780593819487",
+      "title": "THE EXQUISITE TORMENT OF LOVING YOUR ENEMY",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9780593819708",
+      "listType": "fiction",
+      "bookId": "9780593819708",
+      "title": "TWISTED ROAD",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9798217197453",
+      "listType": "fiction",
+      "bookId": "9798217197453",
+      "title": "COUNTRY PEOPLE",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9781638493457",
+      "listType": "fiction",
+      "bookId": "9781638493457",
+      "title": "HE WHO FIGHTS WITH MONSTERS, BOOK 1: OUTWORLDER",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9781668216361",
+      "listType": "fiction",
+      "bookId": "9781668216361",
+      "title": "EVERYTHING WAS BEAUTIFUL AND NOTHING HURT",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9781464264603",
+      "listType": "fiction",
+      "bookId": "9781464264603",
+      "title": "INTO THE FADING TWILIGHT",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9780316587587",
+      "listType": "fiction",
+      "bookId": "9780316587587",
+      "title": "IN THE WAKE OF THE RUINED",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
+    },
+    {
+      "key": "book:9780736447256",
+      "listType": "young_adult",
+      "bookId": "9780736447256",
+      "title": "THE PUMPKIN QUEEN",
+      "archivedAt": "2026-07-19",
+      "postPath": "src/content/posts/zh-cn/每周图书推荐-2026-07-19.md"
     }
   ]
 }
