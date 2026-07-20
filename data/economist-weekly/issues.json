@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "issues": [
+    {
+      "key": "economist:2026-07-18:7bc0c8a06de0b53d4494b007833c34a88c13ed20dc276e72b21624915ffc190a",
+      "issueDate": "2026-07-18",
+      "sourceCommit": "0f535d99e52dca302806e25894f716d6ea994db4",
+      "epubSha256": "7bc0c8a06de0b53d4494b007833c34a88c13ed20dc276e72b21624915ffc190a",
+      "archivedAt": "2026-07-18",
+      "postPath": "src/content/posts/zh-cn/经济学人-2026-07-18.md"
+    }
+  ]
+}
