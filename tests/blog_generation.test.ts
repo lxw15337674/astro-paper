@@ -21,6 +21,7 @@ import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprint
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { CAPITAL_MARKET_SOURCE_SEP, articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
 import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
+import { economistWeeklyMarkdownFromModelJson, parseEconomistWeeklyModelJson } from "../scripts/economist_weekly_compose.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
@@ -47,6 +48,7 @@ function composeFixtureBody(task: string): string {
   const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}.json`), "utf8");
   if (task === "github-trending-daily") return githubTrendingMarkdownFromModelJson(raw, source);
   if (task === "mdblist-weekly") return mdblistMarkdownFromModelJson(raw, source);
+  if (task === "economist-weekly") return economistWeeklyMarkdownFromModelJson(raw, source);
   return dailyDigestMarkdownFromModelJson(raw, source);
 }
 
@@ -741,6 +743,14 @@ ${"这是一段用于覆盖模型把播客顶层标题写成三级标题时的�
   assert.equal(result.title, "Format Drift Podcast：中文标题：一次格式下沉的播客输出");
   assert.match(article, /^## 中文标题：一次格式下沉的播客输出$/m);
   assert.match(article, /^### 第一部分$/m);
+});
+
+test("Economist weekly model output follows the fixed article JSON contract", () => {
+  const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
+  const model = parseEconomistWeeklyModelJson(raw, 3);
+  assert.equal(model.articles.length, 3);
+  assert.deepEqual(model.articles.map(item => item.rank), [1, 2, 3]);
+  assert.ok(model.articles.every(item => item.oneSentenceSummary && item.corePoint && item.contentSummary));
 });
 
 test("HN compose parses source facts from markdown blocks", () => {

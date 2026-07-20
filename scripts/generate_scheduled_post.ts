@@ -27,6 +27,10 @@ import { MDBLIST_LEDGER_REL_PATH, appendMdblistRecommendations, parseMdblistReco
 import { NytBooksNoNewReleasesError, buildNytBooksWeeklySource } from "./nyt_books_source.ts";
 import { nytBooksMarkdownFromModelJson } from "./nyt_books_compose.ts";
 import { NYT_BOOKS_LEDGER_REL_PATH, appendNytBookRecommendations, parseNytBookRecommendationsFromSource } from "./nyt_books_ledger.ts";
+import { EconomistIssueAlreadyArchivedError, EconomistIssueUnavailableError, buildEconomistWeeklySource } from "./economist_weekly_source.ts";
+import { economistWeeklyMarkdownFromModelJson } from "./economist_weekly_compose.ts";
+import { ECONOMIST_LEDGER_REL_PATH, appendEconomistIssue, parseEconomistIssueFromSource } from "./economist_weekly_ledger.ts";
+import { parseModelJsonObject } from "./compose_common.ts";
 
 export type ResultItem = ReturnType<typeof archivePost> & {
   skip_reason?: string;
@@ -202,6 +206,7 @@ function isPodcastArticleTask(task: Task): boolean {
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
   if (error instanceof MarketSourceUnavailableError && error.task === task) return true;
   if (error instanceof NytBooksNoNewReleasesError) return task === "nyt-books-weekly";
+  if (error instanceof EconomistIssueUnavailableError || error instanceof EconomistIssueAlreadyArchivedError) return task === "economist-weekly";
   if (!(error instanceof PodcastSourceInsufficientEpisodesError)) return false;
   return isPodcastArticleTask(task);
 }
@@ -251,6 +256,12 @@ async function sourceForTask(task: Task, date: string, sourceFixtureDir = "", re
   if (task === "nyt-books-weekly") {
     return buildNytBooksWeeklySource(date, {
       ledgerFile: path.join(repo, NYT_BOOKS_LEDGER_REL_PATH),
+      excludePostPath: taskPostRelPath(task, date),
+    });
+  }
+  if (task === "economist-weekly") {
+    return buildEconomistWeeklySource(date, {
+      ledgerFile: path.join(repo, ECONOMIST_LEDGER_REL_PATH),
       excludePostPath: taskPostRelPath(task, date),
     });
   }
@@ -537,6 +548,77 @@ async function buildCombinedTechDailySource({
   return combined;
 }
 
+type EconomistItemSummary = {
+  rank: number;
+  oneSentenceSummary: string;
+  corePoint: string;
+  contentSummary: string;
+};
+
+function economistSourceBlocks(source: string): string[] {
+  return source.split(/(?=^##\s+\d+\.\s+)/gm).map(block => block.trim()).filter(block => /^##\s+\d+\.\s+/.test(block));
+}
+
+function parseEconomistItemSummary(raw: string, rank: number): EconomistItemSummary {
+  const payload = parseModelJsonObject(raw, "economist weekly item summary");
+  const responseRank = Number(payload.rank);
+  const oneSentenceSummary = String(payload.one_sentence_summary || "").replace(/\s+/g, " ").trim();
+  const corePoint = String(payload.core_point || "").replace(/\s+/g, " ").trim();
+  const contentSummary = String(payload.content_summary || "").replace(/\s+/g, " ").trim();
+  if (responseRank !== rank) throw new Error(`economist weekly item summary rank mismatch: ${responseRank} vs ${rank}`);
+  if (oneSentenceSummary.length < 25 || corePoint.length < 60 || contentSummary.length < 120) throw new Error(`economist weekly item ${rank} summary is too short`);
+  if (![oneSentenceSummary, corePoint, contentSummary].every(value => /[\u3400-\u9fff]/.test(value))) throw new Error(`economist weekly item ${rank} summary must be Chinese`);
+  return { rank, oneSentenceSummary, corePoint, contentSummary };
+}
+
+async function buildCombinedEconomistWeeklySource({
+  source,
+  date,
+  repo,
+  model,
+  promptDir,
+  artifactsDir,
+}: {
+  source: string;
+  date: string;
+  repo: string;
+  model: string;
+  promptDir: string;
+  artifactsDir: string;
+}): Promise<string> {
+  const blocks = economistSourceBlocks(source);
+  if (blocks.length < 3) throw new Error(`economist weekly source has too few article blocks: ${blocks.length}`);
+  const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
+  const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "economist-weekly-item-summary"), "utf8");
+  writeArtifact(artifactsDir, "economist-weekly", "source.raw.md", source);
+  const summaries = await mapWithConcurrency(blocks, 3, async block => {
+    const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
+    if (!Number.isInteger(rank)) throw new Error("economist weekly source article is missing rank");
+    const prompt = template.replaceAll("{date}", date).replaceAll("{rank}", String(rank)).replaceAll("{article_text}", block);
+    writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-prompt.md`, prompt);
+    const response = await callAi(prompt, model, true);
+    writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-summary.json`, response.content);
+    return parseEconomistItemSummary(response.content, rank);
+  });
+  const byRank = new Map(summaries.map(summary => [summary.rank, summary]));
+  const header = source.slice(0, source.search(/^##\s+\d+\.\s+/m)).trimEnd();
+  const combined = [
+    header,
+    "",
+    "文章级摘要由独立模型调用生成；以下固定字段是整期导读唯一可用的语义证据。",
+    "",
+    ...blocks.flatMap(block => {
+      const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
+      const summary = byRank.get(rank);
+      const factLines = block.split("\n").filter(line => /^##\s+|^- (?:栏目|作者|原文链接|EPUB 文件)：/.test(line));
+      if (!summary) throw new Error(`economist weekly item summary missing rank ${rank}`);
+      return [...factLines, `- 一句话摘要：${summary.oneSentenceSummary}`, `- 核心观点：${summary.corePoint}`, `- 内容总结：${summary.contentSummary}`, ""];
+    }),
+  ].join("\n");
+  writeArtifact(artifactsDir, "economist-weekly", "source.dynamic.md", combined);
+  return combined;
+}
+
 
 function normalizedHeadingTitle(title: string): string {
   return avoidCloudflareEmailObfuscation(title).replace(/\s+/g, " ").trim().toLowerCase();
@@ -617,6 +699,7 @@ const JSON_COMPOSERS: Partial<Record<Task, (rawJson: string, source: string) => 
   "github-trending-daily": githubTrendingMarkdownFromModelJson,
   "mdblist-weekly": mdblistMarkdownFromModelJson,
   "nyt-books-weekly": nytBooksMarkdownFromModelJson,
+  "economist-weekly": economistWeeklyMarkdownFromModelJson,
   "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src),
   "capital-market-daily": composeFullCapitalMarket,
 };
@@ -801,6 +884,9 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     const itemCount = countNumberedBlocks(source);
     if (itemCount < 1) return [skippedLowQuality(task, date, "tech-daily has no high-quality daily items")];
   }
+  if (useAi && task === "economist-weekly" && !mockResponseDir) {
+    source = await buildCombinedEconomistWeeklySource({ source, date, repo, model, promptDir, artifactsDir });
+  }
   let body = source;
   let description: string | undefined;
   let generation: ResultItem["generation"];
@@ -823,6 +909,13 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
       parseNytBookRecommendationsFromSource(source),
       { archivedAt: date, postPath: result.path },
       path.join(repo, NYT_BOOKS_LEDGER_REL_PATH),
+    );
+  }
+  if (task === "economist-weekly" && !result.skipped) {
+    appendEconomistIssue(
+      parseEconomistIssueFromSource(source),
+      { archivedAt: date, postPath: result.path },
+      path.join(repo, ECONOMIST_LEDGER_REL_PATH),
     );
   }
   if (generation) result.generation = generation;
