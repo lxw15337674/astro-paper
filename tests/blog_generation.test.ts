@@ -7,7 +7,7 @@ import AdmZip from "adm-zip";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, resolvePromptFile } from "../scripts/ai_blog_writer.ts";
-import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
+import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, callBlogAi, callBlogAiWithFailover, parseResponsesSse, responsesUrl } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFacts } from "../scripts/hn_compose.ts";
 import { githubTrendingMarkdownFromModelJson, parseGitHubTrendingFacts } from "../scripts/github_trending_compose.ts";
@@ -193,6 +193,64 @@ test("AI client fails over to deepseek when primary request fails", async () => 
 });
 
 
+
+test("responsesUrl appends the /responses path once", () => {
+  assert.equal(responsesUrl("https://www.right.codes/codex/v1"), "https://www.right.codes/codex/v1/responses");
+  assert.equal(responsesUrl("https://www.right.codes/codex/v1/responses"), "https://www.right.codes/codex/v1/responses");
+  assert.equal(responsesUrl("https://www.right.codes/codex/v1/"), "https://www.right.codes/codex/v1/responses");
+});
+
+test("parseResponsesSse prefers the completed text and falls back to deltas", () => {
+  const sse = [
+    `event: response.output_text.delta\ndata: ${JSON.stringify({ type: "response.output_text.delta", delta: "他" })}`,
+    `event: response.output_text.delta\ndata: ${JSON.stringify({ type: "response.output_text.delta", delta: "好" })}`,
+    `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: { output: [{ content: [{ type: "output_text", text: "他好世界" }] }] } })}`,
+    "data: [DONE]",
+  ].join("\n\n");
+  assert.equal(parseResponsesSse(sse), "他好世界");
+
+  const deltaOnly = [
+    `event: response.output_text.delta\ndata: ${JSON.stringify({ type: "response.output_text.delta", delta: "A" })}`,
+    `event: response.output_text.delta\ndata: ${JSON.stringify({ type: "response.output_text.delta", delta: "B" })}`,
+  ].join("\n\n");
+  assert.equal(parseResponsesSse(deltaOnly), "AB");
+});
+
+test("parseResponsesSse throws on a failed response event", () => {
+  const sse = `event: response.failed\ndata: ${JSON.stringify({ type: "response.failed", response: { error: { message: "quota exceeded" } } })}`;
+  assert.throws(() => parseResponsesSse(sse), /AI responses API error: quota exceeded/);
+});
+
+test("callBlogAi posts to /responses and decodes the SSE stream when apiStyle is responses", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+  globalThis.fetch = (async (input, init) => {
+    calls.push({ url: String(input), body: JSON.parse(String(init?.body || "{}")) });
+    const sse = [
+      `event: response.output_text.delta\ndata: ${JSON.stringify({ type: "response.output_text.delta", delta: "## 标题\n\n正文" })}`,
+      `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: { output: [{ content: [{ type: "output_text", text: "## 标题\n\n正文" }] }] } })}`,
+    ].join("\n\n");
+    return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  }) as typeof fetch;
+  try {
+    const content = await callBlogAi({
+      prompt: "hello",
+      apiKey: "key",
+      baseUrl: "https://www.right.codes/codex/v1",
+      model: "gpt-5.6-luna",
+      apiStyle: "responses",
+      jsonMode: true,
+    });
+    assert.equal(content, "## 标题\n\n正文");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://www.right.codes/codex/v1/responses");
+    assert.equal(calls[0].body.input, "hello");
+    assert.deepEqual(calls[0].body.text, { format: { type: "json_object" } });
+    assert.equal("messages" in calls[0].body, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("Yahoo Finance article evidence is rejected when index moves conflict with closing data", () => {
   const conflicting = "The S&P 500 Index today is down -1.26%, the Dow Jones Industrial Average is down -0.30%, and the Nasdaq 100 Index is down -2.69%.";
