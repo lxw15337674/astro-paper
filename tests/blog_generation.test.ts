@@ -22,7 +22,7 @@ import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprint
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { CAPITAL_MARKET_SOURCE_SEP, articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
 import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
-import { economistWeeklyMarkdownFromModelJson, parseEconomistArticleSummaries, parseEconomistWeeklyModelJson } from "../scripts/economist_weekly_compose.ts";
+import { economistWeeklyMarkdown, parseEconomistArticleSummaries } from "../scripts/economist_weekly_compose.ts";
 import { parseEconomistEpub } from "../scripts/economist_weekly_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
@@ -79,7 +79,7 @@ function composeFixtureBody(task: string): string {
   const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses", `${task}.json`), "utf8");
   if (task === "github-trending-daily") return githubTrendingMarkdownFromModelJson(raw, source);
   if (task === "mdblist-weekly") return mdblistMarkdownFromModelJson(raw, source);
-  if (task === "economist-weekly") return economistWeeklyMarkdownFromModelJson(raw, source);
+  if (task === "economist-weekly") return economistWeeklyMarkdown(source).markdown;
   return dailyDigestMarkdownFromModelJson(raw, source);
 }
 
@@ -848,24 +848,28 @@ test("Economist EPUB keeps every valid article without title dedupe or body trun
   assert.deepEqual(Object.keys(issue.articles[0]).sort(), ["originUrl", "rank", "text"]);
 });
 
-test("Economist item and issue calls use separate JSON contracts", () => {
+test("Economist item summary keeps Markdown structure and rejects headings", () => {
   const item = parseEconomistItemSummary(
     JSON.stringify({
       rank: 1,
       title_zh: "制度压力",
       one_sentence_summary: "短摘要。",
       core_point: "核心观点。",
-      content_summary: "完整总结。",
+      content_summary: "第一段总结。\n\n- **要点一**：细节。\n- 要点二：细节。",
     }),
     1,
   );
   assert.equal(item.titleZh, "制度压力");
-  assert.equal(item.contentSummary, "完整总结。");
+  assert.match(item.contentSummary, /\n\n- \*\*要点一\*\*/);
 
-  const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
-  const model = parseEconomistWeeklyModelJson(raw);
-  assert.ok(model.description && model.issueOverview && model.readingRoute);
-  assert.equal("articles" in model, false);
+  assert.throws(
+    () =>
+      parseEconomistItemSummary(
+        JSON.stringify({ rank: 1, title_zh: "制度压力", one_sentence_summary: "短摘要。", core_point: "核心观点。", content_summary: "## 小标题\n\n正文。" }),
+        1,
+      ),
+    /must not use Markdown headings/,
+  );
 });
 
 test("Economist summary concurrency defaults to ten and never exceeds ten", () => {
@@ -883,17 +887,21 @@ test("Economist summary concurrency defaults to ten and never exceeds ten", () =
   }
 });
 
-test("Economist compose preserves fixed item summaries and removes legacy metadata", () => {
+test("Economist compose aggregates per-article summaries with no issue-level sections", () => {
   const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/economist-weekly.md"), "utf8");
-  const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
   const summaries = parseEconomistArticleSummaries(source);
-  const markdown = economistWeeklyMarkdownFromModelJson(raw, source);
+  const { markdown, description } = economistWeeklyMarkdown(source);
   assert.equal(summaries.length, 3);
-  assert.match(markdown, /^## 全部文章$/m);
-  assert.match(markdown, /^### 脆弱和平的压力测试$/m);
-  assert.match(markdown, /文章解释一项看似有利各方的停火/);
+  // No issue-level overview/reading-route/wrapper sections; articles are top-level.
+  assert.doesNotMatch(markdown, /本期主题脉络|阅读路线|全部文章/);
+  assert.match(markdown, /^## 脆弱和平的压力测试$/m);
+  assert.match(markdown, /^### 内容总结$/m);
+  // content_summary Markdown structure survives the carrier round-trip.
+  assert.match(markdown, /- \*\*国内政治\*\*：/);
   assert.match(markdown, /- 原文：\[The Economist\]\(https:\/\/www\.economist\.com\/leaders\/2099\/01\/01\/a-fragile-peace\)/);
   assert.doesNotMatch(markdown, /原题：|栏目：|作者：|A fragile peace faces a hard test/);
+  assert.equal(description, summaries[0].oneSentenceSummary.slice(0, 30));
+  assert.ok(description.length > 0 && description.length <= 30);
 });
 
 test("Economist archive accepts more than ten complete articles", () => {
@@ -911,13 +919,12 @@ test("Economist archive accepts more than ten complete articles", () => {
         `- 中文标题：第${rank}篇中文标题`,
         `- 一句话摘要：第${rank}篇文章的一句话中文摘要。`,
         `- 核心观点：第${rank}篇文章的核心中文观点。`,
-        `- 内容总结：第${rank}篇文章的完整中文内容总结，其中可以合理说明文章采用的示例。`,
+        `- 内容总结：${JSON.stringify(`第${rank}篇文章的完整中文内容总结：\n\n- **要点**：合理说明文章采用的示例。`)}`,
         "",
       ].join("\n");
     }),
   ].join("\n");
-  const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
-  const body = economistWeeklyMarkdownFromModelJson(raw, source);
+  const body = economistWeeklyMarkdown(source).markdown;
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-economist-all-"));
   const issueDate = contentDateForTask("economist-weekly", "2099-01-09", source);
   assert.equal(issueDate, "2099-01-02");
@@ -927,7 +934,8 @@ test("Economist archive accepts more than ten complete articles", () => {
   assert.equal(result.path, "src/content/posts/zh-cn/经济学人-2099-01-02.md");
   assert.equal(result.title, "经济学人本期导读｜2099-01-02");
   assert.match(article, /pubDatetime: 2099-01-01T16:00:00Z/);
-  assert.equal((article.match(/^###\s+第\d+篇中文标题$/gm) || []).length, 12);
+  assert.equal((article.match(/^##\s+第\d+篇中文标题$/gm) || []).length, 12);
+  assert.match(article, /- \*\*要点\*\*：/);
   assert.doesNotMatch(article, /原题：|栏目：|作者：/);
 });
 

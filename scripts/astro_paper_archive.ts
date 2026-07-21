@@ -373,13 +373,10 @@ function formatNytBooksWeekly(text: string): { markdown: string; ogImage: string
 
 function formatEconomistWeekly(text: string): { markdown: string; ogImage: string } {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  for (const section of ["本期主题脉络", "全部文章", "阅读路线"]) {
-    if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized)) throw new Error(`economist weekly missing section: ${section}`);
-  }
-  const articles = normalized.match(/^###\s+\S.+$/gm) || [];
+  const articles = normalized.match(/^##\s+\S.+$/gm) || [];
   if (articles.length < 3) throw new Error(`economist weekly needs at least three articles, got ${articles.length}`);
   for (const label of ["一句话摘要", "核心观点", "内容总结"]) {
-    const count = (normalized.match(new RegExp(`^####\\s+${label}\\s*$`, "gm")) || []).length;
+    const count = (normalized.match(new RegExp(`^###\\s+${label}\\s*$`, "gm")) || []).length;
     if (count !== articles.length) throw new Error(`economist weekly needs ${label} for every article: ${count} vs ${articles.length}`);
   }
   return { markdown: `${normalized.trim()}\n`, ogImage: "" };
