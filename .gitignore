@@ -35,3 +35,5 @@ compose.override.yaml
 # python bytecode (market table fetcher)
 __pycache__/
 *.pyc
+
+tmp/

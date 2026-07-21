@@ -28,7 +28,7 @@ import { NytBooksNoNewReleasesError, buildNytBooksWeeklySource } from "./nyt_boo
 import { nytBooksMarkdownFromModelJson } from "./nyt_books_compose.ts";
 import { NYT_BOOKS_LEDGER_REL_PATH, appendNytBookRecommendations, parseNytBookRecommendationsFromSource } from "./nyt_books_ledger.ts";
 import { EconomistIssueAlreadyArchivedError, EconomistIssueUnavailableError, buildEconomistWeeklySource } from "./economist_weekly_source.ts";
-import { economistWeeklyMarkdownFromModelJson } from "./economist_weekly_compose.ts";
+import { economistWeeklyMarkdown } from "./economist_weekly_compose.ts";
 import { ECONOMIST_LEDGER_REL_PATH, appendEconomistIssue, parseEconomistIssueFromSource } from "./economist_weekly_ledger.ts";
 import { parseModelJsonObject } from "./compose_common.ts";
 
@@ -41,8 +41,8 @@ export type ResultItem = ReturnType<typeof archivePost> & {
     ai_base_url: string;
     ai_fallback_used: boolean;
     source_artifact: string;
-    prompt_artifact: string;
-    ai_response_artifact: string;
+    prompt_artifact?: string;
+    ai_response_artifact?: string;
     mocked_ai: boolean;
   };
 };
@@ -560,6 +560,16 @@ function economistSourceBlocks(source: string): string[] {
   return source.split(/(?=^##\s+\d+\.\s+)/gm).map(block => block.trim()).filter(block => /^##\s+\d+\.\s+/.test(block));
 }
 
+// content_summary is Markdown; preserve paragraph/list structure while tidying whitespace.
+function normalizeEconomistContentSummary(raw: unknown): string {
+  return String(raw || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export function economistSummaryConcurrency(): number {
   const value = Number(process.env.ECONOMIST_SUMMARY_CONCURRENCY || "10");
   return Number.isInteger(value) && value > 0 ? Math.min(value, 10) : 10;
@@ -576,11 +586,12 @@ export function parseEconomistItemSummary(raw: string, rank: number): EconomistI
   const titleZh = String(payload.title_zh || "").replace(/\s+/g, " ").trim();
   const oneSentenceSummary = String(payload.one_sentence_summary || "").replace(/\s+/g, " ").trim();
   const corePoint = String(payload.core_point || "").replace(/\s+/g, " ").trim();
-  const contentSummary = String(payload.content_summary || "").replace(/\s+/g, " ").trim();
+  const contentSummary = normalizeEconomistContentSummary(payload.content_summary);
   if (responseRank !== rank) throw new Error(`economist weekly item summary rank mismatch: ${responseRank} vs ${rank}`);
   if (!titleZh || !/[\u3400-\u9fff]/.test(titleZh)) throw new Error(`economist weekly item ${rank} needs a Chinese title`);
   if (![oneSentenceSummary, corePoint, contentSummary].every(Boolean)) throw new Error(`economist weekly item ${rank} summary fields must not be empty`);
   if (![oneSentenceSummary, corePoint, contentSummary].every(value => /[\u3400-\u9fff]/.test(value))) throw new Error(`economist weekly item ${rank} summary must be Chinese`);
+  if (/^\s{0,3}#{1,6}\s/m.test(contentSummary)) throw new Error(`economist weekly item ${rank} content_summary must not use Markdown headings`);
   return { rank, titleZh, oneSentenceSummary, corePoint, contentSummary };
 }
 
@@ -649,7 +660,8 @@ async function buildCombinedEconomistWeeklySource({
         `- 中文标题：${summary.titleZh}`,
         `- 一句话摘要：${summary.oneSentenceSummary}`,
         `- 核心观点：${summary.corePoint}`,
-        `- 内容总结：${summary.contentSummary}`,
+        // content_summary is Markdown; JSON-encode so its newlines/lists survive the single-line bullet carrier.
+        `- 内容总结：${JSON.stringify(summary.contentSummary)}`,
         "",
       ];
     }),
@@ -741,7 +753,6 @@ const JSON_COMPOSERS: Partial<Record<Task, (rawJson: string, source: string) => 
   "github-trending-daily": githubTrendingMarkdownFromModelJson,
   "mdblist-weekly": mdblistMarkdownFromModelJson,
   "nyt-books-weekly": nytBooksMarkdownFromModelJson,
-  "economist-weekly": economistWeeklyMarkdownFromModelJson,
   "tech-daily": (raw, src) => dailyDigestMarkdownFromModelJson(raw, src),
   "capital-market-daily": composeFullCapitalMarket,
 };
@@ -941,7 +952,21 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
   let body = source;
   let description: string | undefined;
   let generation: ResultItem["generation"];
-  if (useAi) {
+  if (task === "economist-weekly") {
+    // The issue post is a deterministic aggregation of the per-article summaries; no issue-level AI call.
+    const composed = economistWeeklyMarkdown(source);
+    body = composed.markdown;
+    description = composed.description;
+    const sourceArtifact = writeArtifact(artifactsDir, task, "source.md", source);
+    const itemConfig = envAiConfig({ model });
+    generation = {
+      ai_model: itemConfig.model,
+      ai_base_url: itemConfig.baseUrl,
+      ai_fallback_used: false,
+      source_artifact: sourceArtifact,
+      mocked_ai: Boolean(mockResponseDir),
+    };
+  } else if (useAi) {
     const rendered = await renderWithAi({ task, date: contentDate, source, repo, model, promptDir, mockResponseDir, artifactsDir });
     body = rendered.markdown;
     description = rendered.description;
