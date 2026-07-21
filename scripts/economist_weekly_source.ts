@@ -10,9 +10,7 @@ const REPOSITORY = "hehonghui/awesome-english-ebooks";
 const ECONOMIST_DIR = "01_economist";
 const MAX_EPUB_BYTES = 30 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 80 * 1024 * 1024;
-const MAX_ARTICLES = 8;
 const MIN_ARTICLE_CHARS = 900;
-const MAX_ARTICLE_CHARS = 12_000;
 const NON_ARTICLE_SECTIONS = new Set(["the world this week", "letters", "economic & financial indicators"]);
 
 export class EconomistIssueUnavailableError extends Error {}
@@ -23,10 +21,6 @@ type ManifestItem = { id: string; href: string; mediaType: string };
 
 export type EconomistArticle = {
   rank: number;
-  originalTitle: string;
-  section: string;
-  author: string;
-  sourceFile: string;
   originUrl: string;
   text: string;
 };
@@ -45,19 +39,16 @@ function normalizedText(value = ""): string {
   return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function textFromDocument(html: string): { title: string; section: string; author: string; originUrl: string; text: string } {
+function textFromDocument(html: string): { section: string; originUrl: string; text: string } {
   const dom = new JSDOM(html);
   const { document } = dom.window;
-  const title = normalizedText(document.querySelector("h1.te_article_title, h1, h2")?.textContent || document.title);
   const section = normalizedText(document.querySelector(".te_section_title")?.textContent || "未标明");
-  const authorNode = document.querySelector('[class*="author" i], [class*="byline" i]');
-  const authorText = normalizedText(authorNode?.textContent || "").replace(/^by\s+/i, "");
   const originUrl = ((document.querySelector("a.origin_link") as HTMLAnchorElement | null)?.href || "").replace(/^(https?:\/\/[^/]+)\/+/i, "$1/");
   const paragraphs = [...document.querySelectorAll("p")]
     .filter(node => !node.closest(".link_navbar, nav, header, footer") && !/downloaded by|subscribers only/i.test(node.textContent || ""))
     .map(node => normalizedText(node.textContent || ""))
     .filter(text => text.length > 30);
-  return { title, section, author: authorText || "未标明", originUrl, text: paragraphs.join("\n\n") };
+  return { section, originUrl, text: paragraphs.join("\n\n") };
 }
 
 export function parseEconomistEpub(buffer: Buffer): EconomistParsedIssue {
@@ -82,7 +73,7 @@ export function parseEconomistEpub(buffer: Buffer): EconomistParsedIssue {
     asArray<Record<string, string>>(packageNode?.manifest?.item).map(item => [item.id, { id: item.id, href: item.href, mediaType: item["media-type"] } satisfies ManifestItem]),
   );
   const spine = asArray<Record<string, string>>(packageNode?.spine?.itemref);
-  const candidates: Omit<EconomistArticle, "rank">[] = [];
+  const articles: Omit<EconomistArticle, "rank">[] = [];
   for (const ref of spine) {
     const item = manifest.get(ref.idref);
     if (!item || !/html/i.test(item.mediaType)) continue;
@@ -92,31 +83,15 @@ export function parseEconomistEpub(buffer: Buffer): EconomistParsedIssue {
     if (!entry) continue;
     const parsed = textFromDocument(entry.getData().toString("utf8"));
     if (
-      !parsed.title ||
       parsed.text.length < MIN_ARTICLE_CHARS ||
-      /^(contents|advertisement)$/i.test(parsed.title) ||
       NON_ARTICLE_SECTIONS.has(parsed.section.toLowerCase())
     ) {
       continue;
     }
-    candidates.push({ originalTitle: parsed.title, section: parsed.section, author: parsed.author, sourceFile, originUrl: parsed.originUrl, text: parsed.text.slice(0, MAX_ARTICLE_CHARS) });
+    articles.push({ originUrl: parsed.originUrl, text: parsed.text });
   }
-  const unique = candidates.filter((article, index) => candidates.findIndex(other => other.originalTitle.toLowerCase() === article.originalTitle.toLowerCase()) === index);
-  const selected: Omit<EconomistArticle, "rank">[] = [];
-  const sections = new Set<string>();
-  for (const article of unique) {
-    if (!sections.has(article.section)) {
-      selected.push(article);
-      sections.add(article.section);
-    }
-    if (selected.length >= MAX_ARTICLES) break;
-  }
-  for (const article of unique) {
-    if (selected.length >= MAX_ARTICLES) break;
-    if (!selected.includes(article)) selected.push(article);
-  }
-  if (selected.length < 3) throw new Error(`Economist EPUB produced too few complete articles: ${selected.length}`);
-  return { title, articles: selected.map((article, index) => ({ ...article, rank: index + 1 })) };
+  if (articles.length < 3) throw new Error(`Economist EPUB produced too few complete articles: ${articles.length}`);
+  return { title, articles: articles.map((article, index) => ({ ...article, rank: index + 1 })) };
 }
 
 async function githubJson<T>(url: string): Promise<T> {
@@ -147,15 +122,12 @@ export function renderEconomistWeeklySource(issue: EconomistIssue, parsed: Econo
     `- EPUB 标题：${parsed.title}`,
     `- 抓取时间：${bjtTimestamp()}`,
     "",
-    "数据说明：以下正文来自 EPUB 的阅读顺序。原标题、栏目、作者、来源链接与刊期均为确定性事实，模型只可生成中文标题、一句话摘要、核心观点、内容总结与整期导读。",
+    "数据说明：以下正文来自 EPUB 的阅读顺序。每篇文章会独立请求中文标题与摘要，整期模型只负责编辑聚合。",
     "",
     ...parsed.articles.flatMap(article => [
-      `## ${article.rank}. ${article.originalTitle}`,
+      `## ${article.rank}. 文章`,
       "",
-      `- 栏目：${article.section}`,
-      `- 作者：${article.author}`,
       `- 原文链接：${article.originUrl || "-"}`,
-      `- EPUB 文件：${article.sourceFile}`,
       "",
       article.text,
       "",

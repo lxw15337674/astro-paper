@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import AdmZip from "adm-zip";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, resolvePromptFile } from "../scripts/ai_blog_writer.ts";
@@ -21,11 +22,12 @@ import { appendSummarizedEpisode, isEpisodeSummarized, loadSummarizedFingerprint
 import { dedupeItems, eventFamilyKey } from "../scripts/daily_digest_source.ts";
 import { CAPITAL_MARKET_SOURCE_SEP, articleConflictsWithIndexSnapshot, buildUsSection } from "../scripts/market_daily_source.ts";
 import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
-import { economistWeeklyMarkdownFromModelJson, parseEconomistWeeklyModelJson } from "../scripts/economist_weekly_compose.ts";
+import { economistWeeklyMarkdownFromModelJson, parseEconomistArticleSummaries, parseEconomistWeeklyModelJson } from "../scripts/economist_weekly_compose.ts";
+import { parseEconomistEpub } from "../scripts/economist_weekly_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
-import { type ResultItem, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
+import { type ResultItem, parseEconomistItemSummary, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
 
 // prompts 已按 daily/weekly/market/podcast 分类到子目录，用解析器按名查找（根目录 + 一层子目录）。
 const PROMPTS_DIR = path.join(process.cwd(), "prompts/blog");
@@ -41,6 +43,28 @@ const GITHUB_TRENDING_HTML_FIXTURE = `<!doctype html><html><body>
     <span class="d-inline-block float-sm-right">321 stars today</span>
   </article>
 </body></html>`;
+
+function economistEpubFixture(articleCount: number): Buffer {
+  const zip = new AdmZip();
+  zip.addFile(
+    "META-INF/container.xml",
+    Buffer.from(`<?xml version="1.0"?><container><rootfiles><rootfile full-path="EPUB/content.opf"/></rootfiles></container>`),
+  );
+  const manifest = Array.from({ length: articleCount }, (_, index) => `<item id="article-${index + 1}" href="article-${index + 1}.xhtml" media-type="application/xhtml+xml"/>`).join("");
+  const spine = Array.from({ length: articleCount }, (_, index) => `<itemref idref="article-${index + 1}"/>`).join("");
+  zip.addFile(
+    "EPUB/content.opf",
+    Buffer.from(`<?xml version="1.0"?><package><metadata><title>The Economist fixture</title></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`),
+  );
+  for (let index = 1; index <= articleCount; index += 1) {
+    const longBody = `${`Article ${index} presents complete evidence without an artificial per-article length limit. `.repeat(180)}ARTICLE_${index}_TAIL_SENTINEL`;
+    zip.addFile(
+      `EPUB/article-${index}.xhtml`,
+      Buffer.from(`<html><body><div class="te_section_title">Leaders</div><h1>Repeated title</h1><a class="origin_link" href="https://www.economist.com/fixture/${index}">Original</a><p>${longBody}</p></body></html>`),
+    );
+  }
+  return zip.toBuffer();
+}
 
 // 从 JSON 模型输出 fixture + source fixture 经 composer 组装出 archive 中间契约 Markdown。
 function composeFixtureBody(task: string): string {
@@ -745,12 +769,78 @@ ${"这是一段用于覆盖模型把播客顶层标题写成三级标题时的�
   assert.match(article, /^### 第一部分$/m);
 });
 
-test("Economist weekly model output follows the fixed article JSON contract", () => {
+test("Economist EPUB keeps every valid article without title dedupe or body truncation", () => {
+  const issue = parseEconomistEpub(economistEpubFixture(12));
+  assert.equal(issue.articles.length, 12);
+  assert.deepEqual(
+    issue.articles.map(article => article.rank),
+    Array.from({ length: 12 }, (_, index) => index + 1),
+  );
+  assert.match(issue.articles[0].text, /ARTICLE_1_TAIL_SENTINEL/);
+  assert.ok(issue.articles[0].text.length > 12_000);
+  assert.deepEqual(Object.keys(issue.articles[0]).sort(), ["originUrl", "rank", "text"]);
+});
+
+test("Economist item and issue calls use separate JSON contracts", () => {
+  const item = parseEconomistItemSummary(
+    JSON.stringify({
+      rank: 1,
+      title_zh: "制度压力",
+      one_sentence_summary: "短摘要。",
+      core_point: "核心观点。",
+      content_summary: "完整总结。",
+    }),
+    1,
+  );
+  assert.equal(item.titleZh, "制度压力");
+  assert.equal(item.contentSummary, "完整总结。");
+
   const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
-  const model = parseEconomistWeeklyModelJson(raw, 3);
-  assert.equal(model.articles.length, 3);
-  assert.deepEqual(model.articles.map(item => item.rank), [1, 2, 3]);
-  assert.ok(model.articles.every(item => item.oneSentenceSummary && item.corePoint && item.contentSummary));
+  const model = parseEconomistWeeklyModelJson(raw);
+  assert.ok(model.description && model.issueOverview && model.readingRoute);
+  assert.equal("articles" in model, false);
+});
+
+test("Economist compose preserves fixed item summaries and removes legacy metadata", () => {
+  const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/economist-weekly.md"), "utf8");
+  const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
+  const summaries = parseEconomistArticleSummaries(source);
+  const markdown = economistWeeklyMarkdownFromModelJson(raw, source);
+  assert.equal(summaries.length, 3);
+  assert.match(markdown, /^## 全部文章$/m);
+  assert.match(markdown, /^### 脆弱和平的压力测试$/m);
+  assert.match(markdown, /文章解释一项看似有利各方的停火/);
+  assert.match(markdown, /- 原文：\[The Economist\]\(https:\/\/www\.economist\.com\/leaders\/2099\/01\/01\/a-fragile-peace\)/);
+  assert.doesNotMatch(markdown, /原题：|栏目：|作者：|A fragile peace faces a hard test/);
+});
+
+test("Economist archive accepts more than ten complete articles", () => {
+  const fixtureSource = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/economist-weekly.md"), "utf8");
+  const header = fixtureSource.slice(0, fixtureSource.search(/^##\s+\d+\./m)).trimEnd();
+  const source = [
+    header,
+    "",
+    ...Array.from({ length: 12 }, (_, index) => {
+      const rank = index + 1;
+      return [
+        `## ${rank}. 文章`,
+        "",
+        `- 原文链接：https://www.economist.com/fixture/${rank}`,
+        `- 中文标题：第${rank}篇中文标题`,
+        `- 一句话摘要：第${rank}篇文章的一句话中文摘要。`,
+        `- 核心观点：第${rank}篇文章的核心中文观点。`,
+        `- 内容总结：第${rank}篇文章的完整中文内容总结。`,
+        "",
+      ].join("\n");
+    }),
+  ].join("\n");
+  const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
+  const body = economistWeeklyMarkdownFromModelJson(raw, source);
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-economist-all-"));
+  const result = archivePost({ task: "economist-weekly", date: "2099-01-02", repo, body, force: true });
+  const article = fs.readFileSync(path.join(repo, result.path), "utf8");
+  assert.equal((article.match(/^###\s+第\d+篇中文标题$/gm) || []).length, 12);
+  assert.doesNotMatch(article, /原题：|栏目：|作者：/);
 });
 
 test("HN compose parses source facts from markdown blocks", () => {

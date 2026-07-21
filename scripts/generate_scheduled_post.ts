@@ -550,6 +550,7 @@ async function buildCombinedTechDailySource({
 
 type EconomistItemSummary = {
   rank: number;
+  titleZh: string;
   oneSentenceSummary: string;
   corePoint: string;
   contentSummary: string;
@@ -559,16 +560,41 @@ function economistSourceBlocks(source: string): string[] {
   return source.split(/(?=^##\s+\d+\.\s+)/gm).map(block => block.trim()).filter(block => /^##\s+\d+\.\s+/.test(block));
 }
 
-function parseEconomistItemSummary(raw: string, rank: number): EconomistItemSummary {
+export function parseEconomistItemSummary(raw: string, rank: number): EconomistItemSummary {
   const payload = parseModelJsonObject(raw, "economist weekly item summary");
   const responseRank = Number(payload.rank);
+  const titleZh = String(payload.title_zh || "").replace(/\s+/g, " ").trim();
   const oneSentenceSummary = String(payload.one_sentence_summary || "").replace(/\s+/g, " ").trim();
   const corePoint = String(payload.core_point || "").replace(/\s+/g, " ").trim();
   const contentSummary = String(payload.content_summary || "").replace(/\s+/g, " ").trim();
   if (responseRank !== rank) throw new Error(`economist weekly item summary rank mismatch: ${responseRank} vs ${rank}`);
-  if (oneSentenceSummary.length < 25 || corePoint.length < 60 || contentSummary.length < 120) throw new Error(`economist weekly item ${rank} summary is too short`);
+  if (!titleZh || !/[\u3400-\u9fff]/.test(titleZh)) throw new Error(`economist weekly item ${rank} needs a Chinese title`);
+  if (![oneSentenceSummary, corePoint, contentSummary].every(Boolean)) throw new Error(`economist weekly item ${rank} summary fields must not be empty`);
   if (![oneSentenceSummary, corePoint, contentSummary].every(value => /[\u3400-\u9fff]/.test(value))) throw new Error(`economist weekly item ${rank} summary must be Chinese`);
-  return { rank, oneSentenceSummary, corePoint, contentSummary };
+  return { rank, titleZh, oneSentenceSummary, corePoint, contentSummary };
+}
+
+async function summarizeEconomistItem(prompt: string, rank: number, model: string, artifactsDir: string): Promise<EconomistItemSummary> {
+  const attempts = retryAttempts();
+  let lastError = "";
+  let attemptPrompt = prompt;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await sleep(retryDelayMs(attempt));
+    try {
+      const response = await callAi(attemptPrompt, model, true);
+      const summary = parseEconomistItemSummary(response.content, rank);
+      writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-summary.json`, response.content);
+      return summary;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-error-attempt-${attempt}.txt`, lastError);
+      if (attempt < attempts) {
+        attemptPrompt = `${prompt.trim()}\n\n上一轮输出无法解析为规定的 JSON，原因：${lastError}\n请重新返回完整、合法且字段齐全的 JSON 对象，不要输出解释或代码围栏。`;
+        writeStderr(`WARN: economist weekly item ${rank} attempt ${attempt}/${attempts} failed; retrying: ${lastError}`);
+      }
+    }
+  }
+  throw new Error(`economist weekly item ${rank} failed after ${attempts} attempts: ${lastError}`);
 }
 
 async function buildCombinedEconomistWeeklySource({
@@ -590,29 +616,32 @@ async function buildCombinedEconomistWeeklySource({
   if (blocks.length < 3) throw new Error(`economist weekly source has too few article blocks: ${blocks.length}`);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "economist-weekly-item-summary"), "utf8");
-  writeArtifact(artifactsDir, "economist-weekly", "source.raw.md", source);
   const summaries = await mapWithConcurrency(blocks, 3, async block => {
     const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
     if (!Number.isInteger(rank)) throw new Error("economist weekly source article is missing rank");
     const prompt = template.replaceAll("{date}", date).replaceAll("{rank}", String(rank)).replaceAll("{article_text}", block);
-    writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-prompt.md`, prompt);
-    const response = await callAi(prompt, model, true);
-    writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-summary.json`, response.content);
-    return parseEconomistItemSummary(response.content, rank);
+    return summarizeEconomistItem(prompt, rank, model, artifactsDir);
   });
   const byRank = new Map(summaries.map(summary => [summary.rank, summary]));
   const header = source.slice(0, source.search(/^##\s+\d+\.\s+/m)).trimEnd();
   const combined = [
     header,
     "",
-    "文章级摘要由独立模型调用生成；以下固定字段是整期导读唯一可用的语义证据。",
+    "文章级 JSON 由独立模型调用生成；以下固定结果是整期编辑聚合唯一可用的语义证据。",
     "",
     ...blocks.flatMap(block => {
       const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
       const summary = byRank.get(rank);
-      const factLines = block.split("\n").filter(line => /^##\s+|^- (?:栏目|作者|原文链接|EPUB 文件)：/.test(line));
+      const factLines = block.split("\n").filter(line => /^##\s+|^- 原文链接：/.test(line));
       if (!summary) throw new Error(`economist weekly item summary missing rank ${rank}`);
-      return [...factLines, `- 一句话摘要：${summary.oneSentenceSummary}`, `- 核心观点：${summary.corePoint}`, `- 内容总结：${summary.contentSummary}`, ""];
+      return [
+        ...factLines,
+        `- 中文标题：${summary.titleZh}`,
+        `- 一句话摘要：${summary.oneSentenceSummary}`,
+        `- 核心观点：${summary.corePoint}`,
+        `- 内容总结：${summary.contentSummary}`,
+        "",
+      ];
     }),
   ].join("\n");
   writeArtifact(artifactsDir, "economist-weekly", "source.dynamic.md", combined);
@@ -668,13 +697,16 @@ function assertMarkdownUsesOnlySourceLinks(markdown: string, source: string, tas
   if (unexpected) throw new Error(`${task} generated link outside selected source whitelist: ${unexpected}`);
 }
 
-function promptWithValidationFeedback(prompt: string, task: Task, previousError: string): string {
+function promptWithValidationFeedback(prompt: string, task: Task, previousError: string, jsonMode: boolean): string {
+  const outputInstruction = jsonMode
+    ? "请重新生成完整、合法且字段齐全的 JSON 对象；不要复述错误原因，不要输出解释或代码围栏。"
+    : "请重新生成完整 Markdown 正文，并严格避开上述失败原因；不要复述错误原因，不要输出解释或代码围栏。";
   return `${prompt.trim()}
 
 ---
 
 上一轮 ${task} 输出被发布质量检查拒绝，原因：${previousError}
-请重新生成完整 Markdown 正文，并严格避开上述失败原因；不要复述错误原因，不要输出解释，不要输出代码围栏。`;
+${outputInstruction}`;
 }
 
 function shouldRetryWithValidationFeedback(error: string): boolean {
@@ -750,7 +782,7 @@ async function renderLiveAiMarkdownWithSourceValidation(
       lastError = error instanceof Error ? error.message : String(error);
       writeArtifact(artifactsDir, artifactKey, `ai-error-attempt-${attempt}.txt`, lastError);
       if (attempt < attempts) {
-        attemptPrompt = shouldRetryWithValidationFeedback(lastError) ? promptWithValidationFeedback(prompt, task, lastError) : prompt;
+        attemptPrompt = shouldRetryWithValidationFeedback(lastError) ? promptWithValidationFeedback(prompt, task, lastError, jsonMode) : prompt;
         writeStderr(`WARN: ${artifactKey} AI generation attempt ${attempt}/${attempts} failed; retrying with validation feedback: ${lastError}`);
       }
     }

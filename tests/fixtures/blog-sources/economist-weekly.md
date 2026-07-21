@@ -7,29 +7,28 @@
 - EPUB SHA-256：0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 - EPUB 标题：TheEconomist.2099.01.02
 
-## 1. A fragile peace faces a hard test
+文章级 JSON 由独立模型调用生成；以下固定结果是整期编辑聚合唯一可用的语义证据。
 
-- 栏目：Leaders
-- 作者：未标明
+## 1. 文章
+
 - 原文链接：https://www.economist.com/leaders/2099/01/01/a-fragile-peace
-- EPUB 文件：EPUB/one.html
+- 中文标题：脆弱和平的压力测试
+- 一句话摘要：文章解释一项看似有利各方的停火，为何仍会被国内政治、财政压力和地区安全承诺拉回对抗。
+- 核心观点：和平能否维持，取决于是否存在限制短期投机和约束执行偏差的机制，而不只取决于谈判文本或公开表态。判断前景时必须同时观察参与者的激励、承诺成本与实际落实能力。
+- 内容总结：文章将停火置于多重压力下考察：各方虽然都能从降温中获益，却会受到国内政治算计、财政资源约束和地区安全承诺牵引。若缺少可执行的约束机制，参与者仍可能把短期收益置于共同承诺之前，导致表态与行动脱节。文章因此提醒读者，不应只从谈判是否达成来判断局势，而应追问谁负责执行、违约代价是什么，以及这些安排能否抑制投机行为。
 
-The article explains how a ceasefire faces pressure from domestic politics, fiscal constraints and regional security commitments. Each side can benefit from calm, but no durable mechanism limits opportunistic behaviour or ensures that public promises become practical action.
+## 2. 文章
 
-## 2. The arithmetic behind an ageing society
-
-- 栏目：Finance & economics
-- 作者：Jane Example
 - 原文链接：https://www.economist.com/finance-and-economics/2099/01/01/ageing-arithmetic
-- EPUB 文件：EPUB/two.html
+- 中文标题：老龄社会的算术题
+- 一句话摘要：文章说明老龄化不是单一福利议题，而是同时重塑劳动供给、公共财政和资本配置的一组长期约束。
+- 核心观点：提高退休年龄只能缓解部分压力；生产率、移民、照护体系与税制设计需要协同，否则任何单点改革都难以承担人口结构变化的全部后果。
+- 内容总结：文章将人口老龄化放回宏观经济的联动关系中分析：劳动力减少会影响增长基础，养老和医疗支出会挤压财政空间，资本配置也会随储蓄和风险偏好变化。提高退休年龄固然有帮助，却无法单独解决劳动力、照护和分配问题。文章主张用改革组合而非单一政策理解老龄化，读者在观察各国政策时，应同时检验生产率提升、移民安排、照护供给和税制是否彼此匹配。
 
-The article connects ageing to labour supply, public finance and capital allocation. Raising retirement ages helps only partly; productivity, migration, care systems and tax design need to work together under long-term demographic constraints.
+## 3. 文章
 
-## 3. A practical case for open scientific tools
-
-- 栏目：Science & technology
-- 作者：John Example
 - 原文链接：https://www.economist.com/science-and-technology/2099/01/01/open-scientific-tools
-- EPUB 文件：EPUB/three.html
-
-The article weighs the gains from lower barriers to collaboration and verification against data quality, maintenance responsibility, infrastructure funding and the spread of sensitive capabilities. Openness requires governance rather than the absence of it.
+- 中文标题：开放科研工具的现实条件
+- 一句话摘要：文章认为开放科研工具能扩大协作与验证，但只有将维护和治理成本纳入制度设计，开放才会真正发挥作用。
+- 核心观点：开放并不意味着取消规则；数据质量、维护责任、基础设施经费和敏感能力扩散，都需要被嵌入共享技术体系的治理安排。
+- 内容总结：文章讨论开放工具怎样降低协作门槛，使更多研究者能够参与验证、复用和创新，但也指出这些好处不会自动出现。数据若缺乏质量控制，维护若无人负责，基础设施若没有稳定经费，共享体系反而可能失效；敏感能力扩散还会带来额外风险。因此文章将开放理解为一种需要长期经营的公共技术基础设施，而不是无条件的价值判断，关键在于将责任、资金和边界写入制度安排。

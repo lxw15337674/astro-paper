@@ -373,16 +373,16 @@ function formatNytBooksWeekly(text: string): { markdown: string; ogImage: string
 
 function formatEconomistWeekly(text: string): { markdown: string; ogImage: string } {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
-  for (const section of ["本期主题脉络", "精选文章", "阅读路线"]) {
+  for (const section of ["本期主题脉络", "全部文章", "阅读路线"]) {
     if (!new RegExp(`^##\\s+${section}\\s*$`, "m").test(normalized)) throw new Error(`economist weekly missing section: ${section}`);
   }
-  const articles = normalized.match(/^###\s+.+（.+）$/gm) || [];
-  if (articles.length < 3 || articles.length > 10) throw new Error(`economist weekly needs 3-10 selected articles, got ${articles.length}`);
+  const articles = normalized.match(/^###\s+\S.+$/gm) || [];
+  if (articles.length < 3) throw new Error(`economist weekly needs at least three articles, got ${articles.length}`);
   for (const label of ["一句话摘要", "核心观点", "内容总结"]) {
     const count = (normalized.match(new RegExp(`^####\\s+${label}\\s*$`, "gm")) || []).length;
     if (count !== articles.length) throw new Error(`economist weekly needs ${label} for every article: ${count} vs ${articles.length}`);
   }
-  if (!/原题：/.test(normalized) || !/栏目：/.test(normalized)) throw new Error("economist weekly lacks source-backed article metadata");
+  if (/^- (?:原题|栏目|作者)：/m.test(normalized)) throw new Error("economist weekly must not publish original-title, section, or author metadata");
   for (const pattern of [/待补充/, /示例/, /信息不足/, /无法判断/, /本文将/]) {
     if (pattern.test(normalized)) throw new Error(`economist weekly contains forbidden language: ${pattern.source}`);
   }
