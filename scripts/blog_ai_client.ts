@@ -40,6 +40,13 @@ function envPositiveInt(name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
+function envBool(name: string, fallback: boolean): boolean {
+  const value = (process.env[name] || "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(value)) return true;
+  if (["0", "false", "no", "off"].includes(value)) return false;
+  return fallback;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -299,6 +306,11 @@ export async function callBlogAiWithFailover({
     }
   }
 
+  // Fallback is opt-in: when disabled, an exhausted primary fails the run instead of silently
+  // switching models. Re-enable with AI_FALLBACK_ENABLED=true.
+  if (!envBool("AI_FALLBACK_ENABLED", false)) {
+    throw new Error(primaryError || primaryConfigError || "primary AI request failed");
+  }
   if (fallbackConfigError) {
     throw new Error(primaryError || fallbackConfigError);
   }

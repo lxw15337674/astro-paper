@@ -163,7 +163,9 @@ test("fetchText surfaces aborts as source-specific timeout errors", async () => 
 test("AI client fails over to deepseek when primary request fails", async () => {
   const originalFetch = globalThis.fetch;
   const previousAttempts = process.env.AI_PRIMARY_RETRY_ATTEMPTS;
+  const previousFallback = process.env.AI_FALLBACK_ENABLED;
   process.env.AI_PRIMARY_RETRY_ATTEMPTS = "1"; // isolate failover from the transient-retry path
+  process.env.AI_FALLBACK_ENABLED = "true";
   const calls: string[] = [];
   globalThis.fetch = (async (input, init) => {
     calls.push(String(input));
@@ -192,6 +194,39 @@ test("AI client fails over to deepseek when primary request fails", async () => 
     globalThis.fetch = originalFetch;
     if (previousAttempts === undefined) delete process.env.AI_PRIMARY_RETRY_ATTEMPTS;
     else process.env.AI_PRIMARY_RETRY_ATTEMPTS = previousAttempts;
+    if (previousFallback === undefined) delete process.env.AI_FALLBACK_ENABLED;
+    else process.env.AI_FALLBACK_ENABLED = previousFallback;
+  }
+});
+
+test("AI client throws (no fallback) when fallback is disabled and primary fails", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousAttempts = process.env.AI_PRIMARY_RETRY_ATTEMPTS;
+  const previousFallback = process.env.AI_FALLBACK_ENABLED;
+  process.env.AI_PRIMARY_RETRY_ATTEMPTS = "1";
+  delete process.env.AI_FALLBACK_ENABLED; // default: disabled
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify({ error: { message: "upstream overloaded" } }), { status: 503 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () =>
+        callBlogAiWithFailover({
+          prompt: "hello",
+          primaryConfig: { apiKey: "primary-key", baseUrl: "https://primary.example.com/v1", model: "primary-model", apiStyle: "chat" },
+          fallbackConfig: { apiKey: "fallback-key", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash", apiStyle: "chat" },
+        }),
+      /AI provider HTTP 503/,
+    );
+    assert.deepEqual(calls, ["https://primary.example.com/v1/chat/completions"]); // fallback never called
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousAttempts === undefined) delete process.env.AI_PRIMARY_RETRY_ATTEMPTS;
+    else process.env.AI_PRIMARY_RETRY_ATTEMPTS = previousAttempts;
+    if (previousFallback === undefined) delete process.env.AI_FALLBACK_ENABLED;
+    else process.env.AI_FALLBACK_ENABLED = previousFallback;
   }
 });
 
