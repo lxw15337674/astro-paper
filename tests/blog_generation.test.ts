@@ -829,7 +829,7 @@ test("Economist archive accepts more than ten complete articles", () => {
         `- 中文标题：第${rank}篇中文标题`,
         `- 一句话摘要：第${rank}篇文章的一句话中文摘要。`,
         `- 核心观点：第${rank}篇文章的核心中文观点。`,
-        `- 内容总结：第${rank}篇文章的完整中文内容总结。`,
+        `- 内容总结：第${rank}篇文章的完整中文内容总结，其中可以合理说明文章采用的示例。`,
         "",
       ].join("\n");
     }),

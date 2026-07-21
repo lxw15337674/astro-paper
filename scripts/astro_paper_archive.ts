@@ -383,7 +383,7 @@ function formatEconomistWeekly(text: string): { markdown: string; ogImage: strin
     if (count !== articles.length) throw new Error(`economist weekly needs ${label} for every article: ${count} vs ${articles.length}`);
   }
   if (/^- (?:原题|栏目|作者)：/m.test(normalized)) throw new Error("economist weekly must not publish original-title, section, or author metadata");
-  for (const pattern of [/待补充/, /示例/, /信息不足/, /无法判断/, /本文将/]) {
+  for (const pattern of [/待补充/, /信息不足/, /无法判断/, /本文将/]) {
     if (pattern.test(normalized)) throw new Error(`economist weekly contains forbidden language: ${pattern.source}`);
   }
   return { markdown: `${normalized.trim()}\n`, ogImage: "" };
