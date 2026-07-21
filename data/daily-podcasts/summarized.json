@@ -1230,6 +1230,16 @@
       "date": "2026-07-17",
       "archivedAt": "2026-07-18",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-18-04-48-hours.md"
+    },
+    {
+      "title": "Strands Agents with Clare Liguori",
+      "show": "The InfoQ Podcast",
+      "link": "https://soundcloud.com/infoq-channel/strands-agents-with-clare",
+      "audioUrl": "http://dts.podtrac.com/redirect.mp3/feeds.soundcloud.com/stream/2360468516-infoq-channel-strands-agents-with-clare.mp3",
+      "guid": "tag:soundcloud,2010:tracks/2360468516",
+      "date": "2026-07-20",
+      "archivedAt": "2026-07-21",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-21-01-the-infoq-podcast.md"
     }
   ]
 }
