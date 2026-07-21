@@ -286,7 +286,7 @@ async function callAi(prompt: string, model: string, jsonMode = false): Promise<
     jsonMode,
   });
   if (result.usedFallback) {
-    writeStderr(`WARN: primary AI request failed; using fallback model ${result.config.model} via ${result.config.baseUrl}`);
+    writeStderr(`WARN: primary AI request failed; using fallback model ${result.config.model} via ${result.config.baseUrl}${result.primaryError ? ` | primary failure: ${result.primaryError}` : ""}`);
   }
   return result;
 }
@@ -570,11 +570,6 @@ function normalizeEconomistContentSummary(raw: unknown): string {
     .trim();
 }
 
-export function economistSummaryConcurrency(): number {
-  const value = Number(process.env.ECONOMIST_SUMMARY_CONCURRENCY || "10");
-  return Number.isInteger(value) && value > 0 ? Math.min(value, 10) : 10;
-}
-
 function economistRetryDelayMs(attempt: number): number {
   const base = retryDelayMs(attempt);
   return base > 0 ? base + Math.floor(Math.random() * 1000) : 0;
@@ -637,12 +632,15 @@ async function buildCombinedEconomistWeeklySource({
   if (blocks.length < 3) throw new Error(`economist weekly source has too few article blocks: ${blocks.length}`);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "economist-weekly-item-summary"), "utf8");
-  const summaries = await mapWithConcurrency(blocks, economistSummaryConcurrency(), async block => {
+  // Summarize articles serially: the provider drops a fraction of concurrent connections,
+  // so one-at-a-time keeps every item on the primary model.
+  const summaries: EconomistItemSummary[] = [];
+  for (const block of blocks) {
     const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
     if (!Number.isInteger(rank)) throw new Error("economist weekly source article is missing rank");
     const prompt = template.replaceAll("{date}", date).replaceAll("{rank}", String(rank)).replaceAll("{article_text}", block);
-    return summarizeEconomistItem(prompt, rank, model, artifactsDir);
-  });
+    summaries.push(await summarizeEconomistItem(prompt, rank, model, artifactsDir));
+  }
   const byRank = new Map(summaries.map(summary => [summary.rank, summary]));
   const header = source.slice(0, source.search(/^##\s+\d+\.\s+/m)).trimEnd();
   const combined = [
