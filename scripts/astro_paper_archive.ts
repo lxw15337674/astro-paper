@@ -382,7 +382,6 @@ function formatEconomistWeekly(text: string): { markdown: string; ogImage: strin
     const count = (normalized.match(new RegExp(`^####\\s+${label}\\s*$`, "gm")) || []).length;
     if (count !== articles.length) throw new Error(`economist weekly needs ${label} for every article: ${count} vs ${articles.length}`);
   }
-  if (/^- (?:原题|栏目|作者)：/m.test(normalized)) throw new Error("economist weekly must not publish original-title, section, or author metadata");
   return { markdown: `${normalized.trim()}\n`, ogImage: "" };
 }
 
