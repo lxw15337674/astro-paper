@@ -99,6 +99,27 @@ function newYorkerEpubFixture(articleCount: number): Buffer {
   return zip.toBuffer();
 }
 
+// Synthetic calibre EPUB (The Atlantic / Wired shape): one body per file with hashed classes,
+// a navbar to strip, plus a feed/TOC page that falls below minArticleChars.
+function calibreEpubFixture(articleCount: number): Buffer {
+  const zip = new AdmZip();
+  zip.addFile("META-INF/container.xml", Buffer.from(`<?xml version="1.0"?><container><rootfiles><rootfile full-path="EPUB/content.opf"/></rootfiles></container>`));
+  const ids = [...Array.from({ length: articleCount }, (_, index) => `body-${index + 1}`), "feed-index"];
+  const manifest = ids.map(id => `<item id="${id}" href="${id}.html" media-type="application/xhtml+xml"/>`).join("");
+  const spine = ids.map(id => `<itemref idref="${id}"/>`).join("");
+  zip.addFile("EPUB/content.opf", Buffer.from(`<?xml version="1.0"?><package><metadata><title>The Atlantic fixture</title></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`));
+  for (let index = 1; index <= articleCount; index += 1) {
+    const body = `${`Calibre body ${index} carries a complete reported feature with ample substance to summarize. `.repeat(50)}CAL_${index}_TAIL`;
+    zip.addFile(
+      `EPUB/body-${index}.html`,
+      Buffer.from(`<html><body><div class="calibre_navbar"><a href="#">| Next |</a></div><h2 class="calibre6">Feature ${index}</h2><p class="article_date">June 2026</p><p class="calibre3">${body}</p></body></html>`),
+    );
+  }
+  // Feed/TOC page: empty .article markers, no prose -> dropped by minArticleChars.
+  zip.addFile("EPUB/feed-index.html", Buffer.from(`<html><body><h2 class="calibre_feed_title">Features</h2><div class="article"></div><div class="article"></div></body></html>`));
+  return zip.toBuffer();
+}
+
 // 从 JSON 模型输出 fixture + source fixture 经 composer 组装出 archive 中间契约 Markdown。
 function composeFixtureBody(task: string): string {
   const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources", `${task}.md`), "utf8");
@@ -957,6 +978,16 @@ test("New Yorker EPUB parses .article bodies and drops non-article and short pag
   );
   assert.match(issue.articles[0].text, /NY_1_TAIL/);
   assert.equal(issue.articles[0].originUrl, "https://www.newyorker.com/news/story-1");
+});
+
+test("Calibre EPUB (Atlantic/Wired) parses bodies, strips navbar, drops the feed index", () => {
+  for (const task of ["atlantic-monthly", "wired-monthly"]) {
+    const issue = parseMagazineEpub(calibreEpubFixture(4), magazineConfig(task));
+    assert.equal(issue.articles.length, 4);
+    assert.match(issue.articles[0].text, /CAL_1_TAIL/);
+    assert.doesNotMatch(issue.articles[0].text, /Next/); // navbar stripped
+    assert.equal(issue.articles[0].originUrl, ""); // no reliable canonical link
+  }
 });
 
 test("Economist item summary keeps Markdown structure and rejects headings", () => {

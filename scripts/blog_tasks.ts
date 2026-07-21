@@ -74,6 +74,18 @@ export const BLOG_TASKS = {
     description: "每周《纽约客》中文导读，逐篇精选本期文章并给出结构化中文摘要。",
     fileName: "纽约客-{date}.md",
   },
+  "atlantic-monthly": {
+    titlePrefix: "大西洋月刊本期导读",
+    tag: "杂志",
+    description: "每月《大西洋月刊》中文导读，逐篇精选本期文章并给出结构化中文摘要。",
+    fileName: "大西洋月刊-{date}.md",
+  },
+  "wired-monthly": {
+    titlePrefix: "连线本期导读",
+    tag: "杂志",
+    description: "每月《连线》（Wired）中文导读，逐篇精选本期文章并给出结构化中文摘要。",
+    fileName: "连线-{date}.md",
+  },
   "reddit-top20": {
     titlePrefix: "Reddit 热门",
     tag: "Reddit热门",
@@ -100,6 +112,8 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "0 2 * * 0": { task: "nyt-books-weekly", dateTimeZone: "Asia/Shanghai" },
   "0 3 * * 6": { task: "economist-weekly", dateTimeZone: "Asia/Shanghai" },
   "0 5 * * 6": { task: "new-yorker-weekly", dateTimeZone: "Asia/Shanghai" },
+  "0 6 * * 6": { task: "atlantic-monthly", dateTimeZone: "Asia/Shanghai" },
+  "0 7 * * 6": { task: "wired-monthly", dateTimeZone: "Asia/Shanghai" },
   "0 8 * * *": { task: "reddit-top20", dateTimeZone: "America/Los_Angeles" },
 };
 

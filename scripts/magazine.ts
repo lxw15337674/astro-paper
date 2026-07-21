@@ -12,8 +12,8 @@ import {
 } from "./magazine_ledger.ts";
 
 const REPOSITORY = "hehonghui/awesome-english-ebooks";
-const MAX_EPUB_BYTES = 30 * 1024 * 1024;
-const MAX_UNCOMPRESSED_BYTES = 80 * 1024 * 1024;
+const MAX_EPUB_BYTES = 64 * 1024 * 1024;
+const MAX_UNCOMPRESSED_BYTES = 160 * 1024 * 1024;
 
 export class MagazineIssueUnavailableError extends Error {}
 export class MagazineIssueAlreadyArchivedError extends Error {}
@@ -88,6 +88,18 @@ function newYorkerExtract(html: string): ArticleExtraction {
   return { originUrl, text: paragraphs.join("\n\n") };
 }
 
+// --- Calibre-generic (The Atlantic, Wired) ---------------------------------
+// Bodies are one article per file with hashed calibre classes; feed/TOC pages carry
+// little prose and fall below minArticleChars. No reliable canonical source link.
+function calibreExtract(html: string): ArticleExtraction {
+  const { document } = new JSDOM(html).window;
+  const paragraphs = [...document.querySelectorAll("p")]
+    .filter(node => !node.closest('nav, header, footer, [class*="navbar"]'))
+    .map(node => normalizedText(node.textContent || ""))
+    .filter(text => text.length > 30);
+  return { originUrl: "", text: paragraphs.join("\n\n") };
+}
+
 export const MAGAZINES: Record<string, MagazineConfig> = {
   "economist-weekly": {
     task: "economist-weekly",
@@ -114,6 +126,32 @@ export const MAGAZINES: Record<string, MagazineConfig> = {
     defaultEpubTitle: "The New Yorker",
     minArticleChars: 1200,
     extractArticle: newYorkerExtract,
+  },
+  "atlantic-monthly": {
+    task: "atlantic-monthly",
+    slug: "atlantic-monthly",
+    keyPrefix: "atlantic",
+    ledgerEnvOverride: "ATLANTIC_ISSUES_LEDGER_FILE",
+    dir: "04_atlantic",
+    dirRe: /^\d{4}\.\d{2}\.\d{2}$/,
+    issueDateFromDir: name => name.replaceAll(".", "-"),
+    name: "大西洋月刊",
+    defaultEpubTitle: "The Atlantic",
+    minArticleChars: 1500,
+    extractArticle: calibreExtract,
+  },
+  "wired-monthly": {
+    task: "wired-monthly",
+    slug: "wired-monthly",
+    keyPrefix: "wired",
+    ledgerEnvOverride: "WIRED_ISSUES_LEDGER_FILE",
+    dir: "05_wired",
+    dirRe: /^\d{4}\.\d{2}\.\d{2}$/,
+    issueDateFromDir: name => name.replaceAll(".", "-"),
+    name: "连线",
+    defaultEpubTitle: "Wired",
+    minArticleChars: 1500,
+    extractArticle: calibreExtract,
   },
 };
 
@@ -220,19 +258,35 @@ export async function buildMagazineWeeklySource(
   }: { ledgerFile?: string; excludePostPath?: string; excludePostPathForIssueDate?: (issueDate: string) => string } = {},
 ): Promise<string> {
   const root = await githubJson<GithubEntry[]>(`https://api.github.com/repos/${REPOSITORY}/contents/${config.dir}`);
-  const dirs = root.filter(entry => entry.type === "dir" && config.dirRe.test(entry.name)).sort((a, b) => b.name.localeCompare(a.name));
+  const dirs = root
+    .filter(entry => entry.type === "dir" && config.dirRe.test(entry.name))
+    .sort((a, b) => b.name.localeCompare(a.name));
   if (!dirs.length) throw new MagazineIssueUnavailableError(`${config.name} source has no dated issue directories`);
-  const latest = dirs[0];
-  const issueDate = config.issueDateFromDir(latest.name);
-  if (issueDate > date) throw new MagazineIssueUnavailableError(`latest ${config.name} issue ${issueDate} is later than archive date ${date}`);
-  const files = await githubJson<GithubEntry[]>(`https://api.github.com/repos/${REPOSITORY}/contents/${config.dir}/${latest.name}`);
-  const epub = files.find(entry => entry.type === "file" && /\.epub$/i.test(entry.name) && Boolean(entry.download_url));
-  if (!epub?.download_url) throw new MagazineIssueUnavailableError(`${config.name} issue ${issueDate} has no EPUB file`);
-  const epubBytes = await downloadEpub(epub.download_url, config);
+  // Newest issue directories can exist as placeholders before their EPUB is uploaded; pick the
+  // latest non-future directory that actually contains an EPUB (scan a bounded number of them).
+  let issueDate = "";
+  let epubUrl = "";
+  let sourceCommit = "";
+  let issueDirName = "";
+  for (const dir of dirs.slice(0, 6)) {
+    const candidateDate = config.issueDateFromDir(dir.name);
+    if (candidateDate > date) continue;
+    const files = await githubJson<GithubEntry[]>(`https://api.github.com/repos/${REPOSITORY}/contents/${config.dir}/${dir.name}`);
+    const epub = files.find(entry => entry.type === "file" && /\.epub$/i.test(entry.name) && Boolean(entry.download_url));
+    if (epub?.download_url) {
+      issueDate = candidateDate;
+      epubUrl = epub.download_url;
+      sourceCommit = dir.sha;
+      issueDirName = dir.name;
+      break;
+    }
+  }
+  if (!epubUrl) throw new MagazineIssueUnavailableError(`${config.name} source has no available EPUB issue on or before ${date}`);
+  const epubBytes = await downloadEpub(epubUrl, config);
   const epubSha256 = crypto.createHash("sha256").update(epubBytes).digest("hex");
-  const issue: MagazineIssue = { key: magazineIssueKey(config.keyPrefix, issueDate, epubSha256), issueDate, sourceCommit: latest.sha, epubSha256 };
+  const issue: MagazineIssue = { key: magazineIssueKey(config.keyPrefix, issueDate, epubSha256), issueDate, sourceCommit, epubSha256 };
   const excludedPostPath = excludePostPathForIssueDate?.(issueDate) || excludePostPath;
   if (hasArchivedMagazineIssue(issue, config.keyPrefix, ledgerFile, excludedPostPath)) throw new MagazineIssueAlreadyArchivedError(`${config.name} issue ${issueDate} is already archived`);
   const parsed = parseMagazineEpub(epubBytes, config);
-  return renderMagazineSource(config, issue, parsed, `https://github.com/${REPOSITORY}/tree/master/${config.dir}/${latest.name}`);
+  return renderMagazineSource(config, issue, parsed, `https://github.com/${REPOSITORY}/tree/master/${config.dir}/${issueDirName}`);
 }
