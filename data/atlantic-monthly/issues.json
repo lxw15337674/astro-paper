@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "issues": [
+    {
+      "key": "atlantic:2026-06-02:8ff0a89360b5421784847d44e15b332aa6e64d56c75ddda0f9953ea2648c5914",
+      "issueDate": "2026-06-02",
+      "sourceCommit": "f4a83c24691c2020c5f9bed98101022440b586db",
+      "epubSha256": "8ff0a89360b5421784847d44e15b332aa6e64d56c75ddda0f9953ea2648c5914",
+      "archivedAt": "2026-07-21",
+      "postPath": "src/content/posts/zh-cn/大西洋月刊-2026-06-02.md"
+    }
+  ]
+}
