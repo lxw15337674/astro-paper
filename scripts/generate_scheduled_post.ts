@@ -27,9 +27,16 @@ import { MDBLIST_LEDGER_REL_PATH, appendMdblistRecommendations, parseMdblistReco
 import { NytBooksNoNewReleasesError, buildNytBooksWeeklySource } from "./nyt_books_source.ts";
 import { nytBooksMarkdownFromModelJson } from "./nyt_books_compose.ts";
 import { NYT_BOOKS_LEDGER_REL_PATH, appendNytBookRecommendations, parseNytBookRecommendationsFromSource } from "./nyt_books_ledger.ts";
-import { EconomistIssueAlreadyArchivedError, EconomistIssueUnavailableError, buildEconomistWeeklySource } from "./economist_weekly_source.ts";
 import { economistWeeklyMarkdown } from "./economist_weekly_compose.ts";
-import { ECONOMIST_LEDGER_REL_PATH, appendEconomistIssue, parseEconomistIssueFromSource } from "./economist_weekly_ledger.ts";
+import {
+  MagazineIssueAlreadyArchivedError,
+  MagazineIssueUnavailableError,
+  buildMagazineWeeklySource,
+  isMagazineTask,
+  magazineConfig,
+  type MagazineConfig,
+} from "./magazine.ts";
+import { appendMagazineIssue, magazineLedgerRelPath, parseMagazineIssueFromSource } from "./magazine_ledger.ts";
 import { parseModelJsonObject } from "./compose_common.ts";
 
 export type ResultItem = ReturnType<typeof archivePost> & {
@@ -206,7 +213,7 @@ function isPodcastArticleTask(task: Task): boolean {
 function shouldSkipSourceUnavailable(error: unknown, task: Task): boolean {
   if (error instanceof MarketSourceUnavailableError && error.task === task) return true;
   if (error instanceof NytBooksNoNewReleasesError) return task === "nyt-books-weekly";
-  if (error instanceof EconomistIssueUnavailableError || error instanceof EconomistIssueAlreadyArchivedError) return task === "economist-weekly";
+  if (error instanceof MagazineIssueUnavailableError || error instanceof MagazineIssueAlreadyArchivedError) return isMagazineTask(task);
   if (!(error instanceof PodcastSourceInsufficientEpisodesError)) return false;
   return isPodcastArticleTask(task);
 }
@@ -259,9 +266,9 @@ async function sourceForTask(task: Task, date: string, sourceFixtureDir = "", re
       excludePostPath: taskPostRelPath(task, date),
     });
   }
-  if (task === "economist-weekly") {
-    return buildEconomistWeeklySource(date, {
-      ledgerFile: path.join(repo, ECONOMIST_LEDGER_REL_PATH),
+  if (isMagazineTask(task)) {
+    return buildMagazineWeeklySource(magazineConfig(task), date, {
+      ledgerFile: path.join(repo, magazineLedgerRelPath(magazineConfig(task).slug)),
       excludePostPathForIssueDate: issueDate => taskPostRelPath(task, issueDate),
     });
   }
@@ -590,7 +597,7 @@ export function parseEconomistItemSummary(raw: string, rank: number): EconomistI
   return { rank, titleZh, oneSentenceSummary, corePoint, contentSummary };
 }
 
-async function summarizeEconomistItem(prompt: string, rank: number, model: string, artifactsDir: string): Promise<EconomistItemSummary> {
+async function summarizeMagazineItem(config: MagazineConfig, prompt: string, rank: number, model: string, artifactsDir: string): Promise<EconomistItemSummary> {
   const attempts = retryAttempts();
   let lastError = "";
   let attemptPrompt = prompt;
@@ -599,21 +606,22 @@ async function summarizeEconomistItem(prompt: string, rank: number, model: strin
     try {
       const response = await callAi(attemptPrompt, model, true);
       const summary = parseEconomistItemSummary(response.content, rank);
-      writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-summary.json`, response.content);
+      writeArtifact(artifactsDir, config.slug, `item-${String(rank).padStart(2, "0")}-summary.json`, response.content);
       return summary;
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
-      writeArtifact(artifactsDir, "economist-weekly", `item-${String(rank).padStart(2, "0")}-error-attempt-${attempt}.txt`, lastError);
+      writeArtifact(artifactsDir, config.slug, `item-${String(rank).padStart(2, "0")}-error-attempt-${attempt}.txt`, lastError);
       if (attempt < attempts) {
         attemptPrompt = `${prompt.trim()}\n\n上一轮输出无法解析为规定的 JSON，原因：${lastError}\n请重新返回完整、合法且字段齐全的 JSON 对象，不要输出解释或代码围栏。`;
-        writeStderr(`WARN: economist weekly item ${rank} attempt ${attempt}/${attempts} failed; retrying: ${lastError}`);
+        writeStderr(`WARN: ${config.name} item ${rank} attempt ${attempt}/${attempts} failed; retrying: ${lastError}`);
       }
     }
   }
-  throw new Error(`economist weekly item ${rank} failed after ${attempts} attempts: ${lastError}`);
+  throw new Error(`${config.name} item ${rank} failed after ${attempts} attempts: ${lastError}`);
 }
 
-async function buildCombinedEconomistWeeklySource({
+async function buildCombinedMagazineSource({
+  config,
   source,
   date,
   repo,
@@ -621,6 +629,7 @@ async function buildCombinedEconomistWeeklySource({
   promptDir,
   artifactsDir,
 }: {
+  config: MagazineConfig;
   source: string;
   date: string;
   repo: string;
@@ -629,17 +638,21 @@ async function buildCombinedEconomistWeeklySource({
   artifactsDir: string;
 }): Promise<string> {
   const blocks = economistSourceBlocks(source);
-  if (blocks.length < 3) throw new Error(`economist weekly source has too few article blocks: ${blocks.length}`);
+  if (blocks.length < 3) throw new Error(`${config.name} source has too few article blocks: ${blocks.length}`);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
-  const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "economist-weekly-item-summary"), "utf8");
+  const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "magazine-item-summary"), "utf8");
   // Summarize articles serially: the provider drops a fraction of concurrent connections,
   // so one-at-a-time keeps every item on the primary model.
   const summaries: EconomistItemSummary[] = [];
   for (const block of blocks) {
     const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
-    if (!Number.isInteger(rank)) throw new Error("economist weekly source article is missing rank");
-    const prompt = template.replaceAll("{date}", date).replaceAll("{rank}", String(rank)).replaceAll("{article_text}", block);
-    summaries.push(await summarizeEconomistItem(prompt, rank, model, artifactsDir));
+    if (!Number.isInteger(rank)) throw new Error(`${config.name} source article is missing rank`);
+    const prompt = template
+      .replaceAll("{magazine}", config.name)
+      .replaceAll("{date}", date)
+      .replaceAll("{rank}", String(rank))
+      .replaceAll("{article_text}", block);
+    summaries.push(await summarizeMagazineItem(config, prompt, rank, model, artifactsDir));
   }
   const byRank = new Map(summaries.map(summary => [summary.rank, summary]));
   const header = source.slice(0, source.search(/^##\s+\d+\.\s+/m)).trimEnd();
@@ -652,7 +665,7 @@ async function buildCombinedEconomistWeeklySource({
       const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
       const summary = byRank.get(rank);
       const factLines = block.split("\n").filter(line => /^##\s+|^- 原文链接：/.test(line));
-      if (!summary) throw new Error(`economist weekly item summary missing rank ${rank}`);
+      if (!summary) throw new Error(`${config.name} item summary missing rank ${rank}`);
       return [
         ...factLines,
         `- 中文标题：${summary.titleZh}`,
@@ -664,7 +677,7 @@ async function buildCombinedEconomistWeeklySource({
       ];
     }),
   ].join("\n");
-  writeArtifact(artifactsDir, "economist-weekly", "source.dynamic.md", combined);
+  writeArtifact(artifactsDir, config.slug, "source.dynamic.md", combined);
   return combined;
 }
 
@@ -872,7 +885,7 @@ type GenerateTaskOptions = {
 };
 
 export function contentDateForTask(task: Task, runDate: string, source: string): string {
-  return task === "economist-weekly" ? parseEconomistIssueFromSource(source).issueDate : runDate;
+  return isMagazineTask(task) ? parseMagazineIssueFromSource(source, magazineConfig(task).keyPrefix).issueDate : runDate;
 }
 
 async function fetchPodcastArticleEpisodes(task: Task, date: string, force: boolean): Promise<Episode[]> {
@@ -929,13 +942,13 @@ async function generatePodcastArticles({ task, repo, date, force, promptDir, art
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
   const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
   if (isPodcastArticleTask(task) && useAi && !sourceFixtureDir && !mockResponseDir) return generatePodcastArticles(options);
-  if (!force && task !== "economist-weekly") {
+  if (!force && !isMagazineTask(task)) {
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];
   }
   let source = await sourceForTask(task, date, sourceFixtureDir, repo);
   const contentDate = contentDateForTask(task, date, source);
-  if (!force && task === "economist-weekly") {
+  if (!force && isMagazineTask(task)) {
     const skipped = skippedExisting(task, repo, contentDate);
     if (skipped) return [skipped];
   }
@@ -944,13 +957,13 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
     const itemCount = countNumberedBlocks(source);
     if (itemCount < 1) return [skippedLowQuality(task, date, "tech-daily has no high-quality daily items")];
   }
-  if (useAi && task === "economist-weekly" && !mockResponseDir) {
-    source = await buildCombinedEconomistWeeklySource({ source, date: contentDate, repo, model, promptDir, artifactsDir });
+  if (useAi && isMagazineTask(task) && !mockResponseDir) {
+    source = await buildCombinedMagazineSource({ config: magazineConfig(task), source, date: contentDate, repo, model, promptDir, artifactsDir });
   }
   let body = source;
   let description: string | undefined;
   let generation: ResultItem["generation"];
-  if (task === "economist-weekly") {
+  if (isMagazineTask(task)) {
     // The issue post is a deterministic aggregation of the per-article summaries; no issue-level AI call.
     const composed = economistWeeklyMarkdown(source);
     body = composed.markdown;
@@ -985,11 +998,13 @@ async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]>
       path.join(repo, NYT_BOOKS_LEDGER_REL_PATH),
     );
   }
-  if (task === "economist-weekly" && !result.skipped) {
-    appendEconomistIssue(
-      parseEconomistIssueFromSource(source),
+  if (isMagazineTask(task) && !result.skipped) {
+    const magazine = magazineConfig(task);
+    appendMagazineIssue(
+      parseMagazineIssueFromSource(source, magazine.keyPrefix),
+      magazine.keyPrefix,
       { archivedAt: date, postPath: result.path },
-      path.join(repo, ECONOMIST_LEDGER_REL_PATH),
+      path.join(repo, magazineLedgerRelPath(magazine.slug)),
     );
   }
   if (generation) result.generation = generation;

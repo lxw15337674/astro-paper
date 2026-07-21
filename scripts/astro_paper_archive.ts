@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { bjtTimestamp, compact, frontmatter, parseArgs, readStdin, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { isTask, taskInfo, taskPostRelPath, taskTags, taskTitle } from "./blog_tasks.ts";
+import { isMagazineTask } from "./magazine.ts";
 
 const HN_DEFAULT_OG_IMAGE = "../../../../public/images/hn-cover.svg";
 export const ARCHIVE_PAYLOAD_MARKER = "===ARCHIVE_PAYLOAD===";
@@ -371,7 +372,7 @@ function formatNytBooksWeekly(text: string): { markdown: string; ogImage: string
   return { markdown: `${normalized.trim()}\n`, ogImage };
 }
 
-function formatEconomistWeekly(text: string): { markdown: string; ogImage: string } {
+function formatMagazineWeekly(text: string): { markdown: string; ogImage: string } {
   const normalized = stripLeadingTitleHeading(normalizeMarkdown(text));
   const articles = normalized.match(/^##\s+\S.+$/gm) || [];
   if (articles.length < 3) throw new Error(`economist weekly needs at least three articles, got ${articles.length}`);
@@ -423,7 +424,7 @@ export function archivePost({
     task === "github-trending-daily" ? { markdown: formatGitHubTrendingDaily(body), ogImage: "" } :
     task === "mdblist-weekly" ? { markdown: formatMdblistWeekly(body), ogImage: "" } :
     task === "nyt-books-weekly" ? formatNytBooksWeekly(body) :
-    task === "economist-weekly" ? formatEconomistWeekly(body) :
+    isMagazineTask(task) ? formatMagazineWeekly(body) :
     task === "capital-market-daily" ? formatCapitalMarketDaily(body) :
     (() => { throw new Error(`no archive formatter for task: ${task}`); })();
   const description = formatted.description ?? providedDescription ?? info.description;

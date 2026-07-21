@@ -1,71 +1,40 @@
-import fs from "node:fs";
-import path from "node:path";
-import { compact, ensureDir, repoRoot } from "./blog_common.ts";
+// Thin economist-specific wrappers over the generic magazine ledger.
+import {
+  appendMagazineIssue,
+  hasArchivedMagazineIssue,
+  magazineIssueKey,
+  magazineLedgerPath,
+  magazineLedgerRelPath,
+  parseMagazineIssueFromSource,
+  type ArchivedMagazineIssue,
+  type MagazineIssue,
+} from "./magazine_ledger.ts";
 
-export type EconomistIssue = {
-  key: string;
-  issueDate: string;
-  sourceCommit: string;
-  epubSha256: string;
-};
+const SLUG = "economist-weekly";
+const KEY_PREFIX = "economist";
+const LEDGER_ENV = "ECONOMIST_ISSUES_LEDGER_FILE";
 
-export type ArchivedEconomistIssue = EconomistIssue & {
-  archivedAt: string;
-  postPath: string;
-};
+export type EconomistIssue = MagazineIssue;
+export type ArchivedEconomistIssue = ArchivedMagazineIssue;
 
-type EconomistLedger = { version: 1; issues: ArchivedEconomistIssue[] };
-
-export const ECONOMIST_LEDGER_REL_PATH = "data/economist-weekly/issues.json";
+export const ECONOMIST_LEDGER_REL_PATH = magazineLedgerRelPath(SLUG);
 
 export function economistLedgerPath(): string {
-  return process.env.ECONOMIST_ISSUES_LEDGER_FILE || path.join(repoRoot(), ECONOMIST_LEDGER_REL_PATH);
+  return magazineLedgerPath(SLUG, LEDGER_ENV);
 }
 
 export function economistIssueKey(issueDate: string, epubSha256: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate)) throw new Error(`invalid Economist issue date: ${issueDate}`);
-  if (!/^[a-f0-9]{64}$/i.test(epubSha256)) throw new Error("invalid Economist EPUB SHA-256");
-  return `economist:${issueDate}:${epubSha256.toLowerCase()}`;
-}
-
-function readLedger(file: string): EconomistLedger {
-  if (!fs.existsSync(file)) return { version: 1, issues: [] };
-  let parsed: Partial<EconomistLedger>;
-  try {
-    parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<EconomistLedger>;
-  } catch (error) {
-    throw new Error(`invalid Economist issue ledger ${file}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (parsed.version !== 1 || !Array.isArray(parsed.issues)) throw new Error(`invalid Economist issue ledger structure: ${file}`);
-  for (const issue of parsed.issues) {
-    if (
-      issue.key !== economistIssueKey(issue.issueDate, issue.epubSha256) ||
-      !compact(issue.sourceCommit) ||
-      !compact(issue.archivedAt) ||
-      !compact(issue.postPath)
-    ) {
-      throw new Error(`invalid Economist issue ledger entry: ${issue.key || "missing key"}`);
-    }
-  }
-  return parsed as EconomistLedger;
+  return magazineIssueKey(KEY_PREFIX, issueDate, epubSha256);
 }
 
 export function hasArchivedEconomistIssue(issue: EconomistIssue, file = economistLedgerPath(), excludePostPath = ""): boolean {
-  return readLedger(file).issues.some(entry => entry.key === issue.key && (!excludePostPath || entry.postPath !== excludePostPath));
+  return hasArchivedMagazineIssue(issue, KEY_PREFIX, file, excludePostPath);
 }
 
 export function appendEconomistIssue(issue: EconomistIssue, meta: { archivedAt: string; postPath: string }, file = economistLedgerPath()): void {
-  if (issue.key !== economistIssueKey(issue.issueDate, issue.epubSha256)) throw new Error("Economist issue ledger key mismatch");
-  const ledger = readLedger(file);
-  ledger.issues = ledger.issues.filter(entry => entry.postPath !== meta.postPath && entry.key !== issue.key);
-  ledger.issues.push({ ...issue, archivedAt: meta.archivedAt, postPath: meta.postPath });
-  ensureDir(path.dirname(file));
-  fs.writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
+  appendMagazineIssue(issue, KEY_PREFIX, meta, file);
 }
 
 export function parseEconomistIssueFromSource(source: string): EconomistIssue {
-  const issueDate = source.match(/^- 刊期：(\d{4}-\d{2}-\d{2})$/m)?.[1] || "";
-  const sourceCommit = source.match(/^- 来源提交：([a-f0-9]{40})$/im)?.[1] || "";
-  const epubSha256 = source.match(/^- EPUB SHA-256：([a-f0-9]{64})$/im)?.[1] || "";
-  return { key: economistIssueKey(issueDate, epubSha256), issueDate, sourceCommit, epubSha256 };
+  return parseMagazineIssueFromSource(source, KEY_PREFIX);
 }

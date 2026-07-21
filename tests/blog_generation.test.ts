@@ -24,6 +24,7 @@ import { CAPITAL_MARKET_SOURCE_SEP, articleConflictsWithIndexSnapshot, buildUsSe
 import { composeFullCapitalMarket } from "../scripts/market_compose.ts";
 import { economistWeeklyMarkdown, parseEconomistArticleSummaries } from "../scripts/economist_weekly_compose.ts";
 import { parseEconomistEpub } from "../scripts/economist_weekly_source.ts";
+import { magazineConfig, parseMagazineEpub } from "../scripts/magazine.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
@@ -69,6 +70,53 @@ function economistEpubFixture(articleCount: number): Buffer {
       Buffer.from(`<html><body><div class="te_section_title">Leaders</div><h1>Repeated title</h1><a class="origin_link" href="https://www.economist.com/fixture/${index}">Original</a><p>${longBody}</p></body></html>`),
     );
   }
+  return zip.toBuffer();
+}
+
+// Synthetic New Yorker EPUB: `.article` bodies + a non-article page + a too-short piece to exercise filtering.
+function newYorkerEpubFixture(articleCount: number): Buffer {
+  const zip = new AdmZip();
+  zip.addFile("META-INF/container.xml", Buffer.from(`<?xml version="1.0"?><container><rootfiles><rootfile full-path="EPUB/content.opf"/></rootfiles></container>`));
+  const ids = [
+    ...Array.from({ length: articleCount }, (_, index) => `article-${index + 1}`),
+    "toc-page", // no .article -> dropped
+    "short-poem", // has .article but below minArticleChars -> dropped
+  ];
+  const manifest = ids.map(id => `<item id="${id}" href="${id}.xhtml" media-type="application/xhtml+xml"/>`).join("");
+  const spine = ids.map(id => `<itemref idref="${id}"/>`).join("");
+  zip.addFile("EPUB/content.opf", Buffer.from(`<?xml version="1.0"?><package><metadata><title>The New Yorker fixture</title></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`));
+  for (let index = 1; index <= articleCount; index += 1) {
+    const body = `${`New Yorker article ${index} carries a full reported narrative with plenty of substance. `.repeat(60)}NY_${index}_TAIL`;
+    zip.addFile(
+      `EPUB/article-${index}.xhtml`,
+      Buffer.from(
+        `<html><body><span class="ny_article_category">A Reporter at Large</span><h1 class="ny_article_h1_title">Story ${index}</h1><span class="ny_article_author">By Someone</span><div class="article"><p><a href="https://www.newyorker.com/news/story-${index}">source</a></p><p>${body}</p></div></body></html>`,
+      ),
+    );
+  }
+  zip.addFile("EPUB/toc-page.xhtml", Buffer.from(`<html><body><ul class="sec_toc_item"><li>Contents</li></ul></body></html>`));
+  zip.addFile("EPUB/short-poem.xhtml", Buffer.from(`<html><body><span class="ny_article_category">Poems</span><div class="article"><p>A brief verse, too short to summarize.</p></div></body></html>`));
+  return zip.toBuffer();
+}
+
+// Synthetic calibre EPUB (The Atlantic / Wired shape): one body per file with hashed classes,
+// a navbar to strip, plus a feed/TOC page that falls below minArticleChars.
+function calibreEpubFixture(articleCount: number): Buffer {
+  const zip = new AdmZip();
+  zip.addFile("META-INF/container.xml", Buffer.from(`<?xml version="1.0"?><container><rootfiles><rootfile full-path="EPUB/content.opf"/></rootfiles></container>`));
+  const ids = [...Array.from({ length: articleCount }, (_, index) => `body-${index + 1}`), "feed-index"];
+  const manifest = ids.map(id => `<item id="${id}" href="${id}.html" media-type="application/xhtml+xml"/>`).join("");
+  const spine = ids.map(id => `<itemref idref="${id}"/>`).join("");
+  zip.addFile("EPUB/content.opf", Buffer.from(`<?xml version="1.0"?><package><metadata><title>The Atlantic fixture</title></metadata><manifest>${manifest}</manifest><spine>${spine}</spine></package>`));
+  for (let index = 1; index <= articleCount; index += 1) {
+    const body = `${`Calibre body ${index} carries a complete reported feature with ample substance to summarize. `.repeat(50)}CAL_${index}_TAIL`;
+    zip.addFile(
+      `EPUB/body-${index}.html`,
+      Buffer.from(`<html><body><div class="calibre_navbar"><a href="#">| Next |</a></div><h2 class="calibre6">Feature ${index}</h2><p class="article_date">June 2026</p><p class="calibre3">${body}</p></body></html>`),
+    );
+  }
+  // Feed/TOC page: empty .article markers, no prose -> dropped by minArticleChars.
+  zip.addFile("EPUB/feed-index.html", Buffer.from(`<html><body><h2 class="calibre_feed_title">Features</h2><div class="article"></div><div class="article"></div></body></html>`));
   return zip.toBuffer();
 }
 
@@ -918,6 +966,28 @@ test("Economist EPUB keeps every valid article without title dedupe or body trun
   assert.match(issue.articles[0].text, /ARTICLE_1_TAIL_SENTINEL/);
   assert.ok(issue.articles[0].text.length > 12_000);
   assert.deepEqual(Object.keys(issue.articles[0]).sort(), ["originUrl", "rank", "text"]);
+});
+
+test("New Yorker EPUB parses .article bodies and drops non-article and short pages", () => {
+  const issue = parseMagazineEpub(newYorkerEpubFixture(5), magazineConfig("new-yorker-weekly"));
+  // 5 real articles; the toc page and the short poem are filtered out.
+  assert.equal(issue.articles.length, 5);
+  assert.deepEqual(
+    issue.articles.map(article => article.rank),
+    [1, 2, 3, 4, 5],
+  );
+  assert.match(issue.articles[0].text, /NY_1_TAIL/);
+  assert.equal(issue.articles[0].originUrl, "https://www.newyorker.com/news/story-1");
+});
+
+test("Calibre EPUB (Atlantic/Wired) parses bodies, strips navbar, drops the feed index", () => {
+  for (const task of ["atlantic-monthly", "wired-monthly"]) {
+    const issue = parseMagazineEpub(calibreEpubFixture(4), magazineConfig(task));
+    assert.equal(issue.articles.length, 4);
+    assert.match(issue.articles[0].text, /CAL_1_TAIL/);
+    assert.doesNotMatch(issue.articles[0].text, /Next/); // navbar stripped
+    assert.equal(issue.articles[0].originUrl, ""); // no reliable canonical link
+  }
 });
 
 test("Economist item summary keeps Markdown structure and rejects headings", () => {
