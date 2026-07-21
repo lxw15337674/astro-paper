@@ -364,7 +364,7 @@ test("callBlogAi posts to /responses and decodes the SSE stream when apiStyle is
     assert.equal(content, "## 标题\n\n正文");
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "https://www.right.codes/codex/v1/responses");
-    assert.equal(calls[0].body.input, "hello");
+    assert.deepEqual(calls[0].body.input, [{ role: "user", content: [{ type: "input_text", text: "hello" }] }]);
     assert.deepEqual(calls[0].body.text, { format: { type: "json_object" } });
     assert.equal("messages" in calls[0].body, false);
   } finally {
