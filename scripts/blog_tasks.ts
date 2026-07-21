@@ -68,6 +68,12 @@ export const BLOG_TASKS = {
     description: "每周《经济学人》中文综合导读，精选本期文章并梳理共同主题与阅读路线。",
     fileName: "经济学人-{date}.md",
   },
+  "new-yorker-weekly": {
+    titlePrefix: "纽约客本期导读",
+    tag: "杂志",
+    description: "每周《纽约客》中文导读，逐篇精选本期文章并给出结构化中文摘要。",
+    fileName: "纽约客-{date}.md",
+  },
   "reddit-top20": {
     titlePrefix: "Reddit 热门",
     tag: "Reddit热门",
@@ -93,6 +99,7 @@ export const SCHEDULED_TASK_INPUTS: Record<string, { task: TaskInput; dateOffset
   "0 2 * * 5": { task: "mdblist-weekly", dateTimeZone: "Asia/Shanghai" },
   "0 2 * * 0": { task: "nyt-books-weekly", dateTimeZone: "Asia/Shanghai" },
   "0 3 * * 6": { task: "economist-weekly", dateTimeZone: "Asia/Shanghai" },
+  "0 5 * * 6": { task: "new-yorker-weekly", dateTimeZone: "Asia/Shanghai" },
   "0 8 * * *": { task: "reddit-top20", dateTimeZone: "America/Los_Angeles" },
 };
 
