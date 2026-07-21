@@ -157,7 +157,6 @@ jobs:
           AI_FALLBACK_API_KEY: ${{ secrets.AI_FALLBACK_API_KEY }}
           AI_FALLBACK_BASE_URL: ${{ secrets.AI_FALLBACK_BASE_URL || 'https://api.deepseek.com' }}
           AI_FALLBACK_MODEL: ${{ secrets.AI_FALLBACK_MODEL || 'deepseek-v4-flash' }}
-          ECONOMIST_SUMMARY_CONCURRENCY: 10
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
           NYT_API_KEY: ${{ secrets.NYT_API_KEY }}

@@ -7,7 +7,7 @@ import AdmZip from "adm-zip";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, resolvePromptFile } from "../scripts/ai_blog_writer.ts";
-import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, callBlogAi, callBlogAiWithFailover, parseResponsesSse, responsesUrl } from "../scripts/blog_ai_client.ts";
+import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, callBlogAi, callBlogAiWithFailover, isTransientAiError, parseResponsesSse, responsesUrl } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFacts } from "../scripts/hn_compose.ts";
 import { githubTrendingMarkdownFromModelJson, parseGitHubTrendingFacts } from "../scripts/github_trending_compose.ts";
@@ -30,7 +30,6 @@ import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import {
   type ResultItem,
   contentDateForTask,
-  economistSummaryConcurrency,
   parseEconomistItemSummary,
   settleDailyPodcastArticleResults,
   usesJsonComposer,
@@ -163,6 +162,8 @@ test("fetchText surfaces aborts as source-specific timeout errors", async () => 
 
 test("AI client fails over to deepseek when primary request fails", async () => {
   const originalFetch = globalThis.fetch;
+  const previousAttempts = process.env.AI_PRIMARY_RETRY_ATTEMPTS;
+  process.env.AI_PRIMARY_RETRY_ATTEMPTS = "1"; // isolate failover from the transient-retry path
   const calls: string[] = [];
   globalThis.fetch = (async (input, init) => {
     calls.push(String(input));
@@ -189,10 +190,46 @@ test("AI client fails over to deepseek when primary request fails", async () => 
     ]);
   } finally {
     globalThis.fetch = originalFetch;
+    if (previousAttempts === undefined) delete process.env.AI_PRIMARY_RETRY_ATTEMPTS;
+    else process.env.AI_PRIMARY_RETRY_ATTEMPTS = previousAttempts;
   }
 });
 
+test("isTransientAiError classifies dropped connections, timeouts and 5xx/429 as retryable", () => {
+  assert.equal(isTransientAiError("AI request failed: fetch failed"), true);
+  assert.equal(isTransientAiError("AI request timed out after 600000ms"), true);
+  assert.equal(isTransientAiError("AI provider HTTP 503: overloaded"), true);
+  assert.equal(isTransientAiError("AI provider HTTP 429: slow down"), true);
+  assert.equal(isTransientAiError("AI provider HTTP 400: bad request"), false);
+  assert.equal(isTransientAiError("AI response missing message content: {}"), false);
+});
 
+test("AI client retries the primary on a transient drop before using fallback", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousDelay = process.env.AI_PRIMARY_RETRY_DELAY_MS;
+  process.env.AI_PRIMARY_RETRY_DELAY_MS = "1";
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    calls.push(String(input));
+    if (calls.length === 1) throw new TypeError("fetch failed"); // dropped connection
+    return new Response(JSON.stringify({ choices: [{ message: { content: "## 标题\n\n" + "有效正文".repeat(80) } }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const result = await callBlogAiWithFailover({
+      prompt: "hello",
+      primaryConfig: { apiKey: "primary-key", baseUrl: "https://primary.example.com/v1", model: "primary-model", apiStyle: "chat" },
+      fallbackConfig: { apiKey: "fallback-key", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-flash", apiStyle: "chat" },
+    });
+    assert.equal(result.usedFallback, false);
+    assert.equal(result.config.model, "primary-model");
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls, ["https://primary.example.com/v1/chat/completions", "https://primary.example.com/v1/chat/completions"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousDelay === undefined) delete process.env.AI_PRIMARY_RETRY_DELAY_MS;
+    else process.env.AI_PRIMARY_RETRY_DELAY_MS = previousDelay;
+  }
+});
 
 test("responsesUrl appends the /responses path once", () => {
   assert.equal(responsesUrl("https://www.right.codes/codex/v1"), "https://www.right.codes/codex/v1/responses");
@@ -870,21 +907,6 @@ test("Economist item summary keeps Markdown structure and rejects headings", () 
       ),
     /must not use Markdown headings/,
   );
-});
-
-test("Economist summary concurrency defaults to ten and never exceeds ten", () => {
-  const previous = process.env.ECONOMIST_SUMMARY_CONCURRENCY;
-  try {
-    delete process.env.ECONOMIST_SUMMARY_CONCURRENCY;
-    assert.equal(economistSummaryConcurrency(), 10);
-    process.env.ECONOMIST_SUMMARY_CONCURRENCY = "4";
-    assert.equal(economistSummaryConcurrency(), 4);
-    process.env.ECONOMIST_SUMMARY_CONCURRENCY = "25";
-    assert.equal(economistSummaryConcurrency(), 10);
-  } finally {
-    if (previous === undefined) delete process.env.ECONOMIST_SUMMARY_CONCURRENCY;
-    else process.env.ECONOMIST_SUMMARY_CONCURRENCY = previous;
-  }
 });
 
 test("Economist compose aggregates per-article summaries with no issue-level sections", () => {

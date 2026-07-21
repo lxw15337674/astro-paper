@@ -26,11 +26,31 @@ export type AiCallResult = {
   content: string;
   config: AiConfig;
   usedFallback: boolean;
+  // Populated when the primary target failed (whether or not a fallback then succeeded).
+  primaryError?: string;
 };
 
 function envDurationMs(name: string, fallback: number): number {
   const value = Number(process.env[name] || "");
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function envPositiveInt(name: string, fallback: number): number {
+  const value = Number(process.env[name] || "");
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Transient = worth retrying the same target: dropped connections, resets, timeouts, 5xx, 429.
+// Permanent (4xx other than 429, empty/invalid content) is not retried.
+export function isTransientAiError(message: string): boolean {
+  if (/^AI request timed out/.test(message)) return true;
+  if (/^AI provider HTTP (?:5\d\d|429)\b/.test(message)) return true;
+  if (/^AI request failed:/.test(message)) return true; // network/TLS/connection layer
+  return false;
 }
 
 function envApiStyle(name: string, fallback: AiApiStyle): AiApiStyle {
@@ -260,11 +280,22 @@ export async function callBlogAiWithFailover({
   let primaryError = primaryConfigError;
 
   if (!primaryConfigError) {
-    try {
-      const content = await callBlogAi({ prompt, ...primaryConfig, timeoutMs, maxTokens, jsonMode });
-      return { content, config: primaryConfig, usedFallback: false };
-    } catch (error) {
-      primaryError = error instanceof Error ? error.message : String(error);
+    // Retry the primary target on transient failures (dropped connections under load, 5xx, 429)
+    // before falling back — the provider drops a fraction of concurrent connections.
+    const attempts = envPositiveInt("AI_PRIMARY_RETRY_ATTEMPTS", 3);
+    const baseDelayMs = envPositiveInt("AI_PRIMARY_RETRY_DELAY_MS", 800);
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const content = await callBlogAi({ prompt, ...primaryConfig, timeoutMs, maxTokens, jsonMode });
+        return { content, config: primaryConfig, usedFallback: false, primaryError: attempt > 1 ? primaryError : undefined };
+      } catch (error) {
+        primaryError = error instanceof Error ? error.message : String(error);
+        if (attempt < attempts && isTransientAiError(primaryError)) {
+          await sleep(baseDelayMs * attempt);
+          continue;
+        }
+        break;
+      }
     }
   }
 
@@ -277,7 +308,7 @@ export async function callBlogAiWithFailover({
 
   try {
     const content = await callBlogAi({ prompt, ...fallbackConfig, timeoutMs, maxTokens, jsonMode });
-    return { content, config: fallbackConfig, usedFallback: true };
+    return { content, config: fallbackConfig, usedFallback: true, primaryError: primaryError || primaryConfigError };
   } catch (error) {
     if (error instanceof Error) throw withPriorFailureContext(error, primaryError || primaryConfigError);
     throw new Error(`${String(error)} | primary failure: ${clipText(primaryError || primaryConfigError, 400)}`);
