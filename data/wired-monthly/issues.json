@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "issues": [
+    {
+      "key": "wired:2026-06-02:f1a98a3e725ad2505e05109207b78496d14dfbfb4f8a5f865a8ce35fd3f7663b",
+      "issueDate": "2026-06-02",
+      "sourceCommit": "166858eccadc7673028bd7307371a4dfe059149f",
+      "epubSha256": "f1a98a3e725ad2505e05109207b78496d14dfbfb4f8a5f865a8ce35fd3f7663b",
+      "archivedAt": "2026-07-21",
+      "postPath": "src/content/posts/zh-cn/连线-2026-06-02.md"
+    }
+  ]
+}
