@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "issues": [
+    {
+      "key": "new-yorker:2026-07-20:4f479f1dbb137599ec97ecf155f3099b8ce924ad59b69261dcd24ec7658014ab",
+      "issueDate": "2026-07-20",
+      "sourceCommit": "e0b3ac37f83549833351dc16855879d373e88c38",
+      "epubSha256": "4f479f1dbb137599ec97ecf155f3099b8ce924ad59b69261dcd24ec7658014ab",
+      "archivedAt": "2026-07-21",
+      "postPath": "src/content/posts/zh-cn/纽约客-2026-07-20.md"
+    }
+  ]
+}
