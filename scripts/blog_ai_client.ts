@@ -1,7 +1,7 @@
 import { clipText } from "./blog_common.ts";
 
-export const DEFAULT_AI_BASE_URL = "https://api.openai.com/v1";
-export const DEFAULT_AI_MODEL = "GPT-5.6-luna";
+export const DEFAULT_AI_BASE_URL = "https://www.right.codes/codex/v1";
+export const DEFAULT_AI_MODEL = "gpt-5.6-luna";
 export const DEFAULT_FALLBACK_AI_BASE_URL = "https://api.deepseek.com";
 export const DEFAULT_FALLBACK_AI_MODEL = "deepseek-v4-flash";
 export const DEFAULT_MAX_TOKENS = 4096;

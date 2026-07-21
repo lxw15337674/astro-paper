@@ -7,7 +7,7 @@ import AdmZip from "adm-zip";
 
 import { archivePost } from "../scripts/astro_paper_archive.ts";
 import { chatCompletionsUrl, renderPrompt, resolvePromptFile } from "../scripts/ai_blog_writer.ts";
-import { callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
+import { DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, callBlogAi, callBlogAiWithFailover } from "../scripts/blog_ai_client.ts";
 import { buildPayload, classify } from "../scripts/hn_top10_source.ts";
 import { composeHnBody, hnMarkdownFromModelJson, parseHnModelJson, parseSourceFacts } from "../scripts/hn_compose.ts";
 import { githubTrendingMarkdownFromModelJson, parseGitHubTrendingFacts } from "../scripts/github_trending_compose.ts";
@@ -27,7 +27,14 @@ import { parseEconomistEpub } from "../scripts/economist_weekly_source.ts";
 import { buildGitHubTrendingDailySource, parseGitHubTrendingHtml, sanitizeReadmeText } from "../scripts/github_trending_daily_source.ts";
 import { buildXyzRankTopEpisodesSource } from "../scripts/xyzrank_top_episodes_source.ts";
 import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
-import { type ResultItem, parseEconomistItemSummary, settleDailyPodcastArticleResults, usesJsonComposer } from "../scripts/generate_scheduled_post.ts";
+import {
+  type ResultItem,
+  contentDateForTask,
+  economistSummaryConcurrency,
+  parseEconomistItemSummary,
+  settleDailyPodcastArticleResults,
+  usesJsonComposer,
+} from "../scripts/generate_scheduled_post.ts";
 
 // prompts 已按 daily/weekly/market/podcast 分类到子目录，用解析器按名查找（根目录 + 一层子目录）。
 const PROMPTS_DIR = path.join(process.cwd(), "prompts/blog");
@@ -91,6 +98,8 @@ test("AI writer renders prompts and normalizes chat completions URLs", () => {
   assert.equal(promptWithCommon, "common rules\n\ntask=hn-top10\ndate=2099-01-02\nsource=hello");
   assert.equal(chatCompletionsUrl("https://api.example.com/v1"), "https://api.example.com/v1/chat/completions");
   assert.equal(chatCompletionsUrl("https://api.example.com/v1/chat/completions"), "https://api.example.com/v1/chat/completions");
+  assert.equal(DEFAULT_AI_BASE_URL, "https://www.right.codes/codex/v1");
+  assert.equal(DEFAULT_AI_MODEL, "gpt-5.6-luna");
 });
 
 test("blog source evidence keeps long text sentinels instead of truncating", () => {
@@ -801,6 +810,21 @@ test("Economist item and issue calls use separate JSON contracts", () => {
   assert.equal("articles" in model, false);
 });
 
+test("Economist summary concurrency defaults to ten and never exceeds ten", () => {
+  const previous = process.env.ECONOMIST_SUMMARY_CONCURRENCY;
+  try {
+    delete process.env.ECONOMIST_SUMMARY_CONCURRENCY;
+    assert.equal(economistSummaryConcurrency(), 10);
+    process.env.ECONOMIST_SUMMARY_CONCURRENCY = "4";
+    assert.equal(economistSummaryConcurrency(), 4);
+    process.env.ECONOMIST_SUMMARY_CONCURRENCY = "25";
+    assert.equal(economistSummaryConcurrency(), 10);
+  } finally {
+    if (previous === undefined) delete process.env.ECONOMIST_SUMMARY_CONCURRENCY;
+    else process.env.ECONOMIST_SUMMARY_CONCURRENCY = previous;
+  }
+});
+
 test("Economist compose preserves fixed item summaries and removes legacy metadata", () => {
   const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/economist-weekly.md"), "utf8");
   const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
@@ -837,8 +861,14 @@ test("Economist archive accepts more than ten complete articles", () => {
   const raw = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-ai-responses/economist-weekly.json"), "utf8");
   const body = economistWeeklyMarkdownFromModelJson(raw, source);
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), "astro-paper-economist-all-"));
-  const result = archivePost({ task: "economist-weekly", date: "2099-01-02", repo, body, force: true });
+  const issueDate = contentDateForTask("economist-weekly", "2099-01-09", source);
+  assert.equal(issueDate, "2099-01-02");
+  assert.equal(contentDateForTask("hn-top10", "2099-01-09", source), "2099-01-09");
+  const result = archivePost({ task: "economist-weekly", date: issueDate, repo, body, force: true });
   const article = fs.readFileSync(path.join(repo, result.path), "utf8");
+  assert.equal(result.path, "src/content/posts/zh-cn/经济学人-2099-01-02.md");
+  assert.equal(result.title, "经济学人本期导读｜2099-01-02");
+  assert.match(article, /pubDatetime: 2099-01-01T16:00:00Z/);
   assert.equal((article.match(/^###\s+第\d+篇中文标题$/gm) || []).length, 12);
   assert.doesNotMatch(article, /原题：|栏目：|作者：/);
 });

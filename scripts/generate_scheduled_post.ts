@@ -262,7 +262,7 @@ async function sourceForTask(task: Task, date: string, sourceFixtureDir = "", re
   if (task === "economist-weekly") {
     return buildEconomistWeeklySource(date, {
       ledgerFile: path.join(repo, ECONOMIST_LEDGER_REL_PATH),
-      excludePostPath: taskPostRelPath(task, date),
+      excludePostPathForIssueDate: issueDate => taskPostRelPath(task, issueDate),
     });
   }
   const builder = SOURCE_BUILDERS[task];
@@ -560,6 +560,16 @@ function economistSourceBlocks(source: string): string[] {
   return source.split(/(?=^##\s+\d+\.\s+)/gm).map(block => block.trim()).filter(block => /^##\s+\d+\.\s+/.test(block));
 }
 
+export function economistSummaryConcurrency(): number {
+  const value = Number(process.env.ECONOMIST_SUMMARY_CONCURRENCY || "10");
+  return Number.isInteger(value) && value > 0 ? Math.min(value, 10) : 10;
+}
+
+function economistRetryDelayMs(attempt: number): number {
+  const base = retryDelayMs(attempt);
+  return base > 0 ? base + Math.floor(Math.random() * 1000) : 0;
+}
+
 export function parseEconomistItemSummary(raw: string, rank: number): EconomistItemSummary {
   const payload = parseModelJsonObject(raw, "economist weekly item summary");
   const responseRank = Number(payload.rank);
@@ -579,7 +589,7 @@ async function summarizeEconomistItem(prompt: string, rank: number, model: strin
   let lastError = "";
   let attemptPrompt = prompt;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    await sleep(retryDelayMs(attempt));
+    await sleep(economistRetryDelayMs(attempt));
     try {
       const response = await callAi(attemptPrompt, model, true);
       const summary = parseEconomistItemSummary(response.content, rank);
@@ -616,7 +626,7 @@ async function buildCombinedEconomistWeeklySource({
   if (blocks.length < 3) throw new Error(`economist weekly source has too few article blocks: ${blocks.length}`);
   const resolvedPromptDir = promptDir || path.join(repo, "prompts/blog");
   const template = fs.readFileSync(resolvePromptFile(resolvedPromptDir, "economist-weekly-item-summary"), "utf8");
-  const summaries = await mapWithConcurrency(blocks, 3, async block => {
+  const summaries = await mapWithConcurrency(blocks, economistSummaryConcurrency(), async block => {
     const rank = Number(block.match(/^##\s+(\d+)\./m)?.[1]);
     if (!Number.isInteger(rank)) throw new Error("economist weekly source article is missing rank");
     const prompt = template.replaceAll("{date}", date).replaceAll("{rank}", String(rank)).replaceAll("{article_text}", block);
@@ -852,6 +862,10 @@ type GenerateTaskOptions = {
   artifactsDir: string;
 };
 
+export function contentDateForTask(task: Task, runDate: string, source: string): string {
+  return task === "economist-weekly" ? parseEconomistIssueFromSource(source).issueDate : runDate;
+}
+
 async function fetchPodcastArticleEpisodes(task: Task, date: string, force: boolean): Promise<Episode[]> {
   if (task === "daily-podcasts") return fetchDailyPodcastEpisodes(date, force);
   if (task === "apple-top-podcasts") return fetchAppleTopPodcastEpisodeList(date, force);
@@ -906,29 +920,34 @@ async function generatePodcastArticles({ task, repo, date, force, promptDir, art
 async function generateTask(options: GenerateTaskOptions): Promise<ResultItem[]> {
   const { task, repo, date, force, useAi, model, promptDir, sourceFixtureDir, mockResponseDir, artifactsDir } = options;
   if (isPodcastArticleTask(task) && useAi && !sourceFixtureDir && !mockResponseDir) return generatePodcastArticles(options);
-  if (!force) {
+  if (!force && task !== "economist-weekly") {
     const skipped = skippedExisting(task, repo, date);
     if (skipped) return [skipped];
   }
   let source = await sourceForTask(task, date, sourceFixtureDir, repo);
+  const contentDate = contentDateForTask(task, date, source);
+  if (!force && task === "economist-weekly") {
+    const skipped = skippedExisting(task, repo, contentDate);
+    if (skipped) return [skipped];
+  }
   if (useAi && task === "tech-daily" && !mockResponseDir) {
     source = await buildCombinedTechDailySource({ source, date, repo, model, promptDir, artifactsDir });
     const itemCount = countNumberedBlocks(source);
     if (itemCount < 1) return [skippedLowQuality(task, date, "tech-daily has no high-quality daily items")];
   }
   if (useAi && task === "economist-weekly" && !mockResponseDir) {
-    source = await buildCombinedEconomistWeeklySource({ source, date, repo, model, promptDir, artifactsDir });
+    source = await buildCombinedEconomistWeeklySource({ source, date: contentDate, repo, model, promptDir, artifactsDir });
   }
   let body = source;
   let description: string | undefined;
   let generation: ResultItem["generation"];
   if (useAi) {
-    const rendered = await renderWithAi({ task, date, source, repo, model, promptDir, mockResponseDir, artifactsDir });
+    const rendered = await renderWithAi({ task, date: contentDate, source, repo, model, promptDir, mockResponseDir, artifactsDir });
     body = rendered.markdown;
     description = rendered.description;
     generation = rendered.metadata;
   }
-  const result: ResultItem = archivePost({ task, date, repo, body, force, description });
+  const result: ResultItem = archivePost({ task, date: contentDate, repo, body, force, description });
   if (task === "mdblist-weekly" && !result.skipped) {
     appendMdblistRecommendations(
       parseMdblistRecommendationsFromSource(source),

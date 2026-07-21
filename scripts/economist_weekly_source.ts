@@ -135,7 +135,14 @@ export function renderEconomistWeeklySource(issue: EconomistIssue, parsed: Econo
   ].join("\n");
 }
 
-export async function buildEconomistWeeklySource(date: string, { ledgerFile = economistLedgerPath(), excludePostPath = "" }: { ledgerFile?: string; excludePostPath?: string } = {}): Promise<string> {
+export async function buildEconomistWeeklySource(
+  date: string,
+  {
+    ledgerFile = economistLedgerPath(),
+    excludePostPath = "",
+    excludePostPathForIssueDate,
+  }: { ledgerFile?: string; excludePostPath?: string; excludePostPathForIssueDate?: (issueDate: string) => string } = {},
+): Promise<string> {
   const root = await githubJson<GithubEntry[]>(`https://api.github.com/repos/${REPOSITORY}/contents/${ECONOMIST_DIR}`);
   const dirs = root.filter(entry => entry.type === "dir" && /^te_\d{4}\.\d{2}\.\d{2}$/.test(entry.name)).sort((a, b) => b.name.localeCompare(a.name));
   if (!dirs.length) throw new EconomistIssueUnavailableError("Economist source has no dated issue directories");
@@ -148,7 +155,8 @@ export async function buildEconomistWeeklySource(date: string, { ledgerFile = ec
   const epubBytes = await downloadEpub(epub.download_url);
   const epubSha256 = crypto.createHash("sha256").update(epubBytes).digest("hex");
   const issue: EconomistIssue = { key: economistIssueKey(issueDate, epubSha256), issueDate, sourceCommit: latest.sha, epubSha256 };
-  if (hasArchivedEconomistIssue(issue, ledgerFile, excludePostPath)) throw new EconomistIssueAlreadyArchivedError(`Economist issue ${issueDate} is already archived`);
+  const excludedPostPath = excludePostPathForIssueDate?.(issueDate) || excludePostPath;
+  if (hasArchivedEconomistIssue(issue, ledgerFile, excludedPostPath)) throw new EconomistIssueAlreadyArchivedError(`Economist issue ${issueDate} is already archived`);
   const parsed = parseEconomistEpub(epubBytes);
   return renderEconomistWeeklySource(issue, parsed, `https://github.com/${REPOSITORY}/tree/master/${ECONOMIST_DIR}/${latest.name}`);
 }
