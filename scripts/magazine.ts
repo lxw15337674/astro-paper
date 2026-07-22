@@ -55,7 +55,11 @@ function cleanPath(base: string, href: string): string {
 }
 
 function normalizedText(value = ""): string {
-  return value.replace(/ /g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/ /g, " ")
+    .replace(/[\u200b-\u200d\ufeff]/g, "") // strip zero-width chars carried from the EPUB source
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // --- The Economist ---------------------------------------------------------
