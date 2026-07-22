@@ -31,7 +31,7 @@ import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import {
   type ResultItem,
   contentDateForTask,
-  parseEconomistItemSummary,
+  parseMagazineItemSummary,
   settleDailyPodcastArticleResults,
   usesJsonComposer,
 } from "../scripts/generate_scheduled_post.ts";
@@ -991,7 +991,7 @@ test("Calibre EPUB (Atlantic/Wired) parses bodies, strips navbar, drops the feed
 });
 
 test("Economist item summary keeps Markdown structure and rejects headings", () => {
-  const item = parseEconomistItemSummary(
+  const item = parseMagazineItemSummary(
     JSON.stringify({
       rank: 1,
       title_zh: "制度压力",
@@ -1006,7 +1006,7 @@ test("Economist item summary keeps Markdown structure and rejects headings", () 
 
   assert.throws(
     () =>
-      parseEconomistItemSummary(
+      parseMagazineItemSummary(
         JSON.stringify({ rank: 1, title_zh: "制度压力", one_sentence_summary: "短摘要。", core_point: "核心观点。", content_summary: "## 小标题\n\n正文。" }),
         1,
       ),

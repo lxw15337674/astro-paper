@@ -582,18 +582,18 @@ function economistRetryDelayMs(attempt: number): number {
   return base > 0 ? base + Math.floor(Math.random() * 1000) : 0;
 }
 
-export function parseEconomistItemSummary(raw: string, rank: number): EconomistItemSummary {
-  const payload = parseModelJsonObject(raw, "economist weekly item summary");
+export function parseMagazineItemSummary(raw: string, rank: number, label = "\u6742\u5fd7"): EconomistItemSummary {
+  const payload = parseModelJsonObject(raw, `${label} item summary`);
   const responseRank = Number(payload.rank);
   const titleZh = String(payload.title_zh || "").replace(/\s+/g, " ").trim();
   const oneSentenceSummary = String(payload.one_sentence_summary || "").replace(/\s+/g, " ").trim();
   const corePoint = String(payload.core_point || "").replace(/\s+/g, " ").trim();
   const contentSummary = normalizeEconomistContentSummary(payload.content_summary);
-  if (responseRank !== rank) throw new Error(`economist weekly item summary rank mismatch: ${responseRank} vs ${rank}`);
-  if (!titleZh || !/[\u3400-\u9fff]/.test(titleZh)) throw new Error(`economist weekly item ${rank} needs a Chinese title`);
-  if (![oneSentenceSummary, corePoint, contentSummary].every(Boolean)) throw new Error(`economist weekly item ${rank} summary fields must not be empty`);
-  if (![oneSentenceSummary, corePoint, contentSummary].every(value => /[\u3400-\u9fff]/.test(value))) throw new Error(`economist weekly item ${rank} summary must be Chinese`);
-  if (/^\s{0,3}#{1,6}\s/m.test(contentSummary)) throw new Error(`economist weekly item ${rank} content_summary must not use Markdown headings`);
+  if (responseRank !== rank) throw new Error(`${label} item summary rank mismatch: ${responseRank} vs ${rank}`);
+  if (!titleZh || !/[\u3400-\u9fff]/.test(titleZh)) throw new Error(`${label} item ${rank} needs a Chinese title`);
+  if (![oneSentenceSummary, corePoint, contentSummary].every(Boolean)) throw new Error(`${label} item ${rank} summary fields must not be empty`);
+  if (![oneSentenceSummary, corePoint, contentSummary].every(value => /[\u3400-\u9fff]/.test(value))) throw new Error(`${label} item ${rank} summary must be Chinese`);
+  if (/^\s{0,3}#{1,6}\s/m.test(contentSummary)) throw new Error(`${label} item ${rank} content_summary must not use Markdown headings`);
   return { rank, titleZh, oneSentenceSummary, corePoint, contentSummary };
 }
 
@@ -605,7 +605,7 @@ async function summarizeMagazineItem(config: MagazineConfig, prompt: string, ran
     await sleep(economistRetryDelayMs(attempt));
     try {
       const response = await callAi(attemptPrompt, model, true);
-      const summary = parseEconomistItemSummary(response.content, rank);
+      const summary = parseMagazineItemSummary(response.content, rank, config.name);
       writeArtifact(artifactsDir, config.slug, `item-${String(rank).padStart(2, "0")}-summary.json`, response.content);
       return summary;
     } catch (error) {
