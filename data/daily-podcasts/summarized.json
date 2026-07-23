@@ -1300,6 +1300,56 @@
       "date": "2026-07-20",
       "archivedAt": "2026-07-21",
       "postPath": "src/content/posts/zh-cn/Apple热门播客-2026-07-21-08-the-bill-simmons-podcast.md"
+    },
+    {
+      "title": "SE Radio 730: Birgitta Boeckeler on Harness Engineering for AI Agents",
+      "show": "Software Engineering Radio",
+      "link": "https://se-radio.net/2026/07/se-radio-730-birgitta-boeckeler-on-harness-engineering-for-ai-agents/",
+      "audioUrl": "https://traffic.libsyn.com/secure/seradio/730-birgitta-boeckler-harness-engineering.mp3?dest-id=23379",
+      "guid": "9d080688-7aaf-4eb6-bbc0-cc24d879ab6b",
+      "date": "2026-07-22",
+      "archivedAt": "2026-07-23",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-23-01-software-engineering-radio.md"
+    },
+    {
+      "title": "NanoClaw and the Rise of Personal AI Agents",
+      "show": "Software Engineering Daily",
+      "link": "https://softwareengineeringdaily.com/2026/07/21/nanoclaw-and-the-rise-of-personal-ai-agents/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=nanoclaw-and-the-rise-of-personal-ai-agents",
+      "audioUrl": "https://media.transistor.fm/7d578a4d/1d725d7e.mp3",
+      "guid": "https://softwareengineeringdaily.com/?p=23082",
+      "date": "2026-07-21",
+      "archivedAt": "2026-07-23",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-23-02-software-engineering-daily.md"
+    },
+    {
+      "title": "Why 99% of BI Tools Get Embedded Analytics Wrong And How Omni Fixed It ft. Chris Merrick",
+      "show": "The Data Engineering Show",
+      "link": "https://podcasts.fame.so/e/rn740p28-why-99-of-bi-tools-get-embedded-analytics-wrong-and-how-omni-fixed-it-ft-chris-merrick",
+      "audioUrl": "https://media.fame.so/8yqy6j78.mp3",
+      "guid": "k18yz5p0",
+      "date": "2026-07-21",
+      "archivedAt": "2026-07-23",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-23-03-the-data-engineering-show.md"
+    },
+    {
+      "title": "That's a Totally Normal Thing to Say! (Trivia Extravaganza 2026)",
+      "show": "Waveform: The MKBHD Podcast",
+      "link": "810fd232-b5cc-11f0-92f1-f3486ed30eb3",
+      "audioUrl": "https://www.podtrac.com/pts/redirect.mp3/pdst.fm/e/pscrb.fm/rss/p/mgln.ai/e/257/traffic.megaphone.fm/VMP8430139403.mp3",
+      "guid": "810fd232-b5cc-11f0-92f1-f3486ed30eb3",
+      "date": "2026-07-21",
+      "archivedAt": "2026-07-23",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-23-04-waveform-the-mkbhd-podcast.md"
+    },
+    {
+      "title": "Listen Now: AI A New Kind of Being",
+      "show": "Business Movers",
+      "link": "gid://art19-episode-locator/V0/EdSYXPmNcOyahBK9FIgqsCUb-iOjvvHnEJDuiQxnpSw",
+      "audioUrl": "https://rss.art19.com/episodes/edac211b-5f54-4db2-beaa-ddbf41dc5e58.mp3?rss_browser=BAhJIgtDaHJvbWUGOgZFVA%3D%3D--d05363d83ce333c74f32188013892b2863ad051c",
+      "guid": "gid://art19-episode-locator/V0/EdSYXPmNcOyahBK9FIgqsCUb-iOjvvHnEJDuiQxnpSw",
+      "date": "2026-07-21",
+      "archivedAt": "2026-07-23",
+      "postPath": "src/content/posts/zh-cn/每日播客-2026-07-23-05-business-movers.md"
     }
   ]
 }
