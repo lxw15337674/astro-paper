@@ -3,6 +3,7 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import IconUnderline from "@/assets/icons/IconUnderline.svg";
 import IconMenuDeep from "@/assets/icons/IconMenuDeep.svg";
 import IconArchive from "@/assets/icons/IconArchive.svg";
+import IconRss from "@/assets/icons/IconRss.svg";
 import IconSunHigh from "@/assets/icons/IconSunHigh.svg";
 import IconSearch from "@/assets/icons/IconSearch.svg";
 import IconMoon from "@/assets/icons/IconMoon.svg";
@@ -10,6 +11,7 @@ import IconX from "@/assets/icons/IconX.svg";
 import LinkButton from "./LinkButton.astro";
 import LanguageSwitcher from "./LanguageSwitcher.astro";
 import { getLocalizedSiteTitle } from "@/utils/siteMeta";
+import { getLocalizedRssPath } from "@/utils/localeMeta";
 import { stripBase, stripLocale } from "@/utils/withBase";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
@@ -61,6 +63,17 @@ const isActive = (path: string) => {
       id="nav-menu"
       class="flex w-full flex-col items-center sm:ms-2 sm:flex-row sm:justify-end sm:space-x-4 sm:py-0"
     >
+      <LinkButton
+        href={getLocalizedRssPath(locale)}
+        class="focus-outline hover:bg-surface-hover hover:text-foreground text-muted-foreground absolute end-10 top-5 size-8 rounded-md transition-colors sm:hidden"
+        title={t.a11y.rssFeed}
+        aria-label={t.a11y.rssFeed}
+      >
+        <IconRss
+          class="absolute top-1/2 left-1/2 size-5 -translate-x-1/2 -translate-y-1/2"
+        />
+        <span class="sr-only">{t.a11y.rssFeed}</span>
+      </LinkButton>
       <button
         id="menu-btn"
         class="focus-outline self-end p-2 sm:hidden"
@@ -153,6 +166,19 @@ const isActive = (path: string) => {
             </li>
           )
         }
+        <li class="col-span-1 flex items-center justify-center">
+          <LinkButton
+            href={getLocalizedRssPath(locale)}
+            class="focus-outline hover:bg-surface-hover hover:text-foreground text-muted-foreground relative size-8 rounded-md transition-colors"
+            title={t.a11y.rssFeed}
+            aria-label={t.a11y.rssFeed}
+          >
+            <IconRss
+              class="absolute top-1/2 left-1/2 size-5 -translate-x-1/2 -translate-y-1/2"
+            />
+            <span class="sr-only">{t.a11y.rssFeed}</span>
+          </LinkButton>
+        </li>
         {
           features.lightAndDarkMode && (
             <li class="col-span-1 flex items-center justify-center">
