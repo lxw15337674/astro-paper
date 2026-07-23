@@ -4,13 +4,16 @@ import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
 import Card from "@/components/Card.astro";
-import { DEFAULT_LOCALE } from "@/i18n/locales";
+import { DEFAULT_LOCALE, isSupportedLocale } from "@/i18n/locales";
 import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
 import { getHomePosts, HOME_POSTS_PER_LOAD } from "@/utils/homePostFeed";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
-const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
+const requestedLocale = Astro.currentLocale ?? DEFAULT_LOCALE;
+const locale = isSupportedLocale(requestedLocale)
+  ? requestedLocale
+  : DEFAULT_LOCALE;
 const t = useTranslations(locale);
 const sortedPosts = await getHomePosts(locale);
 const homepagePosts = sortedPosts.slice(0, HOME_POSTS_PER_LOAD);
