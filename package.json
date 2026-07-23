@@ -18,12 +18,13 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@appnest/masonry-layout": "2.2.3",
     "@astrojs/mdx": "^6.0.1",
     "@astrojs/rss": "^4.0.18",
     "@astrojs/sitemap": "^3.7.3",
     "@mozilla/readability": "^0.6.0",
-    "adm-zip": "^0.5.16",
     "@tailwindcss/vite": "^4.3.1",
+    "adm-zip": "^0.5.16",
     "astro": "^6.4.8",
     "coingecko-api-v3": "^0.0.31",
     "dayjs": "^1.11.21",

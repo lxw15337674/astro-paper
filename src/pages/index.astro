@@ -1,31 +1,22 @@
 ---
-import { getCollection } from "astro:content";
 import { getRelativeLocaleUrl } from "astro:i18n";
-import IconRss from "@/assets/icons/IconRss.svg";
-import IconArrowRight from "@/assets/icons/IconArrowRight.svg";
 import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
 import Card from "@/components/Card.astro";
-import LinkButton from "@/components/LinkButton.astro";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
-import { getSortedPosts } from "@/utils/getSortedPosts";
-import { filterCollectionByLocale } from "@/utils/contentLocale";
 import { getSharedLocaleAlternates } from "@/utils/localeAlternates";
-import { getLocalizedRssPath } from "@/utils/localeMeta";
+import { getHomePosts, HOME_POSTS_PER_LOAD } from "@/utils/homePostFeed";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
-const { posts: postsConfig } = config;
-
 const locale = Astro.currentLocale ?? DEFAULT_LOCALE;
 const t = useTranslations(locale);
-
-const posts = filterCollectionByLocale(await getCollection("posts"), locale);
-const sortedPosts = getSortedPosts(posts);
-const featuredPosts = sortedPosts.filter(({ data }) => data.featured);
-const recentPosts = sortedPosts.filter(({ data }) => !data.featured);
+const sortedPosts = await getHomePosts(locale);
+const homepagePosts = sortedPosts.slice(0, HOME_POSTS_PER_LOAD);
+const hasMorePosts = sortedPosts.length > homepagePosts.length;
 const homePath = getRelativeLocaleUrl(locale, "");
+const feedBasePath = getRelativeLocaleUrl(locale, "post-feed/");
 ---
 
 <Layout localeAlternates={getSharedLocaleAlternates("")}>
@@ -36,80 +27,162 @@ const homePath = getRelativeLocaleUrl(locale, "");
     data-home-path={homePath}
     class="app-layout"
   >
-    <section id="hero" class="border-border/80 border-b pt-10 pb-8">
-      <h1
-        class="my-4 inline-block text-4xl leading-tight font-semibold tracking-tight sm:my-8 sm:text-5xl"
-      >
-        {t.home.heroTitle}
-      </h1>
-      <a
-        target="_blank"
-        href={getLocalizedRssPath(locale)}
-        class="inline-block"
-        aria-label={t.a11y.rssFeed}
-        title={t.a11y.rssFeed}
-      >
-        <IconRss
-          width={20}
-          height={20}
-          class="stroke-accent scale-125 stroke-3 rtl:-rotate-90"
-        />
-        <span class="sr-only">{t.a11y.rssFeed}</span>
-      </a>
-
-      <p class="text-muted-foreground leading-7">{t.home.intro}</p>
-    </section>
-
     {
-      featuredPosts.length > 0 && (
-        <section
-          id="featured"
-          class:list={[
-            "pt-12 pb-6",
-            { "border-border/80 border-b": recentPosts.length > 0 },
-          ]}
-        >
-          <h2 class="text-2xl font-semibold tracking-tight">
-            {t.home.featured}
-          </h2>
-          <ul>
-            {featuredPosts.map(data => (
+      homepagePosts.length > 0 && (
+        <section id="home-posts" class="py-8">
+          <h1 class="sr-only">{t.pages.postsTitle}</h1>
+          <masonry-layout
+            id="home-post-grid"
+            role="list"
+            gap="20"
+            maxcolwidth="420"
+            data-feed-base={feedBasePath}
+            data-next-page="2"
+            data-has-more={hasMorePosts}
+            data-locale={locale}
+            data-timezone={config.site.timezone}
+            data-updated-label={t.post.updatedAt}
+          >
+            {homepagePosts.map(data => (
               <Card variant="h3" {...data} />
             ))}
-          </ul>
+          </masonry-layout>
+          <div id="home-post-sentinel" aria-live="polite" />
         </section>
       )
     }
-
-    {
-      recentPosts.length > 0 && (
-        <section id="recent-posts" class="pt-12 pb-6">
-          <h2 class="text-2xl font-semibold tracking-tight">
-            {t.home.recentPosts}
-          </h2>
-          <ul>
-            {recentPosts.slice(0, postsConfig.perIndex).map(data => (
-              <Card variant="h3" {...data} />
-            ))}
-          </ul>
-        </section>
-      )
-    }
-
-    <div class="my-8 text-center">
-      <LinkButton
-        href={getRelativeLocaleUrl(locale, "posts")}
-        class="border-border bg-surface hover:bg-surface-hover text-foreground px-3 py-2 text-sm font-medium"
-      >
-        {t.home.allPosts}
-        <IconArrowRight class="inline-block rtl:-rotate-180" />
-      </LinkButton>
-    </div>
   </main>
   <Footer />
 </Layout>
 
 <script>
+  import "@appnest/masonry-layout";
+
+  type HomePost = {
+    title: string;
+    description: string;
+    url: string;
+    pubDatetime: string;
+    modDatetime: string | null;
+    timezone: string | undefined;
+  };
+
+  type MasonryLayoutElement = HTMLElement & { layout?: () => void };
+
+  function createCard(
+    post: HomePost,
+    grid: MasonryLayoutElement
+  ): HTMLLIElement {
+    const item = document.createElement("li");
+    item.className =
+      "border-border bg-surface/60 hover:bg-surface-hover/80 rounded-lg border p-4 transition-colors";
+
+    const link = document.createElement("a");
+    link.href = post.url;
+    link.className =
+      "text-foreground hover:text-accent inline-block text-lg font-semibold tracking-tight underline-offset-4 hover:underline focus-visible:no-underline focus-visible:underline-offset-0";
+
+    const heading = document.createElement("h3");
+    heading.textContent = post.title;
+    link.append(heading);
+
+    const datetime = grid
+      .querySelector<HTMLElement>("li > div")
+      ?.cloneNode(true) as HTMLElement | undefined;
+    const date = new Date(post.modDatetime ?? post.pubDatetime);
+    const isModified = Boolean(
+      post.modDatetime &&
+      new Date(post.modDatetime) > new Date(post.pubDatetime)
+    );
+
+    if (datetime) {
+      const label = datetime.querySelector("span");
+      if (!isModified) label?.remove();
+      if (isModified && !label) {
+        const updatedLabel = document.createElement("span");
+        updatedLabel.className = "text-sm";
+        updatedLabel.textContent = `${grid.dataset.updatedLabel}:`;
+        datetime.querySelector("time")?.before(updatedLabel);
+      }
+
+      const time = datetime.querySelector("time");
+      if (time) {
+        time.dateTime = date.toISOString();
+        time.textContent = new Intl.DateTimeFormat(grid.dataset.locale, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          timeZone: post.timezone ?? grid.dataset.timezone,
+        }).format(date);
+      }
+    }
+
+    const description = document.createElement("p");
+    description.className = "text-muted-foreground mt-2 leading-7";
+    description.textContent = post.description;
+
+    item.append(link);
+    if (datetime) item.append(datetime);
+    item.append(description);
+    return item;
+  }
+
+  function setupInfinitePosts() {
+    const grid =
+      document.querySelector<MasonryLayoutElement>("#home-post-grid");
+    const sentinel = document.querySelector("#home-post-sentinel");
+    if (!grid || !sentinel || grid.dataset.hasMore !== "true") return;
+
+    let nextPage = Number(grid.dataset.nextPage);
+    let isLoading = false;
+    let lastLoadScrollY = -1;
+
+    const loadNextPage = async () => {
+      if (isLoading || !nextPage) return;
+      isLoading = true;
+
+      try {
+        const response = await fetch(
+          `${grid.dataset.feedBase}${nextPage}.json`
+        );
+        if (!response.ok) throw new Error("Unable to load more posts");
+
+        const feed = (await response.json()) as {
+          posts: HomePost[];
+          hasMore: boolean;
+        };
+        grid.append(...feed.posts.map(post => createCard(post, grid)));
+        grid.layout?.();
+
+        if (feed.hasMore) {
+          nextPage += 1;
+        } else {
+          nextPage = 0;
+          observer.disconnect();
+        }
+      } catch {
+        sentinel.textContent = "";
+      } finally {
+        isLoading = false;
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (
+          entries.some(entry => entry.isIntersecting) &&
+          window.scrollY > lastLoadScrollY
+        ) {
+          lastLoadScrollY = window.scrollY;
+          void loadNextPage();
+        }
+      },
+      { rootMargin: "0px" }
+    );
+
+    observer.observe(sentinel);
+  }
+
   document.addEventListener("astro:page-load", () => {
     const indexLayout = (document.querySelector("#main-content") as HTMLElement)
       ?.dataset;
@@ -117,5 +190,18 @@ const homePath = getRelativeLocaleUrl(locale, "");
     if (indexLayout?.layout) {
       sessionStorage.setItem("backUrl", indexLayout.homePath ?? baseRoot);
     }
+
+    setupInfinitePosts();
   });
 </script>
+
+<style>
+  :global(#home-post-grid > li) {
+    margin: 0.5rem;
+    list-style: none;
+  }
+
+  :global(#home-post-grid > li > a) {
+    font-size: 1rem;
+  }
+</style>
