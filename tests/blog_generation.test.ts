@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -31,6 +32,7 @@ import { verifyResultJson } from "../scripts/verify_blog_generation.ts";
 import {
   type ResultItem,
   contentDateForTask,
+  parseRedditSourceApiResponse,
   parseMagazineItemSummary,
   settleDailyPodcastArticleResults,
   usesJsonComposer,
@@ -1478,4 +1480,38 @@ test("HN source verifier accepts legitimate double-brace examples from source ar
   );
 
   assert.equal(verifyResultJson(repo, resultJson), 1);
+});
+
+test("Reddit source API contract requires an intact, current Top 40 source", () => {
+  const items = Array.from({ length: 40 }, (_, index) => {
+    const rank = index + 1;
+    return [
+      `${rank}. [r/AskReddit] Fixture post ${rank}`,
+      `- ⭐ ${100 - index} points · ${rank} 评论`,
+      "- 来源：r/AskReddit",
+      `- 帖子链接：https://www.reddit.com/r/AskReddit/comments/fixture${rank}/`,
+      "- 正文：Fixture body",
+      "- 热门评论：This is a sufficiently detailed fixture comment for the source contract.",
+      "",
+    ].join("\n");
+  }).join("\n");
+  const source = `${items}\n===ARCHIVE_PAYLOAD===\n${JSON.stringify({ items: [] })}\n`;
+  const payload = {
+    contract_version: "reddit-top20-source.v1",
+    archive_date: "2099-01-02",
+    fetched_at: "2099-01-02T08:00:00Z",
+    item_count: 40,
+    source_sha256: createHash("sha256").update(source, "utf8").digest("hex"),
+    source,
+  };
+
+  assert.equal(parseRedditSourceApiResponse(payload, "2099-01-02"), source);
+  assert.throws(
+    () => parseRedditSourceApiResponse({ ...payload, source_sha256: "0".repeat(64) }, "2099-01-02"),
+    /source_sha256 does not match/,
+  );
+  assert.throws(
+    () => parseRedditSourceApiResponse({ ...payload, archive_date: "2099-01-01" }, "2099-01-02"),
+    /does not match requested date/,
+  );
 });

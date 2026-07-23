@@ -160,6 +160,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
           NYT_API_KEY: ${{ secrets.NYT_API_KEY }}
+          REDDIT_SOURCE_API_URL: ${{ secrets.REDDIT_SOURCE_API_URL }}
+          REDDIT_SOURCE_API_TOKEN: ${{ secrets.REDDIT_SOURCE_API_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           PODCAST_TRANSCRIBE_PROVIDER: gemini
           PODCAST_GEMINI_MODEL: gemini-flash-latest

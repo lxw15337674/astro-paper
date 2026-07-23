@@ -1,17 +1,17 @@
 #!/usr/bin/env tsx
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { archivePost } from "./astro_paper_archive.ts";
 import { validateMarkdown, renderPrompt, resolvePromptFile } from "./ai_blog_writer.ts";
 import { type AiCallResult, callBlogAiWithFailover, envAiConfig, envFallbackAiConfig } from "./blog_ai_client.ts";
-import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, ensureDir, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
+import { avoidCloudflareEmailObfuscation, bjtDateString, dateStringInTimeZone, ensureDir, fetchJson, parseArgs, repoRoot, stringArg, writeStderr, writeStdout } from "./blog_common.ts";
 import { type Task, isTaskInput, scheduledTaskInput, taskPostRelPath, taskTags, taskTitle, tasksForInput } from "./blog_tasks.ts";
 import { buildHnSource } from "./hn_top10_source.ts";
 import { hnMarkdownFromModelJson } from "./hn_compose.ts";
-import { readRedditSource, REDDIT_DATA_DIR } from "./reddit_top20_source.ts";
-import { redditMarkdownFromModelJson } from "./reddit_top20_compose.ts";
+import { parseSourceFacts as parseRedditSourceFacts, redditMarkdownFromModelJson } from "./reddit_top20_compose.ts";
 import { githubTrendingMarkdownFromModelJson } from "./github_trending_compose.ts";
 import { mdblistMarkdownFromModelJson } from "./mdblist_compose.ts";
 import { dailyDigestMarkdownFromModelJson } from "./daily_digest_compose.ts";
@@ -241,10 +241,63 @@ function fixtureSource(fixtureName: string, sourceFixtureDir: string): string {
   return fs.readFileSync(file, "utf8");
 }
 
+type RedditSourceApiResponse = {
+  contract_version?: unknown;
+  archive_date?: unknown;
+  fetched_at?: unknown;
+  item_count?: unknown;
+  source_sha256?: unknown;
+  source?: unknown;
+};
+
+export function parseRedditSourceApiResponse(payload: RedditSourceApiResponse, date: string): string {
+  if (payload.contract_version !== "reddit-top20-source.v1") {
+    throw new Error(`Reddit source API returned an unsupported contract: ${String(payload.contract_version)}`);
+  }
+  if (payload.archive_date !== date) {
+    throw new Error(`Reddit source API archive date ${String(payload.archive_date)} does not match requested date ${date}`);
+  }
+  if (typeof payload.fetched_at !== "string" || Number.isNaN(Date.parse(payload.fetched_at))) {
+    throw new Error("Reddit source API returned an invalid fetched_at timestamp");
+  }
+  if (typeof payload.source !== "string" || !payload.source.includes("===ARCHIVE_PAYLOAD===")) {
+    throw new Error("Reddit source API returned an invalid source payload");
+  }
+  const sourceHash = createHash("sha256").update(payload.source, "utf8").digest("hex");
+  if (payload.source_sha256 !== sourceHash) {
+    throw new Error("Reddit source API source_sha256 does not match source content");
+  }
+  const facts = parseRedditSourceFacts(payload.source);
+  if (typeof payload.item_count !== "number" || !Number.isInteger(payload.item_count) || payload.item_count !== facts.length || facts.length !== 40) {
+    throw new Error(`Reddit source API expected 40 ranked items, received ${String(payload.item_count)}`);
+  }
+  return payload.source;
+}
+
+export async function fetchRedditSourceFromApi(date: string): Promise<string> {
+  const baseUrl = process.env.REDDIT_SOURCE_API_URL?.trim().replace(/\/+$/, "");
+  const token = process.env.REDDIT_SOURCE_API_TOKEN?.trim();
+  if (!baseUrl) throw new Error("REDDIT_SOURCE_API_URL is required for reddit-top20 generation");
+  if (!token) throw new Error("REDDIT_SOURCE_API_TOKEN is required for reddit-top20 generation");
+  const payload = await fetchJson<RedditSourceApiResponse>(`${baseUrl}/v1/reddit/top20-source`, {
+    method: "POST",
+    body: JSON.stringify({ archive_date: date }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    timeoutMs: 90_000,
+    maxChars: 1_000_000,
+    throwOnMaxChars: true,
+    retries: 2,
+  });
+  return parseRedditSourceApiResponse(payload, date);
+}
+
 // capital-market-daily 不在此表：见 JSON_COMPOSERS 里的 composeFullCapitalMarket。
 const SOURCE_BUILDERS: Partial<Record<Task, (date: string) => Promise<string>>> = {
   "hn-top10": () => buildHnSource(),
-  "reddit-top20": date => Promise.resolve(readRedditSource(date, path.join(repoRoot(), "data/reddit-top20"))),
+  "reddit-top20": fetchRedditSourceFromApi,
   "github-trending-daily": date => buildGitHubTrendingDailySource(date, { dataDir: path.join(repoRoot(), "data/github-trending") }),
   "daily-podcasts": date => buildDailyPodcastSource(date),
   "xyzrank-top-episodes": date => buildXyzRankTopEpisodesSource(date),

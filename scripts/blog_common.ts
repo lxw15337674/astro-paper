@@ -89,6 +89,17 @@ export function bjtTimestamp(date = new Date()): string {
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")} CST`;
 }
 
+export type FetchTextOptions = {
+  timeoutMs?: number;
+  headers?: Record<string, string>;
+  maxChars?: number;
+  throwOnMaxChars?: boolean;
+  retries?: number;
+  retryDelayMs?: number;
+  method?: "GET" | "POST";
+  body?: string;
+};
+
 export function frontmatter({
   title,
   date,
@@ -127,14 +138,9 @@ export async function fetchText(
     throwOnMaxChars = false,
     retries = 2,
     retryDelayMs = 1_000,
-  }: {
-    timeoutMs?: number;
-    headers?: Record<string, string>;
-    maxChars?: number;
-    throwOnMaxChars?: boolean;
-    retries?: number;
-    retryDelayMs?: number;
-  } = {},
+    method = "GET",
+    body,
+  }: FetchTextOptions = {},
 ): Promise<string> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -142,6 +148,8 @@ export async function fetchText(
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, {
+        method,
+        body,
         redirect: "follow",
         signal: controller.signal,
         headers: {
@@ -187,7 +195,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function fetchJson<T = unknown>(url: string, options = {}): Promise<T> {
+export async function fetchJson<T = unknown>(url: string, options: FetchTextOptions = {}): Promise<T> {
   return JSON.parse(await fetchText(url, options)) as T;
 }
 
