@@ -1295,7 +1295,23 @@ test("mdblist source builder scans deeper and returns as many unrecommended cand
   }
 });
 
-test("daily digest compose rejects links outside the source pool and duplicates", () => {
+test("daily digest compose retains canonical source URL spelling after matching and reconciliation", () => {
+  const exactSourceUrl = "https://www.cisa.gov/News-Events/News/Exact-Case-Sensitive-Path";
+  const reconciledSourceUrl = "https://www.cisa.gov/News-Events/News/Alert-Targeting";
+  const source = [`- 链接：${exactSourceUrl}`, `- 链接：${reconciledSourceUrl}`].join("\n");
+  const corruptedUrl = "https://www.cisa.gov/news-events/news/alert-alert-targeting";
+  const body = "这是一段足够长的中文正文用于通过低信号与长度校验，说明事件影响与风险。";
+  const items = [
+    { title_zh: "精确匹配保留来源 URL 大小写", source_url: exactSourceUrl, body_markdown: body },
+    { title_zh: "美国政府更新关键基础设施 PLC 威胁预警", source_url: corruptedUrl, body_markdown: body },
+  ];
+  const markdown = dailyDigestMarkdownFromModelJson(JSON.stringify({ overview: "今天的主线是关键基础设施的网络安全风险。", sections: [{ title: "安全", items }] }), source);
+  assert.ok(markdown.includes(`](${exactSourceUrl})`));
+  assert.ok(markdown.includes(`](${reconciledSourceUrl})`));
+  assert.equal(markdown.includes(corruptedUrl), false);
+});
+
+test("daily digest compose rejects external, ambiguous, and duplicate source links", () => {
   const source = fs.readFileSync(path.join(process.cwd(), "tests/fixtures/blog-sources/tech-daily.md"), "utf8");
   const good = { title_zh: "中文标题", source_url: "https://example.com/postgresql-19-beta", body_markdown: "这是一段足够长的中文正文用于通过低信号与长度校验，说明事件影响与风险。" };
   const overview = "今天的主线是工程平台与供应链在发布治理上收敛。";
@@ -1303,6 +1319,12 @@ test("daily digest compose rejects links outside the source pool and duplicates"
   // 编造的链接不在 source 池 → 拒绝。
   assert.throws(
     () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [{ ...good, source_url: "https://evil.example.com/x" }] }] }), source),
+    /outside the source pool/,
+  );
+  // 一个被两个 source slug 同时解释的损坏链接不能安全回填 → 拒绝。
+  const ambiguousSource = ["- 链接：https://example.com/news/aa", "- 链接：https://example.com/news/aaa"].join("\n");
+  assert.throws(
+    () => dailyDigestMarkdownFromModelJson(JSON.stringify({ overview, sections: [{ title: "平台工程", items: [{ ...good, source_url: "https://example.com/news/aaaa" }] }] }), ambiguousSource),
     /outside the source pool/,
   );
   // 同一链接复用 → 拒绝。
