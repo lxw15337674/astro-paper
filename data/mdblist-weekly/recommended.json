@@ -340,6 +340,176 @@
       "title": "Clevatess",
       "archivedAt": "2026-07-17",
       "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-17.md"
+    },
+    {
+      "key": "movie:1275779",
+      "mediaType": "movie",
+      "tmdbId": 1275779,
+      "title": "Disclosure Day",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:1273221",
+      "mediaType": "movie",
+      "tmdbId": 1273221,
+      "title": "Scary Movie",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:652",
+      "mediaType": "movie",
+      "tmdbId": 652,
+      "title": "Troy",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:634649",
+      "mediaType": "movie",
+      "tmdbId": 634649,
+      "title": "Spider-Man: No Way Home",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:157336",
+      "mediaType": "movie",
+      "tmdbId": 157336,
+      "title": "Interstellar",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:315635",
+      "mediaType": "movie",
+      "tmdbId": 315635,
+      "title": "Spider-Man: Homecoming",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:1284465",
+      "mediaType": "movie",
+      "tmdbId": 1284465,
+      "title": "The Death of Robin Hood",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:931285",
+      "mediaType": "movie",
+      "tmdbId": 931285,
+      "title": "Mortal Kombat II",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:299534",
+      "mediaType": "movie",
+      "tmdbId": 299534,
+      "title": "Avengers: Endgame",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "movie:671",
+      "mediaType": "movie",
+      "tmdbId": 671,
+      "title": "Harry Potter and the Philosopher's Stone",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:241882:season:1",
+      "mediaType": "show",
+      "tmdbId": 241882,
+      "seasonNumber": 1,
+      "title": "Ride or Die",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:2122:season:14",
+      "mediaType": "show",
+      "tmdbId": 2122,
+      "seasonNumber": 14,
+      "title": "King of the Hill",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:254528:season:1",
+      "mediaType": "show",
+      "tmdbId": 254528,
+      "seasonNumber": 1,
+      "title": "The Hawk",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:4057:season:19",
+      "mediaType": "show",
+      "tmdbId": 4057,
+      "seasonNumber": 19,
+      "title": "Criminal Minds",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:1668:season:10",
+      "mediaType": "show",
+      "tmdbId": 1668,
+      "seasonNumber": 10,
+      "title": "Friends",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:5920:season:7",
+      "mediaType": "show",
+      "tmdbId": 5920,
+      "seasonNumber": 7,
+      "title": "The Mentalist",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:1421:season:11",
+      "mediaType": "show",
+      "tmdbId": 1421,
+      "seasonNumber": 11,
+      "title": "Modern Family",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:2316:season:9",
+      "mediaType": "show",
+      "tmdbId": 2316,
+      "seasonNumber": 9,
+      "title": "The Office",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:456:season:37",
+      "mediaType": "show",
+      "tmdbId": 456,
+      "seasonNumber": 37,
+      "title": "The Simpsons",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
+    },
+    {
+      "key": "show:1622:season:15",
+      "mediaType": "show",
+      "tmdbId": 1622,
+      "seasonNumber": 15,
+      "title": "Supernatural",
+      "archivedAt": "2026-07-24",
+      "postPath": "src/content/posts/zh-cn/每周影视推荐-2026-07-24.md"
     }
   ]
 }
