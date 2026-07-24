@@ -15,17 +15,70 @@ export type DailyDigestSection = {
   items: DailyDigestItem[];
 };
 
+function stripLinkTerminalPunctuation(url: string): string {
+  return url.replace(/[)）.,，。]+$/, "");
+}
+
 function normalizeLink(url: string): string {
-  return url.replace(/[)）.,，。]+$/, "").toLowerCase();
+  return stripLinkTerminalPunctuation(url).toLowerCase();
 }
 
 // 与 generate_scheduled_post.ts 的 sourceLinks 保持同款归一化，作为 compose 内的精确早校验。
-function sourceLinkSet(source: string): Set<string> {
-  return new Set(
-    (source.match(/^- 链接：(.+)$/gm) || [])
-      .map(line => normalizeLink(line.replace(/^- 链接：/, "")))
-      .filter(Boolean),
-  );
+// Keys are normalized only for comparisons; values retain canonical source-pool URLs.
+function sourceLinkMap(source: string): Map<string, string[]> {
+  const links = new Map<string, string[]>();
+  for (const line of source.match(/^- 链接：(.+)$/gm) || []) {
+    const sourceUrl = stripLinkTerminalPunctuation(line.replace(/^- 链接：/, "").trim());
+    const normalized = normalizeLink(sourceUrl);
+    if (!normalized) continue;
+    const canonicalUrls = links.get(normalized) || [];
+    if (!canonicalUrls.includes(sourceUrl)) canonicalUrls.push(sourceUrl);
+    links.set(normalized, canonicalUrls);
+  }
+  return links;
+}
+
+// Repair only the observed model corruption: a leading prefix of the final URL slug
+// is duplicated. Every other URL component must still match a source-pool URL.
+function hasDuplicatedSlugPrefix(url: string, sourceUrl: string): boolean {
+  try {
+    const candidate = new URL(url);
+    const source = new URL(sourceUrl);
+    if (
+      candidate.origin !== source.origin ||
+      candidate.username !== source.username ||
+      candidate.password !== source.password ||
+      candidate.search !== source.search ||
+      candidate.hash !== source.hash
+    ) {
+      return false;
+    }
+
+    const sourceSlash = source.pathname.lastIndexOf("/");
+    const candidateSlash = candidate.pathname.lastIndexOf("/");
+    if (sourceSlash < 0 || candidateSlash < 0 || source.pathname.slice(0, sourceSlash + 1) !== candidate.pathname.slice(0, candidateSlash + 1)) {
+      return false;
+    }
+
+    const sourceSlug = source.pathname.slice(sourceSlash + 1);
+    const candidateSlug = candidate.pathname.slice(candidateSlash + 1);
+    if (!sourceSlug || !candidateSlug.endsWith(sourceSlug)) return false;
+    const duplicatedPrefix = candidateSlug.slice(0, -sourceSlug.length);
+    return duplicatedPrefix.length > 0 && sourceSlug.startsWith(duplicatedPrefix);
+  } catch {
+    return false;
+  }
+}
+
+function reconcileSourceLink(url: string, allowed: Map<string, string[]>): string | undefined {
+  const normalized = normalizeLink(url);
+  const canonicalCandidate = stripLinkTerminalPunctuation(url.trim());
+  const exact = allowed.get(normalized)?.filter(sourceUrl => sourceUrl === canonicalCandidate) || [];
+  if (exact.length === 1) return exact[0];
+  const normalizedMatches = allowed.get(normalized) || [];
+  if (normalizedMatches.length === 1) return normalizedMatches[0];
+  const matches = [...allowed].flatMap(([sourceKey, sourceUrls]) => (hasDuplicatedSlugPrefix(normalized, sourceKey) ? sourceUrls : []));
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function parseSections(rawSections: unknown): DailyDigestSection[] {
@@ -54,15 +107,17 @@ function parseSections(rawSections: unknown): DailyDigestSection[] {
 export function parseDailyDigestModelJson(raw: string, source: string): { overview: string; sections: DailyDigestSection[] } {
   const parsed = parseModelJsonObject(raw, "daily digest");
   const sections = parseSections(parsed.sections);
-  const allowed = sourceLinkSet(source);
+  const allowed = sourceLinkMap(source);
   const seenLinks = new Set<string>();
   const seenTitles = new Set<string>();
   for (const section of sections) {
     for (const item of section.items) {
-      const normalized = normalizeLink(item.source_url);
-      if (!allowed.has(normalized)) throw new Error(`daily digest item "${item.title_zh}" uses a link outside the source pool: ${item.source_url}`);
-      if (seenLinks.has(normalized)) throw new Error(`daily digest reuses source link: ${item.source_url}`);
-      seenLinks.add(normalized);
+      const sourceUrl = reconcileSourceLink(item.source_url, allowed);
+      if (!sourceUrl) throw new Error(`daily digest item "${item.title_zh}" uses a link outside the source pool: ${item.source_url}`);
+      item.source_url = sourceUrl;
+      const linkKey = normalizeLink(sourceUrl);
+      if (seenLinks.has(linkKey)) throw new Error(`daily digest reuses source link: ${item.source_url}`);
+      seenLinks.add(linkKey);
       const titleKey = item.title_zh.toLowerCase();
       if (seenTitles.has(titleKey)) throw new Error(`daily digest reuses item title: ${item.title_zh}`);
       seenTitles.add(titleKey);
